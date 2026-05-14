@@ -1,0 +1,11 @@
+// Tailwind cannot target Angular's routerLinkActive class directly,
+// so the active channel state lives here.
+
+.channel-item {
+  &.active {
+    background-color: var(--color-surface-3);
+    color: var(--color-text);
+
+    i { color: var(--color-text-muted); }
+  }
+}
