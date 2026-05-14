@@ -113,15 +113,21 @@ export class AuthService {
       return true;
     } catch {
       this.clearSession();
-      this.router.navigate(["/login"]);
       return false;
     }
   }
 
+  private sessionChecked = false;
+  private sessionValid = false;
   // Called on app startup to restore session if a refresh token cookie exists.
   // Returns true if session was restored, false if the user needs to log in.
   async tryRestoreSession(): Promise<boolean> {
-    return this.refresh();
+    if (this.sessionChecked) return this.sessionValid;
+
+    const result = await this.refresh();
+    this.sessionChecked = true;
+    this.sessionValid = result;
+    return result;
   }
 
   getAccessToken(): string | null {
