@@ -148,3 +148,5 @@ src/environments/environment.development.ts
 
 # Coverage reports
 coverage/
+
+.angular/cache
