@@ -68,12 +68,12 @@ html.theme-dark {
    ============================================================ */
 
 html.theme-light {
-  --color-bg:            #f4f4f5;
-  --color-surface:       #ffffff;
-  --color-surface-2:     #f4f4f5;
-  --color-surface-3:     #e4e4e7;
-  --color-border:        #d4d4d8;
-  --color-border-subtle: #e4e4e7;
+  --color-bg:            #e4e4e7;   // was #f4f4f5
+  --color-surface:       #f4f4f5;   // was #ffffff
+  --color-surface-2:     #e4e4e7;   // was #f4f4f5
+  --color-surface-3:     #d4d4d8;   // was #e4e4e7
+  --color-border:        #a1a1aa;   // was #d4d4d8
+  --color-border-subtle: #d4d4d8;   // was #e4e4e7
 
   --color-text:          #09090b;
   --color-text-muted:    #52525b;
