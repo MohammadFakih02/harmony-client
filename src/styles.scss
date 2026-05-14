@@ -1,1 +1,340 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   CSS Custom Properties — Animation Timing System
+   ============================================================ */
+
+:root {
+  --duration-micro:      200ms;
+  --duration-element:    250ms;
+  --duration-page:       300ms;
+  --duration-modal-in:   300ms;
+  --duration-modal-out:  200ms;
+  --duration-message:    250ms;
+
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter:     cubic-bezier(0.0, 0, 0.2, 1);
+  --ease-exit:      cubic-bezier(0.4, 0, 1.0, 1);
+  --ease-bounce:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --transition-micro:   var(--duration-micro)   var(--ease-standard);
+  --transition-element: var(--duration-element) var(--ease-standard);
+  --transition-page:    var(--duration-page)    var(--ease-standard);
+}
+
+/* ============================================================
+   Theme: Dark (default)
+   ============================================================ */
+
+:root,
+html.theme-dark {
+  --color-bg:            #09090b;
+  --color-surface:       #18181b;
+  --color-surface-2:     #27272a;
+  --color-surface-3:     #3f3f46;
+  --color-border:        #3f3f46;
+  --color-border-subtle: #27272a;
+
+  --color-text:          #f4f4f5;
+  --color-text-muted:    #a1a1aa;
+  --color-text-faint:    #71717a;
+
+  --color-accent:        #8b5cf6;
+  --color-accent-hover:  #7c3aed;
+  --color-accent-light:  #a78bfa;
+  --color-accent-muted:  rgba(139, 92, 246, 0.15);
+  --color-accent-glow:   rgba(139, 92, 246, 0.3);
+
+  --color-danger:        #ef4444;
+  --color-danger-muted:  rgba(239, 68, 68, 0.15);
+  --color-success:       #10b981;
+  --color-success-muted: rgba(16, 185, 129, 0.15);
+  --color-warning:       #f59e0b;
+  --color-warning-muted: rgba(245, 158, 11, 0.15);
+
+  --color-scrollbar:       #3f3f46;
+  --color-scrollbar-hover: #8b5cf6;
+
+  --shadow-panel:   0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-modal:   0 8px 40px rgba(0, 0, 0, 0.6);
+  --shadow-tooltip: 0 2px 8px  rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   Theme: Light
+   ============================================================ */
+
+html.theme-light {
+  --color-bg:            #f4f4f5;
+  --color-surface:       #ffffff;
+  --color-surface-2:     #f4f4f5;
+  --color-surface-3:     #e4e4e7;
+  --color-border:        #d4d4d8;
+  --color-border-subtle: #e4e4e7;
+
+  --color-text:          #09090b;
+  --color-text-muted:    #52525b;
+  --color-text-faint:    #a1a1aa;
+
+  --color-accent:        #7c3aed;
+  --color-accent-hover:  #6d28d9;
+  --color-accent-light:  #8b5cf6;
+  --color-accent-muted:  rgba(124, 58, 237, 0.1);
+  --color-accent-glow:   rgba(124, 58, 237, 0.2);
+
+  --color-danger:        #dc2626;
+  --color-danger-muted:  rgba(220, 38, 38, 0.1);
+  --color-success:       #059669;
+  --color-success-muted: rgba(5, 150, 105, 0.1);
+  --color-warning:       #d97706;
+  --color-warning-muted: rgba(217, 119, 6, 0.1);
+
+  --color-scrollbar:       #d4d4d8;
+  --color-scrollbar-hover: #7c3aed;
+
+  --shadow-panel:   0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal:   0 8px 40px rgba(0, 0, 0, 0.15);
+  --shadow-tooltip: 0 2px 8px  rgba(0, 0, 0, 0.12);
+}
+
+/* ============================================================
+   Theme: Midnight (OLED-friendly pure black)
+   ============================================================ */
+
+html.theme-midnight {
+  --color-bg:            #000000;
+  --color-surface:       #0a0a0a;
+  --color-surface-2:     #141414;
+  --color-surface-3:     #1f1f1f;
+  --color-border:        #2a2a2a;
+  --color-border-subtle: #1a1a1a;
+
+  --color-text:          #ffffff;
+  --color-text-muted:    #9ca3af;
+  --color-text-faint:    #6b7280;
+
+  --color-accent:        #a78bfa;
+  --color-accent-hover:  #8b5cf6;
+  --color-accent-light:  #c4b5fd;
+  --color-accent-muted:  rgba(167, 139, 250, 0.12);
+  --color-accent-glow:   rgba(167, 139, 250, 0.25);
+
+  --color-danger:        #f87171;
+  --color-danger-muted:  rgba(248, 113, 113, 0.12);
+  --color-success:       #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.12);
+  --color-warning:       #fbbf24;
+  --color-warning-muted: rgba(251, 191, 36, 0.12);
+
+  --color-scrollbar:       #2a2a2a;
+  --color-scrollbar-hover: #a78bfa;
+
+  --shadow-panel:   0 4px 24px rgba(0, 0, 0, 0.8);
+  --shadow-modal:   0 8px 40px rgba(0, 0, 0, 0.9);
+  --shadow-tooltip: 0 2px 8px  rgba(0, 0, 0, 0.8);
+}
+
+/* ============================================================
+   Theme: Forest (future theme placeholder)
+   ============================================================ */
+
+html.theme-forest {
+  --color-bg:            #0a0f0a;
+  --color-surface:       #0f1a0f;
+  --color-surface-2:     #162416;
+  --color-surface-3:     #1e321e;
+  --color-border:        #2d4a2d;
+  --color-border-subtle: #1e321e;
+
+  --color-text:          #ecfdf5;
+  --color-text-muted:    #86efac;
+  --color-text-faint:    #4ade80;
+
+  --color-accent:        #10b981;
+  --color-accent-hover:  #059669;
+  --color-accent-light:  #34d399;
+  --color-accent-muted:  rgba(16, 185, 129, 0.15);
+  --color-accent-glow:   rgba(16, 185, 129, 0.3);
+
+  --color-danger:        #f87171;
+  --color-danger-muted:  rgba(248, 113, 113, 0.15);
+  --color-success:       #10b981;
+  --color-success-muted: rgba(16, 185, 129, 0.15);
+  --color-warning:       #fbbf24;
+  --color-warning-muted: rgba(251, 191, 36, 0.15);
+
+  --color-scrollbar:       #2d4a2d;
+  --color-scrollbar-hover: #10b981;
+
+  --shadow-panel:   0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-modal:   0 8px 40px rgba(0, 0, 0, 0.7);
+  --shadow-tooltip: 0 2px 8px  rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color var(--transition-page),
+    color            var(--transition-page);
+}
+
+/* ============================================================
+   Scrollbars
+   ============================================================ */
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar);
+  border-radius: 9999px;
+  transition: background var(--transition-micro);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-scrollbar-hover); }
+* { scrollbar-width: thin; scrollbar-color: var(--color-scrollbar) transparent; }
+
+/* ============================================================
+   Focus & Selection
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+::selection {
+  background-color: var(--color-accent-muted);
+  color: var(--color-text);
+}
+
+/* ============================================================
+   Interactive element transitions
+   ============================================================ */
+
+button, a, [role="button"] {
+  transition:
+    color        var(--transition-micro),
+    background   var(--transition-micro),
+    border-color var(--transition-micro),
+    box-shadow   var(--transition-micro),
+    opacity      var(--transition-micro),
+    transform    var(--transition-micro);
+}
+
+button:active:not(:disabled),
+[role="button"]:active {
+  transform: scale(0.97);
+}
+
+/* ============================================================
+   Keyframes
+   ============================================================ */
+
+@keyframes fadeIn       { from { opacity: 0; }                               to { opacity: 1; } }
+@keyframes fadeOut      { from { opacity: 1; }                               to { opacity: 0; } }
+@keyframes slideUpIn    { from { opacity: 0; transform: translateY(10px); }  to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDownIn  { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideLeftIn  { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideRightIn { from { opacity: 0; transform: translateX(12px); }  to { opacity: 1; transform: translateX(0); } }
+@keyframes scaleIn      { from { opacity: 0; transform: scale(0.95); }       to { opacity: 1; transform: scale(1); } }
+@keyframes scaleOut     { from { opacity: 1; transform: scale(1); }          to { opacity: 0; transform: scale(0.95); } }
+@keyframes modalIn      { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes modalOut     { from { opacity: 1; transform: scale(1) translateY(0); }      to { opacity: 0; transform: scale(0.94) translateY(8px); } }
+@keyframes sidebarIn    { from { opacity: 0; transform: translateX(-100%); } to { opacity: 1; transform: translateX(0); } }
+@keyframes messageIn    { from { opacity: 0; transform: translateY(6px); }   to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
+  50%       { box-shadow: 0 0 0 8px transparent; }
+}
+@keyframes iconBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+  30%           { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   Utility classes
+   ============================================================ */
+
+@layer utilities {
+  .animate-fade-in     { animation: fadeIn       var(--duration-element)   var(--ease-enter)    both; }
+  .animate-fade-out    { animation: fadeOut      var(--duration-modal-out) var(--ease-exit)     both; }
+  .animate-slide-up    { animation: slideUpIn    var(--duration-element)   var(--ease-enter)    both; }
+  .animate-slide-down  { animation: slideDownIn  var(--duration-element)   var(--ease-enter)    both; }
+  .animate-slide-left  { animation: slideLeftIn  var(--duration-element)   var(--ease-enter)    both; }
+  .animate-slide-right { animation: slideRightIn var(--duration-element)   var(--ease-enter)    both; }
+  .animate-scale-in    { animation: scaleIn      var(--duration-element)   var(--ease-enter)    both; }
+  .animate-scale-out   { animation: scaleOut     var(--duration-modal-out) var(--ease-exit)     both; }
+  .animate-modal-in    { animation: modalIn      var(--duration-modal-in)  var(--ease-enter)    both; }
+  .animate-modal-out   { animation: modalOut     var(--duration-modal-out) var(--ease-exit)     both; }
+  .animate-sidebar-in  { animation: sidebarIn    var(--duration-page)      var(--ease-enter)    both; }
+  .animate-message-in  { animation: messageIn    var(--duration-message)   var(--ease-enter)    both; }
+  .animate-pulse-glow  { animation: pulseGlow    2s                        var(--ease-standard) infinite; }
+  .animate-icon-bounce { animation: iconBounce   var(--duration-element)   var(--ease-bounce)   both; }
+  .animate-shake       { animation: shake        var(--duration-element)   var(--ease-standard) both; }
+  .spin-loader         { animation: spin         0.8s                      linear               infinite; }
+
+  .stagger-children > *:nth-child(1) { animation-delay:   0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay:  40ms; }
+  .stagger-children > *:nth-child(3) { animation-delay:  80ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 280ms; }
+
+  .transition-micro   { transition: all var(--transition-micro); }
+  .transition-element { transition: all var(--transition-element); }
+  .transition-page    { transition: all var(--transition-page); }
+
+  .typing-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: currentColor;
+    animation: typingDot 1.2s var(--ease-standard) infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  .truncate-text  { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .flex-col-full  { display: flex; flex-direction: column; height: 100%; }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+}
