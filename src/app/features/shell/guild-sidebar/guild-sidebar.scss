@@ -1,0 +1,51 @@
+// Tailwind cannot express pseudo-element animations or
+// border-radius transitions on hover, so those live here.
+// Everything else is in the HTML via Tailwind classes.
+
+.guild-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition:
+    border-radius var(--duration-element) var(--ease-standard),
+    background-color var(--duration-micro) var(--ease-standard),
+    color var(--duration-micro) var(--ease-standard),
+    transform var(--duration-micro) var(--ease-standard);
+
+  // Pill indicator — left edge
+  &::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background-color: var(--color-text);
+    height: 0;
+    opacity: 0;
+    transition:
+      height var(--duration-element) var(--ease-bounce),
+      opacity var(--duration-element) var(--ease-standard);
+  }
+
+  &:hover {
+    border-radius: 30%;
+    transform: translateY(-1px);
+
+    &::before {
+      height: 20px;
+      opacity: 1;
+    }
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
