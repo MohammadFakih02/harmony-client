@@ -1,10 +1,11 @@
-<nav class="flex flex-col items-center w-18 min-w-[72px] h-screen bg-bg py-3 gap-1 overflow-y-auto overflow-x-hidden scrollbar-none">
-
+<nav
+  class="flex flex-col items-center w-full h-full py-3 gap-1 overflow-y-auto overflow-x-hidden scrollbar-none"
+>
   <!-- Home / DM -->
   <div class="flex flex-col items-center gap-1 w-full">
     <a
       routerLink="/app/friends"
-      class="guild-icon bg-surface text-accent-light hover:bg-accent hover:text-white"
+      class="guild-icon bg-surface-2 text-accent-light hover:text-white"
       title="Direct Messages"
     >
       <i class="fas fa-yin-yang text-2xl"></i>
@@ -15,13 +16,15 @@
   <!-- Guild list -->
   <div class="flex flex-col items-center gap-2 w-full flex-1">
     @for (guild of guilds; track guild.id) {
-      <button
-        class="guild-icon bg-surface text-muted hover:bg-accent hover:text-white"
-        [title]="guild.name"
-        (click)="navigateToGuild(guild.id)"
+    <button
+      class="guild-icon bg-surface-2 text-muted hover:text-white"
+      [title]="guild.name"
+      (click)="navigateToGuild(guild.id)"
+    >
+      <span class="text-sm font-semibold select-none"
+        >{{ guild.initials }}</span
       >
-        <span class="text-sm font-semibold select-none">{{ guild.initials }}</span>
-      </button>
+    </button>
     }
   </div>
 
@@ -29,25 +32,24 @@
   <div class="flex flex-col items-center gap-2 w-full">
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
     <button
-      class="guild-icon bg-surface text-success hover:bg-success hover:text-white"
+      class="guild-icon bg-surface-2 text-success hover:bg-success hover:text-white"
       title="Add a Server"
     >
       <i class="fas fa-plus"></i>
     </button>
     <button
-      class="guild-icon bg-surface text-muted hover:bg-accent hover:text-white"
+      class="guild-icon bg-surface-2 text-muted hover:text-white"
       title="Explore Servers"
     >
       <i class="fas fa-compass"></i>
     </button>
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
     <button
-      class="guild-icon bg-surface text-muted hover:bg-danger hover:text-white"
+      class="guild-icon bg-surface-2 text-muted hover:bg-danger hover:text-white"
       title="Log out"
       (click)="logout()"
     >
       <i class="fas fa-right-from-bracket"></i>
     </button>
   </div>
-
 </nav>
