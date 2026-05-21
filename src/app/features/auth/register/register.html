@@ -1,13 +1,11 @@
-<div
-  class="min-h-screen bg-bg flex items-center justify-center px-4 animate-fade-in"
->
+<div class="min-h-screen zen-mesh-bg flex items-center justify-center px-4">
   <div
-    class="w-full max-w-md bg-surface rounded-2xl shadow-panel p-8 border border-border-subtle"
+    class="w-full max-w-md bg-surface rounded-3xl shadow-modal p-8 border border-border animate-scale-in"
   >
     <!-- Brand -->
     <div class="text-center mb-8">
       <div
-        class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-accent-muted mb-4"
+        class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-accent-muted mb-4 animate-pulse-glow"
       >
         <i class="fas fa-yin-yang text-6xl text-accent-light"></i>
       </div>
@@ -45,7 +43,7 @@
           formControlName="username"
           autocomplete="username"
           placeholder="cooluser"
-          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-harmony-placeholder text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-faint text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         @if (username.invalid && username.touched) {
         <p class="mt-1 text-xs text-red-400">
@@ -69,7 +67,7 @@
           formControlName="email"
           autocomplete="email"
           placeholder="you@example.com"
-          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-harmony-placeholder text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-faint text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         @if (email.invalid && email.touched) {
         <p class="mt-1 text-xs text-red-400">Enter a valid email address.</p>
@@ -90,7 +88,7 @@
           formControlName="password"
           autocomplete="new-password"
           placeholder="••••••••"
-          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-harmony-placeholder text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-faint text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         @if (password.invalid && password.touched) {
         <p class="mt-1 text-xs text-red-400">
@@ -113,7 +111,7 @@
           formControlName="confirmPassword"
           autocomplete="new-password"
           placeholder="••••••••"
-          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-harmony-placeholder text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-primary placeholder-faint text-sm transition-colors duration-150 hover:border-surface-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         @if (passwordMismatch) {
         <p class="mt-1 text-xs text-red-400">Passwords do not match.</p>

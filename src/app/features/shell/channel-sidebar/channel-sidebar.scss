@@ -1,11 +1,31 @@
-// Tailwind cannot target Angular's routerLinkActive class directly,
-// so the active channel state lives here.
-
 .channel-item {
-  &.active {
-    background-color: var(--color-surface-3);
-    color: var(--color-text);
+  position: relative;
+  overflow: hidden;
 
-    i { color: var(--color-text-muted); }
+  &.active {
+    background: linear-gradient(
+      90deg,
+      var(--color-accent-muted) 0%,
+      transparent 100%
+    );
+    color: var(--color-text);
+    font-weight: 600;
+
+    i {
+      color: var(--color-accent-light);
+    }
+
+    // Modern left micro-accent indicator
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 25%;
+      height: 50%;
+      width: 3px;
+      border-radius: 0 4px 4px 0;
+      background-color: var(--color-accent);
+      animation: slideUpIn var(--duration-element) var(--ease-enter);
+    }
   }
 }
