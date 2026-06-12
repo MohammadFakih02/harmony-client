@@ -3,9 +3,9 @@
   <div
     class="flex items-center justify-between px-4 h-12 min-h-[48px] border-b border-border-subtle cursor-pointer transition-micro hover:bg-surface-2"
   >
-    <span class="font-semibold text-primary truncate-text flex-1"
-      >{{ guildName() }}</span
-    >
+    <span class="font-semibold text-primary truncate-text flex-1">
+      {{ guildStore.selectedGuild()?.name ?? 'Select a server' }}
+    </span>
     <button
       class="flex items-center justify-center w-6 h-6 text-muted hover:text-primary transition-micro text-xs"
     >
@@ -15,9 +15,15 @@
 
   <!-- Channel list -->
   <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
-    @for (category of categories(); track category.id) {
+    @if (channelStore.loading()) {
+    <div class="flex justify-center pt-8">
+      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+    </div>
+    } @else {
+    @for (category of channelStore.currentCategories(); track category.id) {
     <div class="mb-1">
-      <!-- Category header -->
+      <!-- Category header (only shown when the category has a name) -->
+      @if (category.name) {
       <div class="channel-category-header group flex items-center w-full px-2 pl-4 py-1">
         <button
           class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
@@ -36,29 +42,40 @@
           <i class="fas fa-plus"></i>
         </button>
       </div>
+      }
 
       <!-- Channels -->
       @if (!category.collapsed) {
       <div class="flex flex-col gap-0.5 px-2 animate-slide-down">
         @for (channel of category.channels; track channel.id) {
+        @let unread = unreadStore.counts()[channel.id] || 0;
         <div
           routerLinkActive="active"
           class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
+          [class.font-semibold]="unread > 0"
+          [class.text-primary]="unread > 0"
         >
-          <!-- Invisible full-row link — the clickable area for navigation -->
           <a
-            [routerLink]="['/app/guilds/1/channels', channel.id]"
+            [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
             class="absolute inset-0 rounded-md"
             [attr.aria-label]="'Open ' + channel.name"
           ></a>
 
           <i
             class="fas w-4 text-center flex-shrink-0 text-faint text-base relative z-10"
-            [class.fa-hashtag]="channel.type === 'text'"
+            [class.fa-hashtag]="channel.type === 'text' || channel.type === 'announcement'"
             [class.fa-volume-high]="channel.type === 'voice'"
           ></i>
           <span class="flex-1 truncate-text relative z-10">{{ channel.name }}</span>
 
+          <!-- Unread badge -->
+          @if (unread > 0) {
+          <span
+            class="relative z-10 flex-shrink-0 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"
+          >
+            {{ unread > 99 ? '99+' : unread }}
+          </span>
+          } @else {
           <div
             class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro relative z-10"
           >
@@ -75,49 +92,40 @@
               <i class="fas fa-gear"></i>
             </button>
           </div>
+          }
         </div>
         }
       </div>
       }
     </div>
     }
+    }
   </div>
 
-  <!-- Floating User Deck (SaAS Aesthetic) -->
+  <!-- User deck -->
   <div
     class="flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border-subtle h-[52px] min-h-[52px] shadow-sm animate-slide-up"
   >
-    <!-- Avatar -->
     <ui-avatar
       [src]="auth.currentUser()?.avatarKey ?? null"
       [alt]="auth.currentUser()?.username ?? ''"
       status="online"
     />
-
-    <!-- User info -->
     <div class="flex flex-col flex-1 min-w-0">
-      <span
-        class="text-sm font-semibold text-primary leading-tight truncate-text"
-      >
+      <span class="text-sm font-semibold text-primary leading-tight truncate-text">
         {{ auth.currentUser()?.username }}
       </span>
       <span class="text-xs text-faint leading-tight truncate-text">
         #{{ auth.currentUser()?.discriminator }}
       </span>
     </div>
-
-    <!-- Action buttons -->
     <div class="flex gap-0.5">
       <button
         class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
         [title]="theme.isDark() ? 'Light Mode' : 'Dark Mode'"
         (click)="toggleTheme()"
       >
-        <i
-          class="fas"
-          [class.fa-sun]="theme.isDark()"
-          [class.fa-moon]="!theme.isDark()"
-        ></i>
+        <i class="fas" [class.fa-sun]="theme.isDark()" [class.fa-moon]="!theme.isDark()"></i>
       </button>
       <button
         class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
