@@ -15,20 +15,28 @@
 
   <!-- Guild list -->
   <div class="flex flex-col items-center gap-2 w-full flex-1">
-    @for (guild of guilds; track guild.id) {
+    @for (guild of guildStore.guilds(); track guild.id) {
     <button
-      class="guild-icon bg-surface-2 text-muted hover:text-white"
+      class="guild-icon text-muted hover:text-white transition-micro relative"
+      [class.bg-accent]="guildStore.selectedGuildId() === guild.id"
+      [class.bg-surface-2]="guildStore.selectedGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"
     >
-      <span class="text-sm font-semibold select-none"
-        >{{ guild.initials }}</span
-      >
+      @if (guild.iconKey) {
+        <img
+          [src]="guild.iconKey"
+          [alt]="guild.name"
+          class="w-full h-full object-cover rounded-[inherit]"
+        />
+      } @else {
+        <span class="text-sm font-semibold select-none">{{ guildInitials()[guild.id] }}</span>
+      }
     </button>
     }
   </div>
 
-  <!-- Add server + Explore -->
+  <!-- Add server + utility -->
   <div class="flex flex-col items-center gap-2 w-full">
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
     <button

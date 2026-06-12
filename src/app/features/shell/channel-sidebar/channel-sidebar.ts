@@ -1,21 +1,11 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { ChannelStore } from '../../../core/stores/channel.store';
+import { GuildStore } from '../../../core/stores/guild.store';
+import { UnreadStore } from '../../../core/stores/unread.store';
 import { UiAvatar } from '../../../shared/ui';
-
-interface Channel {
-  id: string;
-  name: string;
-  type: 'text' | 'voice';
-}
-
-interface Category {
-  id: string;
-  name: string;
-  channels: Channel[];
-  collapsed: boolean;
-}
 
 @Component({
   selector: 'app-channel-sidebar',
@@ -25,38 +15,14 @@ interface Category {
   styleUrl: './channel-sidebar.scss',
 })
 export class ChannelSidebar {
-  auth = inject(AuthService);
-  theme = inject(ThemeService);
+  protected readonly auth = inject(AuthService);
+  protected readonly theme = inject(ThemeService);
+  protected readonly guildStore = inject(GuildStore);
+  protected readonly channelStore = inject(ChannelStore);
+  protected readonly unreadStore = inject(UnreadStore);
 
-  guildName = signal('My Server');
-
-  // Placeholder — replaced by NgRx store in Month 2
-  categories = signal<Category[]>([
-    {
-      id: '1',
-      name: 'Text Channels',
-      collapsed: false,
-      channels: [
-        { id: '1', name: 'general', type: 'text' },
-        { id: '2', name: 'announcements', type: 'text' },
-        { id: '3', name: 'off-topic', type: 'text' },
-      ],
-    },
-    {
-      id: '2',
-      name: 'Voice Channels',
-      collapsed: false,
-      channels: [
-        { id: '4', name: 'General', type: 'voice' },
-        { id: '5', name: 'Gaming', type: 'voice' },
-      ],
-    },
-  ]);
-
-  toggleCategory(categoryId: string): void {
-    this.categories.update(cats =>
-      cats.map(c => c.id === categoryId ? { ...c, collapsed: !c.collapsed } : c)
-    );
+  toggleCategory(categoryId: number | null): void {
+    if (categoryId !== null) this.channelStore.toggleCategory(categoryId);
   }
 
   toggleTheme(): void {

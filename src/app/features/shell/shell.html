@@ -17,8 +17,30 @@
 
   <!-- Content Workspace -->
   <main
-    class="flex-1 h-full bg-surface rounded-2xl border border-border-subtle overflow-hidden shadow-panel"
+    class="flex-1 h-full bg-surface rounded-2xl border border-border-subtle overflow-hidden shadow-panel relative"
   >
     <router-outlet />
   </main>
 </div>
+
+<!-- Connection status banner — floats over the bottom of the screen, only when degraded -->
+@if (signalR.connectionState() === 'reconnecting' || signalR.connectionState() === 'disconnected') {
+<div
+  class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium shadow-modal animate-slide-up"
+  [class.bg-warning]="signalR.connectionState() === 'reconnecting'"
+  [class.text-bg]="signalR.connectionState() === 'reconnecting'"
+  [class.bg-danger]="signalR.connectionState() === 'disconnected'"
+  [class.text-white]="signalR.connectionState() === 'disconnected'"
+>
+  @if (signalR.connectionState() === 'reconnecting') {
+    <i class="fas fa-yin-yang animate-spin text-xs"></i>
+    <span>Reconnecting…</span>
+  } @else {
+    <i class="fas fa-wifi text-xs"></i>
+    <span>Connection lost —</span>
+    <button class="underline hover:no-underline font-semibold" onclick="location.reload()">
+      refresh to reconnect
+    </button>
+  }
+</div>
+}
