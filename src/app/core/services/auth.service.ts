@@ -137,10 +137,19 @@ export class AuthService {
   private setSession(response: AuthResponse): void {
     this._accessToken.set(response.accessToken);
     this._currentUser.set(response.user);
+    // Keep the restore latch in sync — a fresh session is a known-valid result,
+    // so a later guard check short-circuits without firing another refresh.
+    this.sessionChecked = true;
+    this.sessionValid = true;
   }
 
   private clearSession(): void {
     this._accessToken.set(null);
     this._currentUser.set(null);
+    // After an intentional logout, lock the latch to "checked + invalid"
+    // so guestGuard's tryRestoreSession() short-circuits instead of
+    // re-running refresh() while the cookie is still technically alive.
+    this.sessionChecked = true; // ← was false
+    this.sessionValid = false;
   }
 }

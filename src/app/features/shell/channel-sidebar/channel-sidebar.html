@@ -3,7 +3,7 @@
   <div
     class="flex items-center justify-between px-4 h-12 min-h-[48px] border-b border-border-subtle cursor-pointer transition-micro hover:bg-surface-2"
   >
-    <span class="font-semibold text-[15px] text-primary truncate-text flex-1"
+    <span class="font-semibold text-primary truncate-text flex-1"
       >{{ guildName() }}</span
     >
     <button
@@ -18,59 +18,64 @@
     @for (category of categories(); track category.id) {
     <div class="mb-1">
       <!-- Category header -->
-      <button
-        class="channel-category-header group flex items-center gap-1 w-full px-2 pl-4 py-1 text-[11px] font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
-        (click)="toggleCategory(category.id)"
-      >
-        <i
-          class="fas fa-chevron-right text-[10px] flex-shrink-0 transition-element"
-          [class.rotate-90]="!category.collapsed"
-        ></i>
-        <span class="flex-1 text-left">{{ category.name }}</span>
+      <div class="channel-category-header group flex items-center w-full px-2 pl-4 py-1">
         <button
-          class="flex items-center justify-center w-4 h-4 opacity-0 group-hover:opacity-100 hover:text-primary transition-micro text-xs"
+          class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+          (click)="toggleCategory(category.id)"
+        >
+          <i
+            class="fas fa-chevron-right text-3xs flex-shrink-0 transition-element"
+            [class.rotate-90]="!category.collapsed"
+          ></i>
+          <span class="flex-1 text-left">{{ category.name }}</span>
+        </button>
+        <button
+          class="flex items-center justify-center w-4 h-4 opacity-0 group-hover:opacity-100 text-faint hover:text-primary transition-micro text-xs"
           title="Create Channel"
-          (click)="$event.stopPropagation()"
         >
           <i class="fas fa-plus"></i>
         </button>
-      </button>
+      </div>
 
       <!-- Channels -->
       @if (!category.collapsed) {
       <div class="flex flex-col gap-0.5 px-2 animate-slide-down">
         @for (channel of category.channels; track channel.id) {
-        <a
-          [routerLink]="['/app/guilds/1/channels', channel.id]"
+        <div
           routerLinkActive="active"
-          class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md text-[15px] font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+          class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
         >
+          <!-- Invisible full-row link — the clickable area for navigation -->
+          <a
+            [routerLink]="['/app/guilds/1/channels', channel.id]"
+            class="absolute inset-0 rounded-md"
+            [attr.aria-label]="'Open ' + channel.name"
+          ></a>
+
           <i
-            class="fas w-4 text-center flex-shrink-0 text-faint text-base"
+            class="fas w-4 text-center flex-shrink-0 text-faint text-base relative z-10"
             [class.fa-hashtag]="channel.type === 'text'"
             [class.fa-volume-high]="channel.type === 'voice'"
           ></i>
-          <span class="flex-1 truncate-text">{{ channel.name }}</span>
+          <span class="flex-1 truncate-text relative z-10">{{ channel.name }}</span>
 
           <div
-            class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro"
+            class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro relative z-10"
           >
             <button
               class="flex items-center justify-center w-5 h-5 rounded text-muted hover:text-primary hover:bg-surface-3 transition-micro text-xs"
               title="Create Invite"
-              (click)="$event.preventDefault()"
             >
               <i class="fas fa-user-plus"></i>
             </button>
             <button
               class="flex items-center justify-center w-5 h-5 rounded text-muted hover:text-primary hover:bg-surface-3 transition-micro text-xs"
               title="Channel Settings"
-              (click)="$event.preventDefault()"
             >
               <i class="fas fa-gear"></i>
             </button>
           </div>
-        </a>
+        </div>
         }
       </div>
       }
@@ -83,24 +88,11 @@
     class="flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border-subtle h-[52px] min-h-[52px] shadow-sm animate-slide-up"
   >
     <!-- Avatar -->
-    <div class="relative flex-shrink-0">
-      @if (auth.currentUser()?.avatarKey) {
-      <img
-        [src]="auth.currentUser()!.avatarKey!"
-        [alt]="auth.currentUser()!.username"
-        class="w-8 h-8 rounded-full object-cover"
-      />
-      } @else {
-      <div
-        class="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent-light text-sm"
-      >
-        <i class="fas fa-user"></i>
-      </div>
-      }
-      <div
-        class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success border-2 border-surface-2"
-      ></div>
-    </div>
+    <ui-avatar
+      [src]="auth.currentUser()?.avatarKey ?? null"
+      [alt]="auth.currentUser()?.username ?? ''"
+      status="online"
+    />
 
     <!-- User info -->
     <div class="flex flex-col flex-1 min-w-0">
@@ -117,7 +109,7 @@
     <!-- Action buttons -->
     <div class="flex gap-0.5">
       <button
-        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro text-[15px]"
+        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
         [title]="theme.isDark() ? 'Light Mode' : 'Dark Mode'"
         (click)="toggleTheme()"
       >
@@ -128,7 +120,7 @@
         ></i>
       </button>
       <button
-        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro text-[15px]"
+        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
         title="User Settings"
       >
         <i class="fas fa-gear"></i>

@@ -5,6 +5,7 @@ import {
   HttpErrorResponse,
 } from "@angular/common/http";
 import { inject } from "@angular/core";
+import { Router } from "@angular/router";
 import { catchError, from, switchMap, throwError } from "rxjs";
 import { AuthService } from "../services/auth.service";
 
@@ -13,6 +14,7 @@ export const authInterceptor: HttpInterceptorFn = (
   next: HttpHandlerFn,
 ) => {
   const authService = inject(AuthService);
+  const router = inject(Router);
 
   // Don't intercept auth endpoints — they manage tokens themselves
   if (isAuthEndpoint(req.url)) {
@@ -29,7 +31,8 @@ export const authInterceptor: HttpInterceptorFn = (
         return from(authService.refresh()).pipe(
           switchMap((success) => {
             if (!success) {
-              // Refresh failed — user has been redirected to login by AuthService
+              // Refresh failed — session is already cleared; send the user to login.
+              router.navigate(["/login"]);
               return throwError(() => error);
             }
             // Retry with the new token
