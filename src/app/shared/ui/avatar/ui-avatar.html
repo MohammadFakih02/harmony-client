@@ -1,0 +1,22 @@
+<div class="relative flex-shrink-0">
+  @if (src()) {
+  <img
+    [src]="src()!"
+    [alt]="alt()"
+    class="rounded-full object-cover"
+    [class]="sizeClass()"
+  />
+  } @else {
+  <div
+    class="rounded-full bg-accent-muted flex items-center justify-center text-accent-light"
+    [class]="sizeClass()"
+  >
+    <i class="fas fa-user"></i>
+  </div>
+  } @if (status()) {
+  <div
+    class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+    [class]="ringClass() + ' ' + statusClasses[status()!]"
+  ></div>
+  }
+</div>

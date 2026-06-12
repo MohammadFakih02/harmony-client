@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UiButton, UiInput } from '../../../shared/ui';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -12,7 +13,7 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput],
   templateUrl: './register.html',
 })
 export class RegisterComponent {
@@ -63,4 +64,21 @@ export class RegisterComponent {
   get password() { return this.form.get('password')!; }
   get confirmPassword() { return this.form.get('confirmPassword')!; }
   get passwordMismatch() { return this.form.hasError('passwordMismatch') && this.confirmPassword.touched; }
+
+  get usernameError(): string | null {
+    return this.username.invalid && this.username.touched
+      ? 'Username must be between 2 and 32 characters.'
+      : null;
+  }
+  get emailError(): string | null {
+    return this.email.invalid && this.email.touched ? 'Enter a valid email address.' : null;
+  }
+  get passwordError(): string | null {
+    return this.password.invalid && this.password.touched
+      ? 'Password must be at least 8 characters.'
+      : null;
+  }
+  get confirmPasswordError(): string | null {
+    return this.passwordMismatch ? 'Passwords do not match.' : null;
+  }
 }

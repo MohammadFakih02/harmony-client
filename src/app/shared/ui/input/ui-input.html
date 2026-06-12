@@ -1,0 +1,18 @@
+<input
+  [id]="inputId()"
+  [type]="inputType()"
+  [placeholder]="placeholder()"
+  [autocomplete]="autocomplete()"
+  [value]="value()"
+  [disabled]="isDisabled()"
+  [class]="inputClass()"
+  [attr.aria-invalid]="error() ? 'true' : null"
+  [attr.aria-describedby]="error() ? inputId() + '-error' : null"
+  (input)="onInput($event)"
+  (blur)="onBlur()"
+/>
+@if (error()) {
+<p [id]="inputId() + '-error'" role="alert" class="mt-1 text-xs text-danger">
+  {{ error() }}
+</p>
+}
