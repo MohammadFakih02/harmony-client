@@ -3,6 +3,18 @@
 
 /* ============================================================
    Tailwind CSS v4 Configuration Block
+
+   Runtime-theming indirection — why tokens look "circular":
+   @theme registers Tailwind utility names and their CSS output at build time.
+   Values like `--color-bg: var(--color-bg)` are intentional: Tailwind emits
+   `background-color: var(--color-bg)` for `bg-bg`, keeping the value as a live
+   CSS custom property reference. The actual colour is set in the `html.theme-*`
+   blocks below and swapped at runtime by ThemeService — no rebuild needed.
+
+   Token naming note:
+   `--color-primary` maps to the primary TEXT colour, not the brand accent.
+   The accent colour is `--color-accent`. This naming mirrors Discord's convention
+   (primary = foreground) and is intentional — renaming would churn every template.
    ============================================================ */
 @theme {
   /* Colors */
@@ -28,6 +40,10 @@
   --color-success-muted: var(--color-success-muted);
   --color-warning: var(--color-warning);
   --color-warning-muted: var(--color-warning-muted);
+
+  /* Type scale — supplements Tailwind defaults */
+  --text-2xs: 0.6875rem; /* 11px — category headers, metadata */
+  --text-3xs: 0.625rem;  /* 10px — icon-size hints, micro labels */
 
   /* Spacing */
   --spacing-18: 4.5rem; /* Enables w-18 / h-18 (72px) for your sidebar */
@@ -212,6 +228,18 @@
     }
     80% {
       transform: translateX(4px);
+    }
+  }
+  @keyframes typingDot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
     }
   }
 }
@@ -524,9 +552,6 @@ button:active:not(:disabled),
   }
   .animate-shake {
     animation: shake var(--duration-element) var(--ease-standard) both;
-  }
-  .spin-loader {
-    animation: spin 0.8s linear infinite;
   }
 
   .stagger-children > *:nth-child(1) {

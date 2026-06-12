@@ -2,11 +2,12 @@ import { Component, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UiButton, UiInput } from '../../../shared/ui';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput],
   templateUrl: './login.html',
 })
 export class LoginComponent {
@@ -48,4 +49,11 @@ export class LoginComponent {
 
   get email() { return this.form.get('email')!; }
   get password() { return this.form.get('password')!; }
+
+  get emailError(): string | null {
+    return this.email.invalid && this.email.touched ? 'Enter a valid email address.' : null;
+  }
+  get passwordError(): string | null {
+    return this.password.invalid && this.password.touched ? 'Password must be at least 8 characters.' : null;
+  }
 }

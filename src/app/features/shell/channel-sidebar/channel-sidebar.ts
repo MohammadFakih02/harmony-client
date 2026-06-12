@@ -1,7 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { UiAvatar } from '../../../shared/ui';
 
 interface Channel {
   id: string;
@@ -19,7 +20,7 @@ interface Category {
 @Component({
   selector: 'app-channel-sidebar',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, RouterLinkActive, UiAvatar],
   templateUrl: './channel-sidebar.html',
   styleUrl: './channel-sidebar.scss',
 })
