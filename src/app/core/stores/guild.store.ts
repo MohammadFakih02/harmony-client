@@ -1,0 +1,37 @@
+import { computed, inject } from '@angular/core';
+import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { GuildSummary } from '../models/guild.models';
+import { GuildService } from '../services/guild.service';
+
+interface GuildState {
+  guilds: GuildSummary[];
+  selectedGuildId: number | null;
+  loading: boolean;
+}
+
+export const GuildStore = signalStore(
+  { providedIn: 'root' },
+  withState<GuildState>({ guilds: [], selectedGuildId: null, loading: false }),
+  withComputed(({ guilds, selectedGuildId }) => ({
+    selectedGuild: computed(() => guilds().find((g) => g.id === selectedGuildId()) ?? null),
+  })),
+  withMethods((store, service = inject(GuildService)) => ({
+    async loadGuilds(): Promise<void> {
+      patchState(store, { loading: true });
+      try {
+        const guilds = await service.getMyGuilds();
+        patchState(store, { guilds, loading: false });
+      } catch {
+        patchState(store, { loading: false });
+      }
+    },
+
+    selectGuild(id: number): void {
+      patchState(store, { selectedGuildId: id });
+    },
+
+    addGuild(guild: GuildSummary): void {
+      patchState(store, { guilds: [...store.guilds(), guild] });
+    },
+  })),
+);

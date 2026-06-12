@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { GuildStore } from '../../../core/stores/guild.store';
 
 @Component({
   selector: 'app-guild-sidebar',
@@ -10,16 +11,26 @@ import { AuthService } from '../../../core/services/auth.service';
   styleUrl: './guild-sidebar.scss',
 })
 export class GuildSidebar {
-  private auth = inject(AuthService);
-  private router = inject(Router);
+  protected readonly auth = inject(AuthService);
+  protected readonly guildStore = inject(GuildStore);
+  private readonly router = inject(Router);
 
-  // Placeholder — replaced by NgRx store in Month 2
-  guilds = [
-    { id: '1', name: 'My Server', initials: 'MS' },
-    { id: '2', name: 'Dev Team', initials: 'DT' },
-  ];
+  protected readonly guildInitials = computed(() =>
+    this.guildStore.guilds().reduce(
+      (acc, g) => {
+        acc[g.id] = g.name
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+        return acc;
+      },
+      {} as Record<number, string>,
+    ),
+  );
 
-  navigateToGuild(guildId: string): void {
+  navigateToGuild(guildId: number): void {
     this.router.navigate(['/app/guilds', guildId]);
   }
 
