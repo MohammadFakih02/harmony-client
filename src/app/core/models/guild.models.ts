@@ -1,5 +1,5 @@
 export interface GuildSummary {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
   iconKey: string | null;
@@ -7,5 +7,5 @@ export interface GuildSummary {
   memberCount: number;
   isPublic: boolean;
   inviteCode: string;
-  ownerId: number;
+  ownerId: string;
 }

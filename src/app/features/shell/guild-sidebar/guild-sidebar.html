@@ -17,8 +17,9 @@
   <div class="flex flex-col items-center gap-2 w-full flex-1">
     @for (guild of guildStore.guilds(); track guild.id) {
     <button
-      class="guild-icon text-muted hover:text-white transition-micro relative"
+      class="guild-icon text-muted hover:text-primary transition-micro relative"
       [class.bg-accent]="guildStore.selectedGuildId() === guild.id"
+      [class.text-white]="guildStore.selectedGuildId() === guild.id"
       [class.bg-surface-2]="guildStore.selectedGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"
@@ -42,6 +43,7 @@
     <button
       class="guild-icon bg-surface-2 text-success hover:bg-success hover:text-white"
       title="Add a Server"
+      (click)="openCreateModal()"
     >
       <i class="fas fa-plus"></i>
     </button>
@@ -61,3 +63,61 @@
     </button>
   </div>
 </nav>
+
+<!-- Create Server Modal -->
+@if (showCreateModal()) {
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  (click)="closeCreateModal()"
+>
+  <div
+    class="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 flex flex-col gap-5"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="flex flex-col gap-1">
+      <h2 class="text-lg font-bold text-primary text-center">Create a Server</h2>
+      <p class="text-sm text-muted text-center">Give your new server a name to get started.</p>
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="guild-name">
+        Server Name
+      </label>
+      <input
+        id="guild-name"
+        type="text"
+        class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+        placeholder="My Awesome Server"
+        maxlength="100"
+        [ngModel]="guildName()"
+        (ngModelChange)="guildName.set($event)"
+        (keydown.enter)="submitCreateGuild()"
+      />
+      @if (error()) {
+      <p class="text-xs text-danger">{{ error() }}</p>
+      }
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="closeCreateModal()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro disabled:opacity-50 disabled:cursor-not-allowed"
+        [disabled]="submitting() || !guildName().trim()"
+        (click)="submitCreateGuild()"
+      >
+        @if (submitting()) {
+          <i class="fas fa-yin-yang animate-spin mr-1.5"></i>
+        }
+        Create Server
+      </button>
+    </div>
+  </div>
+</div>
+}

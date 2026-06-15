@@ -1,7 +1,7 @@
 <!-- Degraded banner -->
 @if (messageStore.degraded()) {
 <div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs">
-  <i class="fas fa-triangle-exclamation flex-shrink-0"></i>
+  <i class="fas fa-triangle-exclamation shrink-0"></i>
   <span>Couldn't load all messages — some history may be missing.</span>
 </div>
 }
@@ -30,7 +30,7 @@
 }
 
 <!-- Message groups -->
-<div class="flex flex-col gap-0.5 px-2 py-2" #scrollContainer>
+<div class="flex flex-col gap-0.5 px-2 py-2 h-max">
   @for (group of messageGroups(); track group.firstMessageId) {
   <div class="group flex items-start gap-3 px-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-message-in">
     <ui-avatar
@@ -38,7 +38,7 @@
       [alt]="group.username"
       size="md"
       ringClass="border-surface-2 group-hover:border-surface-2"
-      class="mt-0.5 flex-shrink-0"
+      class="mt-0.5 shrink-0"
     />
     <div class="flex flex-col gap-0.5 flex-1 min-w-0">
       <div class="flex items-baseline gap-2">
@@ -47,7 +47,7 @@
       </div>
       @for (msg of group.messages; track msg.messageId) {
       <p
-        class="text-sm leading-relaxed break-words"
+        class="text-sm leading-relaxed wrap-break-words"
         [class.text-muted]="!msg.pending && !msg.failed"
         [class.text-primary]="!msg.pending && !msg.failed"
         [class.opacity-60]="msg.pending"

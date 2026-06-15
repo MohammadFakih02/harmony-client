@@ -468,13 +468,17 @@ body {
    Focus & Selection
    ============================================================ */
 
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-:focus:not(:focus-visible) {
-  outline: none;
+@layer base {
+  /* Inside @layer base, Tailwind utilities (in @layer utilities) take precedence,
+     so focus-visible:outline-none on any element correctly suppresses this. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 ::selection {

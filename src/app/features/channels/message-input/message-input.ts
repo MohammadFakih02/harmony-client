@@ -1,13 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { UiButton } from '../../../shared/ui';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MessageStore } from '../../../core/stores/message.store';
 
 @Component({
   selector: 'app-message-input',
   standalone: true,
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule],
   templateUrl: './message-input.html',
 })
 export class MessageInput {

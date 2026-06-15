@@ -1,29 +1,42 @@
-<div
-  class="flex h-screen w-screen p-3 gap-3 bg-gradient-to-br from-bg to-surface-2 overflow-hidden select-none"
->
-  <!-- Guild Navigation Panel -->
-  <div
-    class="flex flex-col h-full w-18 min-w-[72px] bg-surface rounded-2xl border border-border-subtle overflow-hidden"
-  >
+<div class="flex h-screen w-screen bg-bg overflow-hidden select-none">
+  <!-- Guild Navigation Bar -->
+  <div class="flex flex-col h-full w-18 min-w-18 bg-surface overflow-hidden">
     <app-guild-sidebar />
   </div>
 
   <!-- Channel Navigation Panel -->
-  <div
-    class="flex flex-col h-full w-60 min-w-[240px] bg-surface rounded-2xl border border-border-subtle overflow-hidden"
-  >
+  <div class="flex flex-col h-full w-60 min-w-60 bg-surface-2 overflow-hidden border-r border-border-subtle">
     <app-channel-sidebar />
   </div>
 
   <!-- Content Workspace -->
-  <main
-    class="flex-1 h-full bg-surface rounded-2xl border border-border-subtle overflow-hidden shadow-panel relative"
-  >
-    <router-outlet />
+  <main class="flex-1 h-full bg-surface overflow-hidden flex min-w-0">
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+      <!-- Member list toggle button (top-right of chat) -->
+      <div class="absolute top-2 right-3 z-10">
+        <button
+          class="flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface-2 transition-micro text-sm"
+          [class.text-accent]="showMembers()"
+          [class.bg-accent-muted]="showMembers()"
+          title="Toggle Member List"
+          (click)="showMembers.set(!showMembers())"
+        >
+          <i class="fas fa-users"></i>
+        </button>
+      </div>
+      <router-outlet />
+    </div>
+
+    <!-- Member sidebar (togglable) -->
+    @if (showMembers()) {
+    <div class="w-60 min-w-60 h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0">
+      <app-member-sidebar />
+    </div>
+    }
   </main>
 </div>
 
-<!-- Connection status banner — floats over the bottom of the screen, only when degraded -->
+<!-- Connection status banner -->
 @if (signalR.connectionState() === 'reconnecting' || signalR.connectionState() === 'disconnected') {
 <div
   class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium shadow-modal animate-slide-up"

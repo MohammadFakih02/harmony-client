@@ -1,9 +1,11 @@
-<div class="flex items-end gap-2 px-4 py-3">
+<!-- Added: w-full, mx-auto, shrink-0, and a matching max-width (e.g., max-w-5xl) -->
+<div class="w-full mx-auto flex items-center gap-2 px-4 py-3 shrink-0">
   <div
-    class="flex-1 bg-surface-2 rounded-lg border border-border-subtle px-4 py-2.5 focus-within:border-accent transition-micro"
+    class="flex-1 flex items-center bg-surface-3 rounded-xl h-11 ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
   >
+    <!-- Added: py-2.5 (vertical padding) and switched to leading-normal to prevent the text from clipping -->
     <textarea
-      class="w-full bg-transparent text-sm text-primary placeholder-faint resize-none focus:outline-none leading-relaxed max-h-48 overflow-y-auto"
+      class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm px-4 py-2.5 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
       [placeholder]="'Message #' + channelName()"
       [ngModel]="draft()"
       (ngModelChange)="draft.set($event)"
@@ -11,14 +13,22 @@
       rows="1"
     ></textarea>
   </div>
-  <ui-button
-    variant="primary"
-    size="icon"
-    [loading]="sending()"
-    [disabled]="!canSend()"
+  <button
+    class="flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-micro text-sm font-medium"
+    [class.bg-accent]="canSend()"
+    [class.text-white]="canSend()"
+    [class.hover:bg-accent-hover]="canSend()"
+    [class.bg-surface-3]="!canSend()"
+    [class.text-faint]="!canSend()"
+    [class.cursor-not-allowed]="!canSend()"
+    [disabled]="!canSend() || sending()"
     (click)="send()"
     title="Send message"
   >
-    <i class="fas fa-paper-plane text-sm"></i>
-  </ui-button>
+    @if (sending()) {
+    <i class="fas fa-yin-yang animate-spin"></i>
+    } @else {
+    <i class="fas fa-paper-plane"></i>
+    }
+  </button>
 </div>
