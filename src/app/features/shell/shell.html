@@ -14,15 +14,14 @@
     <div class="flex-1 flex flex-col overflow-hidden min-w-0 relative">
       <!-- Member list toggle button (top-right of chat) -->
       <div class="absolute top-2 right-3 z-10">
-        <button
-          class="flex items-center justify-center w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface-2 transition-micro text-sm"
-          [class.text-accent]="showMembers()"
-          [class.bg-accent-muted]="showMembers()"
-          title="Toggle Member List"
+        <ui-icon-button
+          size="md"
+          [active]="showMembers()"
+          label="Toggle Member List"
           (click)="showMembers.set(!showMembers())"
         >
           <i class="fas fa-users"></i>
-        </button>
+        </ui-icon-button>
       </div>
       <router-outlet />
     </div>

@@ -8,19 +8,13 @@
     </span>
     <div class="flex items-center gap-1">
       @if (guildStore.selectedGuildId()) {
-      <button
-        class="flex items-center justify-center w-7 h-7 text-muted hover:text-primary hover:bg-surface-2 rounded-md transition-micro text-xs"
-        title="Create Channel"
-        (click)="openCreateChannel()"
-      >
+      <ui-icon-button size="sm" label="Create Channel" (click)="openCreateChannel()">
         <i class="fas fa-plus"></i>
-      </button>
+      </ui-icon-button>
       }
-      <button
-        class="flex items-center justify-center w-6 h-6 text-muted hover:text-primary transition-micro text-xs"
-      >
+      <ui-icon-button size="sm" hover="none">
         <i class="fas fa-chevron-down"></i>
-      </button>
+      </ui-icon-button>
     </div>
   </div>
 
@@ -58,13 +52,11 @@
           ></i>
           <span class="flex-1 text-left">{{ category.name }}</span>
         </button>
-        <button
-          class="flex items-center justify-center w-4 h-4 opacity-0 group-hover:opacity-100 text-faint hover:text-primary transition-micro text-xs"
-          title="Create Channel"
-          (click)="openCreateChannel()"
-        >
-          <i class="fas fa-plus"></i>
-        </button>
+        <span class="opacity-0 group-hover:opacity-100 transition-micro">
+          <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
+            <i class="fas fa-plus"></i>
+          </ui-icon-button>
+        </span>
       </div>
       }
 
@@ -97,20 +89,12 @@
           </span>
           } @else {
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro">
-            <button
-              class="flex items-center justify-center w-5 h-5 rounded text-muted hover:text-primary hover:bg-surface-3 transition-micro text-xs"
-              title="Create Invite"
-              (click)="$event.preventDefault()"
-            >
+            <ui-icon-button size="xs" hover="surface-3" label="Create Invite" (click)="$event.preventDefault()">
               <i class="fas fa-user-plus"></i>
-            </button>
-            <button
-              class="flex items-center justify-center w-5 h-5 rounded text-muted hover:text-primary hover:bg-surface-3 transition-micro text-xs"
-              title="Channel Settings"
-              (click)="$event.preventDefault()"
-            >
+            </ui-icon-button>
+            <ui-icon-button size="xs" hover="surface-3" label="Channel Settings" (click)="$event.preventDefault()">
               <i class="fas fa-gear"></i>
-            </button>
+            </ui-icon-button>
           </div>
           }
         </a>
@@ -140,19 +124,17 @@
       </span>
     </div>
     <div class="flex gap-0.5">
-      <button
-        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
-        [title]="theme.isDark() ? 'Light Mode' : 'Dark Mode'"
+      <ui-icon-button
+        size="md"
+        hover="surface-3"
+        [label]="theme.isDark() ? 'Light Mode' : 'Dark Mode'"
         (click)="toggleTheme()"
       >
         <i class="fas" [class.fa-sun]="theme.isDark()" [class.fa-moon]="!theme.isDark()"></i>
-      </button>
-      <button
-        class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro"
-        title="User Settings"
-      >
+      </ui-icon-button>
+      <ui-icon-button size="md" hover="surface-3" label="User Settings">
         <i class="fas fa-gear"></i>
-      </button>
+      </ui-icon-button>
     </div>
   </div>
 </aside>
