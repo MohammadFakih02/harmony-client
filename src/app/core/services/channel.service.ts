@@ -9,7 +9,21 @@ export class ChannelService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiUrl;
 
-  getGuildChannels(guildId: number): Promise<Channel[]> {
+  getGuildChannels(guildId: string): Promise<Channel[]> {
     return firstValueFrom(this.http.get<Channel[]>(`${this.base}/guilds/${guildId}/channels`));
+  }
+
+  createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
+    return firstValueFrom(
+      this.http.post<Channel>(`${this.base}/guilds/${guildId}/channels`, {
+        name,
+        type,
+        topic: null,
+        position: 0,
+        categoryId: null,
+        isNsfw: false,
+        slowmodeSeconds: 0,
+      }),
+    );
   }
 }

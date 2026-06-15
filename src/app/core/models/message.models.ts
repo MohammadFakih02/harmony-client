@@ -1,23 +1,24 @@
 export interface MessageResponse {
-  messageId: number;
-  channelId: number;
-  guildId: number;
-  userId: number;
+  messageId: string;
+  channelId: string;
+  guildId: string;
+  userId: string;
   username: string;
   avatarKey: string | null;
   content: string;
-  createdAt: string;
+  /** Unix milliseconds timestamp from the server (safe JS number — 13 digits) */
+  sentAt: number;
   isEdited: boolean;
-  editedAt: string | null;
+  editedAt: number | null;
   isDeleted: boolean;
   messageType: string;
-  attachmentIds: number[];
-  mentionIds: number[];
-  replyToId: number | null;
+  attachmentIds: string[];
+  mentionIds: string[];
+  replyToId: string | null;
   // Client-side only — not from the server
   pending?: boolean;
   failed?: boolean;
-  tempId?: number;
+  tempId?: number; // local negative counter; never a Snowflake
 }
 
 export interface ChannelMessagesResponse {
@@ -26,24 +27,24 @@ export interface ChannelMessagesResponse {
 }
 
 export interface SendMessageResponse {
-  messageId: number;
-  channelId: number;
-  guildId: number;
+  messageId: string;
+  channelId: string;
+  guildId: string;
 }
 
 export interface MessageFailedPayload {
-  messageId: number;
-  channelId: number;
-  guildId: number;
+  messageId: string;
+  channelId: string;
+  guildId: string;
 }
 
 export interface UnreadCountPayload {
-  channelId: number;
-  guildId: number;
+  channelId: string;
+  guildId: string;
   unreadCount: number;
 }
 
 export interface UnreadCountResponse {
-  channelId: number;
+  channelId: string;
   unreadCount: number;
 }

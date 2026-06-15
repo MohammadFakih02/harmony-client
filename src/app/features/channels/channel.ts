@@ -1,5 +1,6 @@
 import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { MessageResponse } from '../../core/models/message.models';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
@@ -12,13 +13,10 @@ import { MessageInput } from './message-input/message-input';
   selector: 'app-channel',
   standalone: true,
   imports: [MessageList, MessageInput],
+  host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
-    <div class="flex flex-col h-full">
-      <div class="flex-1 overflow-y-auto">
-        <app-message-list />
-      </div>
-      <app-message-input />
-    </div>
+    <app-message-list class="flex-1 min-h-0" />
+    <app-message-input />
   `,
 })
 export class Channel implements OnInit, OnDestroy {
@@ -28,28 +26,37 @@ export class Channel implements OnInit, OnDestroy {
   private readonly unreadStore = inject(UnreadStore);
   private readonly signalR = inject(SignalRService);
 
-  private channelId = 0;
-  private guildId = 0;
+  private channelId = '';
+  private guildId = '';
+  private paramSub?: Subscription;
 
-  async ngOnInit(): Promise<void> {
-    this.channelId = Number(this.route.snapshot.params['channelId']);
-    this.guildId = Number(this.route.snapshot.parent?.params['guildId']);
+  ngOnInit(): void {
+    this.paramSub = this.route.params.subscribe(async (params) => {
+      const newChannelId: string = params['channelId'];
+      const newGuildId: string = this.route.snapshot.parent?.params['guildId'] ?? '';
+      if (newChannelId === this.channelId) return;
 
-    this.channelStore.selectChannel(this.channelId);
-    await this.messageStore.loadMessages(this.guildId, this.channelId);
+      const prev = this.channelId;
+      this.channelId = newChannelId;
+      this.guildId = newGuildId;
 
-    // Mark as read using the newest loaded message
-    const messages = this.messageStore.messages();
-    const newest = [...messages].reverse().find((m: MessageResponse) => (m.messageId ?? 0) > 0);
-    if (newest) {
-      this.unreadStore.markRead(this.guildId, this.channelId, newest.messageId).catch(() => {});
-    }
+      this.channelStore.selectChannel(newChannelId);
+      await this.messageStore.loadMessages(newGuildId, newChannelId);
 
-    await this.signalR.client?.joinChannel(this.channelId).catch(() => {});
+      const messages = this.messageStore.messages();
+      const newest = [...messages].reverse().find((m: MessageResponse) => !m.tempId);
+      if (newest) {
+        this.unreadStore.markRead(newGuildId, newChannelId, newest.messageId).catch(() => {});
+      }
+
+      if (prev) this.signalR.client?.leaveChannel(prev).catch(() => {});
+      this.signalR.client?.joinChannel(newChannelId).catch(() => {});
+    });
   }
 
-  async ngOnDestroy(): Promise<void> {
-    await this.signalR.client?.leaveChannel(this.channelId).catch(() => {});
+  ngOnDestroy(): void {
+    this.paramSub?.unsubscribe();
+    this.signalR.client?.leaveChannel(this.channelId).catch(() => {});
     this.messageStore.clearMessages();
   }
 }

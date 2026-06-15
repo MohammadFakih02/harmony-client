@@ -1,19 +1,28 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { ChannelStore } from '../../../core/stores/channel.store';
 
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, FormsModule],
+  host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',
 })
 export class GuildSidebar {
   protected readonly auth = inject(AuthService);
   protected readonly guildStore = inject(GuildStore);
+  private readonly channelStore = inject(ChannelStore);
   private readonly router = inject(Router);
+
+  protected readonly showCreateModal = signal(false);
+  protected readonly guildName = signal('');
+  protected readonly submitting = signal(false);
+  protected readonly error = signal('');
 
   protected readonly guildInitials = computed(() =>
     this.guildStore.guilds().reduce(
@@ -26,12 +35,41 @@ export class GuildSidebar {
           .toUpperCase();
         return acc;
       },
-      {} as Record<number, string>,
+      {} as Record<string, string>,
     ),
   );
 
-  navigateToGuild(guildId: number): void {
+  navigateToGuild(guildId: string): void {
     this.router.navigate(['/app/guilds', guildId]);
+  }
+
+  openCreateModal(): void {
+    this.guildName.set('');
+    this.error.set('');
+    this.showCreateModal.set(true);
+  }
+
+  closeCreateModal(): void {
+    this.showCreateModal.set(false);
+  }
+
+  async submitCreateGuild(): Promise<void> {
+    const name = this.guildName().trim();
+    if (!name) return;
+
+    this.submitting.set(true);
+    this.error.set('');
+    try {
+      const guild = await this.guildStore.createGuild(name);
+      // Create a default text channel, then navigate into it
+      const general = await this.channelStore.createChannel(guild.id, 'general', 'text');
+      this.showCreateModal.set(false);
+      this.router.navigate(['/app/guilds', guild.id, 'channels', general.id]);
+    } catch {
+      this.error.set('Failed to create server. Please try again.');
+    } finally {
+      this.submitting.set(false);
+    }
   }
 
   async logout(): Promise<void> {

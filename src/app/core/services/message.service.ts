@@ -14,23 +14,25 @@ export class MessageService {
   private readonly base = environment.apiUrl;
 
   getMessages(
-    channelId: number,
-    options: { before?: number; limit?: number } = {},
+    guildId: string,
+    channelId: string,
+    options: { before?: string; limit?: number } = {},
   ): Promise<ChannelMessagesResponse> {
     const params: Record<string, string> = { limit: String(options.limit ?? 50) };
-    if (options.before != null) params['before'] = String(options.before);
+    if (options.before != null) params['before'] = options.before;
     return firstValueFrom(
-      this.http.get<ChannelMessagesResponse>(`${this.base}/channels/${channelId}/messages`, {
-        params,
-      }),
+      this.http.get<ChannelMessagesResponse>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/messages`,
+        { params },
+      ),
     );
   }
 
   sendMessage(
-    guildId: number,
-    channelId: number,
+    guildId: string,
+    channelId: string,
     content: string,
-    options: { attachmentId?: number; replyToId?: number } = {},
+    options: { attachmentId?: string; replyToId?: string } = {},
   ): Promise<SendMessageResponse> {
     return firstValueFrom(
       this.http.post<SendMessageResponse>(
@@ -40,7 +42,7 @@ export class MessageService {
     );
   }
 
-  markRead(guildId: number, channelId: number, lastReadMessageId: number): Promise<void> {
+  markRead(guildId: string, channelId: string, lastReadMessageId: string): Promise<void> {
     return firstValueFrom(
       this.http.post<void>(
         `${this.base}/guilds/${guildId}/channels/${channelId}/read`,

@@ -1,0 +1,41 @@
+<div class="flex flex-col h-full">
+  <div class="px-4 h-12 min-h-12 flex items-center border-b border-border-subtle shrink-0">
+    <span class="text-xs font-bold uppercase tracking-wider text-faint">
+      Members — {{ members().length }}
+    </span>
+  </div>
+
+  <div class="flex-1 overflow-y-auto py-2 px-2">
+    @if (loading()) {
+    <div class="flex justify-center pt-6">
+      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+    </div>
+    } @else if (members().length === 0) {
+    <p class="text-xs text-faint text-center pt-6">No members found.</p>
+    } @else {
+    @for (member of sortedMembers(); track member.userId) {
+    <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 transition-micro">
+      <ui-avatar
+        [src]="member.avatarKey"
+        [alt]="displayName(member)"
+        size="sm"
+        status="offline"
+      />
+      <div class="flex flex-col min-w-0 flex-1">
+        <div class="flex items-center gap-1 min-w-0">
+          <span class="text-sm font-medium text-primary truncate leading-tight">
+            {{ displayName(member) }}
+          </span>
+          @if (member.isOwner) {
+          <i class="fas fa-crown text-warning text-xs shrink-0"></i>
+          }
+        </div>
+        @if (member.nickname) {
+        <span class="text-xs text-faint truncate leading-tight">{{ member.username }}</span>
+        }
+      </div>
+    </div>
+    }
+    }
+  </div>
+</div>

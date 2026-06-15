@@ -5,10 +5,9 @@ import { ChannelService } from '../services/channel.service';
 import { GuildStore } from './guild.store';
 
 interface ChannelState {
-  channelsByGuild: Record<number, Channel[]>;
-  selectedChannelId: number | null;
-  // Tracks which category IDs the user has collapsed; persists across channel navigation
-  collapsedCategories: Record<number, boolean>;
+  channelsByGuild: Record<string, Channel[]>;
+  selectedChannelId: string | null;
+  collapsedCategories: Record<string, boolean>;
   loading: boolean;
 }
 
@@ -28,7 +27,6 @@ export const ChannelStore = signalStore(
       const all = store.channelsByGuild()[guildId] ?? [];
       const collapsed = store.collapsedCategories();
 
-      // Identify category containers: channels that other channels point to via categoryId
       const categoryIds = new Set(
         all.filter((c) => c.categoryId !== null).map((c) => c.categoryId!),
       );
@@ -48,7 +46,6 @@ export const ChannelStore = signalStore(
         collapsed: collapsed[cat.id] ?? false,
       }));
 
-      // Channels with no category go first
       const uncategorized = leafChannels.filter((c) => c.categoryId === null);
       if (uncategorized.length > 0) {
         categories.unshift({
@@ -70,7 +67,7 @@ export const ChannelStore = signalStore(
     }),
   })),
   withMethods((store, service = inject(ChannelService)) => ({
-    async loadChannels(guildId: number): Promise<void> {
+    async loadChannels(guildId: string): Promise<void> {
       patchState(store, { loading: true });
       try {
         const channels = await service.getGuildChannels(guildId);
@@ -83,11 +80,11 @@ export const ChannelStore = signalStore(
       }
     },
 
-    selectChannel(id: number): void {
+    selectChannel(id: string): void {
       patchState(store, { selectedChannelId: id });
     },
 
-    toggleCategory(categoryId: number): void {
+    toggleCategory(categoryId: string): void {
       const current = store.collapsedCategories();
       patchState(store, {
         collapsedCategories: { ...current, [categoryId]: !current[categoryId] },
@@ -113,12 +110,21 @@ export const ChannelStore = signalStore(
       });
     },
 
-    removeChannel(channelId: number): void {
-      const updated: Record<number, Channel[]> = {};
+    removeChannel(channelId: string): void {
+      const updated: Record<string, Channel[]> = {};
       for (const [gid, channels] of Object.entries(store.channelsByGuild())) {
-        updated[Number(gid)] = channels.filter((c) => c.id !== channelId);
+        updated[gid] = channels.filter((c) => c.id !== channelId);
       }
       patchState(store, { channelsByGuild: updated });
+    },
+
+    async createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
+      const channel = await service.createChannel(guildId, name, type);
+      const existing = store.channelsByGuild()[guildId] ?? [];
+      patchState(store, {
+        channelsByGuild: { ...store.channelsByGuild(), [guildId]: [...existing, channel] },
+      });
+      return channel;
     },
   })),
 );
