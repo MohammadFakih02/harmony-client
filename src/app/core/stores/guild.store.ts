@@ -5,7 +5,7 @@ import { GuildService } from '../services/guild.service';
 
 interface GuildState {
   guilds: GuildSummary[];
-  selectedGuildId: number | null;
+  selectedGuildId: string | null;
   loading: boolean;
 }
 
@@ -26,12 +26,18 @@ export const GuildStore = signalStore(
       }
     },
 
-    selectGuild(id: number): void {
+    selectGuild(id: string): void {
       patchState(store, { selectedGuildId: id });
     },
 
     addGuild(guild: GuildSummary): void {
       patchState(store, { guilds: [...store.guilds(), guild] });
+    },
+
+    async createGuild(name: string, description?: string): Promise<GuildSummary> {
+      const guild = await service.createGuild(name, description);
+      patchState(store, { guilds: [...store.guilds(), guild] });
+      return guild;
     },
   })),
 );

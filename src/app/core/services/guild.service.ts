@@ -10,6 +10,12 @@ export class GuildService {
   private readonly base = environment.apiUrl;
 
   getMyGuilds(): Promise<GuildSummary[]> {
-    return firstValueFrom(this.http.get<GuildSummary[]>(`${this.base}/guilds/me`));
+    return firstValueFrom(this.http.get<GuildSummary[]>(`${this.base}/users/me/guilds`));
+  }
+
+  createGuild(name: string, description?: string): Promise<GuildSummary> {
+    return firstValueFrom(
+      this.http.post<GuildSummary>(`${this.base}/guilds`, { name, description: description ?? null }),
+    );
   }
 }

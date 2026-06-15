@@ -1,4 +1,4 @@
-import { Component, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
@@ -8,15 +8,17 @@ import { MessageStore } from '../../core/stores/message.store';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
+import { MemberSidebar } from './member-sidebar/member-sidebar';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, GuildSidebar, ChannelSidebar],
+  imports: [RouterOutlet, GuildSidebar, ChannelSidebar, MemberSidebar],
   templateUrl: './shell.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {
   protected readonly signalR = inject(SignalRService);
+  protected readonly showMembers = signal(true);
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
