@@ -9,11 +9,12 @@ import { UnreadStore } from '../../core/stores/unread.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
+import { UiIconButton } from '../../shared/ui';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, GuildSidebar, ChannelSidebar, MemberSidebar],
+  imports: [RouterOutlet, GuildSidebar, ChannelSidebar, MemberSidebar, UiIconButton],
   templateUrl: './shell.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {

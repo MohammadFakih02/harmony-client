@@ -6,12 +6,12 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiIconButton } from '../../../shared/ui';
 
 @Component({
   selector: 'app-channel-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, UiAvatar, FormsModule],
+  imports: [RouterLink, RouterLinkActive, UiAvatar, UiIconButton, FormsModule],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
   styleUrl: './channel-sidebar.scss',

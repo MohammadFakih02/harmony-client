@@ -65,6 +65,7 @@
   --animate-slide-left: slideLeftIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
   --animate-slide-right: slideRightIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
   --animate-scale-in: scaleIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-scale-out: scaleOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
   --animate-modal-in: modalIn 300ms cubic-bezier(0, 0, 0.2, 1) both;
   --animate-modal-out: modalOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
   --animate-sidebar-in: sidebarIn 300ms cubic-bezier(0, 0, 0.2, 1) both;
@@ -415,6 +416,16 @@ html.theme-forest {
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Disable all transitions/animations during window resize so fullscreen
+   toggle is instant. The resize-animation-stopper class is added by JS
+   for the duration of the resize, then removed 300ms after it stops. */
+.resize-animation-stopper *,
+.resize-animation-stopper *::before,
+.resize-animation-stopper *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 /* ============================================================
    Base
    ============================================================ */
@@ -512,51 +523,9 @@ button:active:not(:disabled),
    ============================================================ */
 
 @layer utilities {
-  .animate-fade-in {
-    animation: fadeIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-fade-out {
-    animation: fadeOut var(--duration-modal-out) var(--ease-exit) both;
-  }
-  .animate-slide-up {
-    animation: slideUpIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-slide-down {
-    animation: slideDownIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-slide-left {
-    animation: slideLeftIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-slide-right {
-    animation: slideRightIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-scale-in {
-    animation: scaleIn var(--duration-element) var(--ease-enter) both;
-  }
-  .animate-scale-out {
-    animation: scaleOut var(--duration-modal-out) var(--ease-exit) both;
-  }
-  .animate-modal-in {
-    animation: modalIn var(--duration-modal-in) var(--ease-enter) both;
-  }
-  .animate-modal-out {
-    animation: modalOut var(--duration-modal-out) var(--ease-exit) both;
-  }
-  .animate-sidebar-in {
-    animation: sidebarIn var(--duration-page) var(--ease-enter) both;
-  }
-  .animate-message-in {
-    animation: messageIn var(--duration-message) var(--ease-enter) both;
-  }
-  .animate-pulse-glow {
-    animation: pulseGlow 2s var(--ease-standard) infinite;
-  }
-  .animate-icon-bounce {
-    animation: iconBounce var(--duration-element) var(--ease-bounce) both;
-  }
-  .animate-shake {
-    animation: shake var(--duration-element) var(--ease-standard) both;
-  }
+  /* Animation utilities (animate-fade-in, animate-slide-up, etc.) are
+     generated automatically by Tailwind from the --animate-* tokens in the
+     @theme block above. Do not redeclare them here. */
 
   .stagger-children > *:nth-child(1) {
     animation-delay: 0ms;
@@ -584,13 +553,31 @@ button:active:not(:disabled),
   }
 
   .transition-micro {
-    transition: all var(--transition-micro);
+    transition:
+      color var(--transition-micro),
+      background-color var(--transition-micro),
+      border-color var(--transition-micro),
+      box-shadow var(--transition-micro),
+      opacity var(--transition-micro),
+      transform var(--transition-micro);
   }
   .transition-element {
-    transition: all var(--transition-element);
+    transition:
+      color var(--transition-element),
+      background-color var(--transition-element),
+      border-color var(--transition-element),
+      box-shadow var(--transition-element),
+      opacity var(--transition-element),
+      transform var(--transition-element);
   }
   .transition-page {
-    transition: all var(--transition-page);
+    transition:
+      color var(--transition-page),
+      background-color var(--transition-page),
+      border-color var(--transition-page),
+      box-shadow var(--transition-page),
+      opacity var(--transition-page),
+      transform var(--transition-page);
   }
 
   .typing-dot {
