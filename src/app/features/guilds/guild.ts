@@ -1,5 +1,5 @@
 import { Component, inject, OnDestroy, OnInit } from '@angular/core';
-import { ActivatedRoute, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { GuildStore } from '../../core/stores/guild.store';
@@ -14,6 +14,7 @@ import { SignalRService } from '../../core/services/signalr.service';
 })
 export class Guild implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly signalR = inject(SignalRService);
@@ -33,6 +34,19 @@ export class Guild implements OnInit, OnDestroy {
 
       this.guildStore.selectGuild(newGuildId);
       await this.channelStore.loadChannels(newGuildId);
+
+      // Landed on the bare guild route (no channel in the URL) → open the
+      // last-visited channel for this guild, or its first text channel.
+      // router.url already reflects the full target URL during activation,
+      // so this won't hijack a deep-link straight to /channels/:id.
+      if (!this.router.url.includes('/channels/')) {
+        const target = this.channelStore.resolveDefaultChannel(newGuildId);
+        if (target) {
+          this.router.navigate(['/app/guilds', newGuildId, 'channels', target], {
+            replaceUrl: true,
+          });
+        }
+      }
 
       if (prev) this.signalR.client?.leaveGuild(prev).catch(() => {});
       this.signalR.client?.joinGuild(newGuildId).catch(() => {});

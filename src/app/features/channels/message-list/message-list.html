@@ -1,38 +1,43 @@
 <!-- Degraded banner -->
 @if (messageStore.degraded()) {
-<div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs">
+<div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs shrink-0">
   <i class="fas fa-triangle-exclamation shrink-0"></i>
   <span>Couldn't load all messages — some history may be missing.</span>
 </div>
 }
 
-<!-- Loading spinner for initial load -->
-@if (messageStore.isLoading() && messageStore.messages().length === 0) {
-<div class="flex items-center justify-center h-full">
+<!-- Loading spinner for initial load (delayed so fast loads don't flash it) -->
+@if (showInitialLoading()) {
+<div class="flex items-center justify-center flex-1">
   <i class="fas fa-yin-yang animate-spin text-2xl text-faint"></i>
+</div>
+} @else if (messageStore.isLoading() && messageStore.messages().length === 0) {
+<!-- Loading but under the delay threshold → render nothing (avoids the flash) -->
+<div class="flex-1"></div>
+} @else if (messageStore.messages().length === 0) {
+<div class="flex flex-col items-center justify-center flex-1 gap-3 text-center">
+  <i class="fas fa-hashtag text-5xl text-faint"></i>
+  <p class="text-sm text-muted">No messages yet. Say hello!</p>
 </div>
 } @else {
 
-<!-- Load older button -->
-@if (messageStore.hasMore() && messageStore.messages().length > 0) {
-<div class="flex justify-center pt-3">
-  <button
-    class="text-xs text-accent hover:text-accent-hover font-medium px-3 py-1.5 rounded-md hover:bg-accent-muted transition-micro"
-    [disabled]="messageStore.isLoading()"
-    (click)="messageStore.loadOlder()"
-  >
-    @if (messageStore.isLoading()) {
-      <i class="fas fa-yin-yang animate-spin mr-1"></i>
-    }
-    Load older messages
-  </button>
+<!-- Subtle indicator while older history loads (auto-triggered on scroll-up) -->
+@if (messageStore.isLoading() && messageStore.messages().length > 0) {
+<div class="flex justify-center py-1.5 shrink-0">
+  <i class="fas fa-yin-yang animate-spin text-faint text-sm"></i>
 </div>
 }
 
-<!-- Message groups -->
-<div class="flex flex-col gap-0.5 px-2 py-2 h-max">
-  @for (group of messageGroups(); track group.firstMessageId) {
-  <div class="group flex items-start gap-3 px-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-message-in">
+<cdk-virtual-scroll-viewport
+  [itemSize]="64"
+  [minBufferPx]="640"
+  [maxBufferPx]="1280"
+  class="flex-1 min-h-0"
+>
+  <div
+    *cdkVirtualFor="let group of messageGroups(); trackBy: trackGroup"
+    class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro animate-message-in"
+  >
     <ui-avatar
       [src]="group.avatarKey"
       [alt]="group.username"
@@ -56,7 +61,9 @@
         @if (msg.isDeleted) {
           <span class="italic text-faint">Message deleted</span>
         } @else {
-          {{ msg.content }}
+          <!-- whitespace-pre-wrap is scoped to the content span only, so template
+               indentation around the interpolation can't leak in as a leading space -->
+          <span class="whitespace-pre-wrap">{{ msg.content }}</span>
           @if (msg.isEdited) {
             <span class="text-xs text-faint ml-1">(edited)</span>
           }
@@ -74,13 +81,6 @@
       }
     </div>
   </div>
-  }
+</cdk-virtual-scroll-viewport>
 
-  @if (messageStore.messages().length === 0 && !messageStore.isLoading()) {
-  <div class="flex flex-col items-center justify-center py-16 gap-3 text-center">
-    <i class="fas fa-hashtag text-5xl text-faint"></i>
-    <p class="text-sm text-muted">No messages yet. Say hello!</p>
-  </div>
-  }
-</div>
 }

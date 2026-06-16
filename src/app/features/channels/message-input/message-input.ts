@@ -2,11 +2,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MessageStore } from '../../../core/stores/message.store';
+import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
 
 @Component({
   selector: 'app-message-input',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, AutoGrow],
   templateUrl: './message-input.html',
 })
 export class MessageInput {
