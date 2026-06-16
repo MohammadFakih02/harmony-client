@@ -7,6 +7,7 @@ import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
+import { delayedSignal } from '../../../shared/util/delayed-signal';
 
 @Component({
   selector: 'app-channel-sidebar',
@@ -23,6 +24,9 @@ export class ChannelSidebar {
   protected readonly channelStore = inject(ChannelStore);
   protected readonly unreadStore = inject(UnreadStore);
   private readonly router = inject(Router);
+
+  // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
+  protected readonly showLoading = delayedSignal(this.channelStore.loading);
 
   protected readonly showCreateModal = signal(false);
   protected readonly channelName = signal('');

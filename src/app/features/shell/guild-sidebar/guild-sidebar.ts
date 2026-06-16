@@ -40,6 +40,11 @@ export class GuildSidebar {
   );
 
   navigateToGuild(guildId: string): void {
+    // Already viewing this guild → do nothing (re-navigating would blank the open
+    // channel). Check the URL, not selectedGuildId (which stays stale on /friends).
+    // The trailing-boundary check avoids snowflake-id prefix collisions.
+    const url = this.router.url;
+    if (url.includes(`/guilds/${guildId}/`) || url.endsWith(`/guilds/${guildId}`)) return;
     this.router.navigate(['/app/guilds', guildId]);
   }
 

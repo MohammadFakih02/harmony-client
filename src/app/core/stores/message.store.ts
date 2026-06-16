@@ -29,7 +29,38 @@ export const MessageStore = signalStore(
     activeGuildId: null,
     realIdToTempId: {},
   }),
-  withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => ({
+  withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
+    /**
+     * Reconcile an optimistic message with its server id once the POST resolves.
+     * Under high latency the SignalR `MessageReceived` broadcast can arrive *before*
+     * this POST returns — in that case `appendMessage` has already inserted the
+     * authoritative copy, so we drop the optimistic ghost instead of relabeling it
+     * (which would leave two copies of the same id, one stuck `pending`).
+     * Closure over `store` so it works regardless of `this` binding after `await`.
+     */
+    const confirmSent = (tempId: number, realId: string): void => {
+      const alreadyArrived = store.messages().some((m) => m.messageId === realId);
+      if (alreadyArrived) {
+        // SignalR's MessageReceived already inserted the authoritative copy →
+        // drop the optimistic ghost so we don't keep two copies of the same id.
+        patchState(store, {
+          messages: store.messages().filter((m) => m.tempId !== tempId),
+        });
+      } else {
+        // A successful POST means the server accepted the message, so it's no
+        // longer "pending" — clear it now rather than waiting for the SignalR
+        // echo (which may be delayed/reordered). The echo will later swap in the
+        // authoritative payload via appendMessage, but the message is no longer grey.
+        patchState(store, {
+          messages: store.messages().map((m) =>
+            m.tempId === tempId ? { ...m, messageId: realId, pending: false } : m,
+          ),
+          realIdToTempId: { ...store.realIdToTempId(), [realId]: tempId },
+        });
+      }
+    };
+
+    return {
     async loadMessages(guildId: string, channelId: string): Promise<void> {
       patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
       try {
@@ -102,12 +133,7 @@ export const MessageStore = signalStore(
 
       try {
         const response = await service.sendMessage(guildId, channelId, content);
-        patchState(store, {
-          messages: store.messages().map((m) =>
-            m.tempId === tempId ? { ...m, messageId: response.messageId } : m,
-          ),
-          realIdToTempId: { ...store.realIdToTempId(), [response.messageId]: tempId },
-        });
+        confirmSent(tempId, response.messageId);
       } catch {
         patchState(store, {
           messages: store.messages().map((m) =>
@@ -163,12 +189,7 @@ export const MessageStore = signalStore(
 
       try {
         const response = await service.sendMessage(guildId, channelId, msg.content);
-        patchState(store, {
-          messages: store.messages().map((m) =>
-            m.tempId === newTempId ? { ...m, messageId: response.messageId } : m,
-          ),
-          realIdToTempId: { ...store.realIdToTempId(), [response.messageId]: newTempId },
-        });
+        confirmSent(newTempId, response.messageId);
       } catch {
         patchState(store, {
           messages: store.messages().map((m) =>
@@ -204,5 +225,6 @@ export const MessageStore = signalStore(
         realIdToTempId: {},
       });
     },
-  })),
+    };
+  }),
 );

@@ -6,8 +6,110 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Apply the saved theme + background BEFORE first paint, so there's no
+       white flash and no wrong-theme flash while Angular boots. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('harmony-theme') || 'theme-dark';
+        var bg = {
+          'theme-dark': '#09090b',
+          'theme-light': '#e4e4e7',
+          'theme-midnight': '#000000',
+          'theme-forest': '#0a0f0a'
+        }[t] || '#09090b';
+        document.documentElement.classList.add(t);
+        document.documentElement.style.backgroundColor = bg;
+      } catch (e) { /* localStorage blocked → fall back to CSS default */ }
+    })();
+  </script>
+
+  <!-- Boot splash styles. CSS-var fallbacks cover the moment before styles.css
+       loads; once it does, the values resolve per active theme. -->
+  <style>
+    #app-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      background-color: var(--color-bg, #09090b);
+      color: var(--color-text, #f4f4f5);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    #app-splash .app-splash-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    #app-splash .app-splash-brand .yin {
+      display: inline-block;
+      font-size: 1.4rem;
+      color: var(--color-accent, #8b5cf6);
+      animation: app-splash-spin 3s linear infinite;
+    }
+    #app-splash .app-splash-spinner {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 3px solid var(--color-surface-3, #3f3f46);
+      border-top-color: var(--color-accent, #8b5cf6);
+      animation: app-splash-spin 0.8s linear infinite;
+    }
+    #app-splash .app-splash-msg {
+      font-size: 0.875rem;
+      color: var(--color-muted, #a1a1aa);
+      min-height: 1.25rem;
+      transition: opacity 0.25s ease;
+    }
+    @keyframes app-splash-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #app-splash .app-splash-spinner,
+      #app-splash .app-splash-brand .yin { animation: none; }
+    }
+  </style>
 </head>
 <body>
-  <app-root></app-root>
+  <app-root>
+    <!-- Shown until Angular bootstraps and replaces <app-root>'s contents. -->
+    <div id="app-splash">
+      <div class="app-splash-brand"><span class="yin">☯</span> Harmony</div>
+      <div class="app-splash-spinner"></div>
+      <div class="app-splash-msg" id="app-splash-msg">Starting up…</div>
+    </div>
+  </app-root>
+
+  <script>
+    (function () {
+      var el = document.getElementById('app-splash-msg');
+      if (!el) return;
+      var msgs = [
+        'Connecting to the server…',
+        'Establishing the realtime link…',
+        'Loading your guilds…',
+        'Syncing messages…',
+        'Almost ready…'
+      ];
+      var i = 0;
+      var id = setInterval(function () {
+        // Angular replaced <app-root> → splash gone → stop the timer.
+        if (!document.getElementById('app-splash-msg')) { clearInterval(id); return; }
+        i = (i + 1) % msgs.length;
+        el.style.opacity = '0';
+        setTimeout(function () {
+          if (!el.isConnected) return;
+          el.textContent = msgs[i];
+          el.style.opacity = '1';
+        }, 250);
+      }, 1600);
+    })();
+  </script>
 </body>
 </html>
