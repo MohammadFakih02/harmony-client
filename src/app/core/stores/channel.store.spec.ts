@@ -4,8 +4,8 @@ import { GuildStore } from './guild.store';
 import { ChannelService } from '../services/channel.service';
 import { Channel } from '../models/channel.models';
 
-const makeChannel = (overrides: Partial<Channel> & { id: number; name: string }): Channel => ({
-  guildId: 1,
+const makeChannel = (overrides: Partial<Channel> & { id: string; name: string }): Channel => ({
+  guildId: '1',
   topic: null,
   type: 'text',
   position: 0,
@@ -42,25 +42,25 @@ describe('ChannelStore', () => {
 
   it('loadChannels() stores channels keyed by guildId', async () => {
     const channels = [
-      makeChannel({ id: 10, name: 'general', guildId: 1 }),
-      makeChannel({ id: 11, name: 'off-topic', guildId: 1 }),
+      makeChannel({ id: '10', name: 'general', guildId: '1' }),
+      makeChannel({ id: '11', name: 'off-topic', guildId: '1' }),
     ];
     service.getGuildChannels.mockResolvedValue(channels);
 
-    await TestBed.runInInjectionContext(() => store.loadChannels(1));
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
 
-    expect(store.channelsByGuild()[1]).toHaveLength(2);
+    expect(store.channelsByGuild()['1']).toHaveLength(2);
   });
 
   it('currentCategories groups channels under their category container', async () => {
     // Category container channel (other channels reference it via categoryId)
-    const textCategory = makeChannel({ id: 1, name: 'text channels', guildId: 1, type: 'category', categoryId: null, position: 0 });
-    const general = makeChannel({ id: 2, name: 'general', guildId: 1, type: 'text', categoryId: 1, position: 1 });
-    const announce = makeChannel({ id: 3, name: 'announcements', guildId: 1, type: 'announcement', categoryId: 1, position: 2 });
+    const textCategory = makeChannel({ id: '1', name: 'text channels', guildId: '1', type: 'category', categoryId: null, position: 0 });
+    const general = makeChannel({ id: '2', name: 'general', guildId: '1', type: 'text', categoryId: '1', position: 1 });
+    const announce = makeChannel({ id: '3', name: 'announcements', guildId: '1', type: 'announcement', categoryId: '1', position: 2 });
 
     service.getGuildChannels.mockResolvedValue([textCategory, general, announce]);
-    await TestBed.runInInjectionContext(() => store.loadChannels(1));
-    guildStore.selectGuild(1);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
 
     const cats = store.currentCategories();
     expect(cats).toHaveLength(1);
@@ -69,40 +69,40 @@ describe('ChannelStore', () => {
   });
 
   it('currentCategories puts uncategorized channels in a nameless group', async () => {
-    const ch = makeChannel({ id: 5, name: 'lobby', guildId: 1, categoryId: null });
+    const ch = makeChannel({ id: '5', name: 'lobby', guildId: '1', categoryId: null });
     service.getGuildChannels.mockResolvedValue([ch]);
-    await TestBed.runInInjectionContext(() => store.loadChannels(1));
-    guildStore.selectGuild(1);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
 
     const cats = store.currentCategories();
     expect(cats[0].id).toBeNull();
     expect(cats[0].name).toBe('');
-    expect(cats[0].channels[0].id).toBe(5);
+    expect(cats[0].channels[0].id).toBe('5');
   });
 
   it('toggleCategory() flips collapsed state', async () => {
-    const cat = makeChannel({ id: 1, name: 'cat', guildId: 1, type: 'category', categoryId: null, position: 0 });
-    const ch = makeChannel({ id: 2, name: 'ch', guildId: 1, categoryId: 1 });
+    const cat = makeChannel({ id: '1', name: 'cat', guildId: '1', type: 'category', categoryId: null, position: 0 });
+    const ch = makeChannel({ id: '2', name: 'ch', guildId: '1', categoryId: '1' });
     service.getGuildChannels.mockResolvedValue([cat, ch]);
-    await TestBed.runInInjectionContext(() => store.loadChannels(1));
-    guildStore.selectGuild(1);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
 
     expect(store.currentCategories()[0].collapsed).toBe(false);
-    store.toggleCategory(1);
+    store.toggleCategory('1');
     expect(store.currentCategories()[0].collapsed).toBe(true);
-    store.toggleCategory(1);
+    store.toggleCategory('1');
     expect(store.currentCategories()[0].collapsed).toBe(false);
   });
 
   it('removeChannel() strips the channel from all guilds', async () => {
     service.getGuildChannels.mockResolvedValue([
-      makeChannel({ id: 10, name: 'a', guildId: 1 }),
-      makeChannel({ id: 11, name: 'b', guildId: 1 }),
+      makeChannel({ id: '10', name: 'a', guildId: '1' }),
+      makeChannel({ id: '11', name: 'b', guildId: '1' }),
     ]);
-    await TestBed.runInInjectionContext(() => store.loadChannels(1));
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
 
-    store.removeChannel(10);
+    store.removeChannel('10');
 
-    expect(store.channelsByGuild()[1]?.map((c) => c.id)).toEqual([11]);
+    expect(store.channelsByGuild()['1']?.map((c) => c.id)).toEqual(['11']);
   });
 });

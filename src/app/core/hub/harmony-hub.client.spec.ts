@@ -42,15 +42,33 @@ describe('HarmonyHubClient', () => {
     expect(registeredEvents).toContain('TypingStarted');
   });
 
-  it('dispatches MessageReceived to messageReceived$', () => {
+  it('dispatches MessageReceived to messageReceived$ coercing Snowflake ids to strings', () => {
     const received: unknown[] = [];
     client.messageReceived$.subscribe((m) => received.push(m));
 
-    const payload = { messageId: 1, content: 'hello' };
-    conn.emit('MessageReceived', payload);
+    // SignalR delivers ids as JSON numbers; the handler coerces them to strings.
+    conn.emit('MessageReceived', {
+      messageId: 1,
+      channelId: 2,
+      guildId: 3,
+      userId: 4,
+      content: 'hello',
+      sentAt: 1704067200000,
+      editedAt: null,
+      replyToId: null,
+      attachmentIds: [],
+      mentionIds: [],
+    });
 
     expect(received).toHaveLength(1);
-    expect(received[0]).toBe(payload);
+    expect(received[0]).toMatchObject({
+      messageId: '1',
+      channelId: '2',
+      guildId: '3',
+      userId: '4',
+      content: 'hello',
+      sentAt: 1704067200000,
+    });
   });
 
   it('dispatches MessageFailed to messageFailed$', () => {
@@ -73,16 +91,19 @@ describe('HarmonyHubClient', () => {
     expect(received[0]).toBe(payload);
   });
 
-  it('dispatches MessageEdited with individual args to messageEdited$', () => {
+  it('dispatches MessageEdited as a single payload object to messageEdited$', () => {
     const received: unknown[] = [];
     client.messageEdited$.subscribe((e) => received.push(e));
 
-    conn.emit('MessageEdited', 99, 'new content', '2024-01-01T00:00:00Z');
+    // Backend broadcasts MessageEditedPayload { messageId, newContent, editedAt }
+    // as one object; editedAt is a Unix-ms long. The handler coerces the id to a
+    // string and editedAt to a number.
+    conn.emit('MessageEdited', { messageId: 99, newContent: 'new content', editedAt: 1704067200000 });
 
     expect(received[0]).toEqual({
-      messageId: 99,
+      messageId: '99',
       content: 'new content',
-      editedAt: '2024-01-01T00:00:00Z',
+      editedAt: 1704067200000,
     });
   });
 
@@ -97,18 +118,18 @@ describe('HarmonyHubClient', () => {
   });
 
   it('joinChannel() invokes JoinChannel with the channel id', async () => {
-    await client.joinChannel(123);
-    expect(conn.invoke).toHaveBeenCalledWith('JoinChannel', 123);
+    await client.joinChannel('123');
+    expect(conn.invoke).toHaveBeenCalledWith('JoinChannel', '123');
   });
 
   it('joinGuild() invokes JoinGuild with the guild id', async () => {
-    await client.joinGuild(7);
-    expect(conn.invoke).toHaveBeenCalledWith('JoinGuild', 7);
+    await client.joinGuild('7');
+    expect(conn.invoke).toHaveBeenCalledWith('JoinGuild', '7');
   });
 
   it('startTyping() invokes StartTyping', async () => {
-    await client.startTyping(55);
-    expect(conn.invoke).toHaveBeenCalledWith('StartTyping', 55);
+    await client.startTyping('55');
+    expect(conn.invoke).toHaveBeenCalledWith('StartTyping', '55');
   });
 
   it('exposes current connection state via .state', () => {
