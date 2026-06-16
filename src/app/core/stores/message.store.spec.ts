@@ -4,14 +4,14 @@ import { MessageService } from '../services/message.service';
 import { AuthService } from '../services/auth.service';
 import { MessageResponse } from '../models/message.models';
 
-const makeMsg = (overrides: Partial<MessageResponse> & { messageId: number }): MessageResponse => ({
-  channelId: 1,
-  guildId: 1,
-  userId: 10,
+const makeMsg = (overrides: Partial<MessageResponse> & { messageId: string }): MessageResponse => ({
+  channelId: '1',
+  guildId: '1',
+  userId: '10',
   username: 'alice',
   avatarKey: null,
   content: 'hello',
-  createdAt: new Date().toISOString(),
+  sentAt: Date.now(),
   isEdited: false,
   editedAt: null,
   isDeleted: false,
@@ -62,19 +62,19 @@ describe('MessageStore', () => {
   describe('loadMessages()', () => {
     it('reverses the server order (newest-first → oldest-first for display)', async () => {
       service.getMessages.mockResolvedValue({
-        messages: [makeMsg({ messageId: 3 }), makeMsg({ messageId: 2 }), makeMsg({ messageId: 1 })],
+        messages: [makeMsg({ messageId: '3' }), makeMsg({ messageId: '2' }), makeMsg({ messageId: '1' })],
         degraded: false,
       });
 
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
-      expect(store.messages().map((m) => m.messageId)).toEqual([1, 2, 3]);
+      expect(store.messages().map((m) => m.messageId)).toEqual(['1', '2', '3']);
     });
 
     it('sets hasMore=false when fewer than 50 messages returned', async () => {
-      service.getMessages.mockResolvedValue({ messages: [makeMsg({ messageId: 1 })], degraded: false });
+      service.getMessages.mockResolvedValue({ messages: [makeMsg({ messageId: '1' })], degraded: false });
 
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
       expect(store.hasMore()).toBe(false);
     });
@@ -82,7 +82,7 @@ describe('MessageStore', () => {
     it('propagates the degraded flag', async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: true });
 
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
       expect(store.degraded()).toBe(true);
     });
@@ -91,11 +91,11 @@ describe('MessageStore', () => {
   describe('sendMessage() — optimistic flow', () => {
     beforeEach(async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
     });
 
     it('adds a pending optimistic entry immediately', async () => {
-      service.sendMessage.mockResolvedValue({ messageId: 999, channelId: 1, guildId: 1 });
+      service.sendMessage.mockResolvedValue({ messageId: '999', channelId: '1', guildId: '1' });
 
       const sendPromise = TestBed.runInInjectionContext(() => store.sendMessage('hi'));
 
@@ -108,15 +108,17 @@ describe('MessageStore', () => {
     });
 
     it('replaces the pending entry with the real ID after REST response', async () => {
-      service.sendMessage.mockResolvedValue({ messageId: 500, channelId: 1, guildId: 1 });
+      service.sendMessage.mockResolvedValue({ messageId: '500', channelId: '1', guildId: '1' });
 
       await TestBed.runInInjectionContext(() => store.sendMessage('hello'));
 
       const msgs = store.messages();
-      const entry = msgs.find((m) => m.messageId === 500);
+      const entry = msgs.find((m) => m.messageId === '500');
       expect(entry).toBeDefined();
-      expect(entry?.pending).toBe(true);
-      expect(store.realIdToTempId()[500]).toBeDefined();
+      // A successful POST clears `pending` immediately (no longer waits for the
+      // SignalR echo) — see message.store confirmSent().
+      expect(entry?.pending).toBe(false);
+      expect(store.realIdToTempId()['500']).toBeDefined();
     });
 
     it('marks the entry as failed when the REST call throws', async () => {
@@ -133,51 +135,51 @@ describe('MessageStore', () => {
   describe('appendMessage() — reconcile', () => {
     beforeEach(async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
-      service.sendMessage.mockResolvedValue({ messageId: 777, channelId: 1, guildId: 1 });
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      service.sendMessage.mockResolvedValue({ messageId: '777', channelId: '1', guildId: '1' });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
       await TestBed.runInInjectionContext(() => store.sendMessage('sent'));
     });
 
     it('reconciles a pending entry when SignalR fires with the real ID', () => {
-      const authoritative = makeMsg({ messageId: 777, content: 'sent', username: 'alice' });
+      const authoritative = makeMsg({ messageId: '777', content: 'sent', username: 'alice' });
 
       store.appendMessage(authoritative);
 
       const msgs = store.messages();
-      const reconciled = msgs.find((m) => m.messageId === 777);
+      const reconciled = msgs.find((m) => m.messageId === '777');
       expect(reconciled?.pending).toBeUndefined();
-      expect(store.realIdToTempId()[777]).toBeUndefined();
+      expect(store.realIdToTempId()['777']).toBeUndefined();
     });
 
     it('appends a genuinely new message without touching pending entries', () => {
-      const other = makeMsg({ messageId: 888, content: 'hi from bob', userId: 99, username: 'bob' });
+      const other = makeMsg({ messageId: '888', content: 'hi from bob', userId: '99', username: 'bob' });
 
       store.appendMessage(other);
 
-      expect(store.messages().some((m) => m.messageId === 888)).toBe(true);
+      expect(store.messages().some((m) => m.messageId === '888')).toBe(true);
       // Original pending entry still there
-      expect(store.messages().some((m) => m.messageId === 777)).toBe(true);
+      expect(store.messages().some((m) => m.messageId === '777')).toBe(true);
     });
 
     it('does not append duplicate messages', () => {
-      const msg = makeMsg({ messageId: 888, content: 'once' });
+      const msg = makeMsg({ messageId: '888', content: 'once' });
       store.appendMessage(msg);
       store.appendMessage(msg);
 
-      expect(store.messages().filter((m) => m.messageId === 888)).toHaveLength(1);
+      expect(store.messages().filter((m) => m.messageId === '888')).toHaveLength(1);
     });
   });
 
   describe('handleFailed()', () => {
     it('marks the message as failed by messageId', async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
-      service.sendMessage.mockResolvedValue({ messageId: 321, channelId: 1, guildId: 1 });
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      service.sendMessage.mockResolvedValue({ messageId: '321', channelId: '1', guildId: '1' });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
       await TestBed.runInInjectionContext(() => store.sendMessage('will fail'));
 
-      store.handleFailed({ messageId: 321, channelId: 1, guildId: 1 });
+      store.handleFailed({ messageId: '321', channelId: '1', guildId: '1' });
 
-      const msg = store.messages().find((m) => m.messageId === 321);
+      const msg = store.messages().find((m) => m.messageId === '321');
       expect(msg?.failed).toBe(true);
       expect(msg?.pending).toBe(false);
     });
@@ -188,9 +190,9 @@ describe('MessageStore', () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
       service.sendMessage
         .mockRejectedValueOnce(new Error('first attempt fails'))
-        .mockResolvedValueOnce({ messageId: 456, channelId: 1, guildId: 1 });
+        .mockResolvedValueOnce({ messageId: '456', channelId: '1', guildId: '1' });
 
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
       await TestBed.runInInjectionContext(() => store.sendMessage('retry me'));
 
       const failedEntry = store.messages().find((m) => m.failed);
@@ -201,14 +203,14 @@ describe('MessageStore', () => {
 
       // Original failed entry is gone; new pending entry exists with realId=456
       expect(store.messages().find((m) => m.failed)).toBeUndefined();
-      expect(store.messages().find((m) => m.messageId === 456)).toBeDefined();
+      expect(store.messages().find((m) => m.messageId === '456')).toBeDefined();
     });
 
     it('marks the entry failed again if the retry also throws', async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
       service.sendMessage.mockRejectedValue(new Error('always fails'));
 
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
       await TestBed.runInInjectionContext(() => store.sendMessage('doomed'));
 
       const failed = store.messages().find((m) => m.failed)!;
@@ -219,7 +221,7 @@ describe('MessageStore', () => {
 
     it('is a no-op when called with an unknown tempId', async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });
-      await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
       await TestBed.runInInjectionContext(() => store.retryMessage(-9999));
 
@@ -229,10 +231,10 @@ describe('MessageStore', () => {
 
   it('clearMessages() resets all state', async () => {
     service.getMessages.mockResolvedValue({
-      messages: [makeMsg({ messageId: 1 })],
+      messages: [makeMsg({ messageId: '1' })],
       degraded: false,
     });
-    await TestBed.runInInjectionContext(() => store.loadMessages(1, 1));
+    await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
     store.clearMessages();
 

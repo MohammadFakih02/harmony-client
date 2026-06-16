@@ -8,8 +8,11 @@ interface ChannelState {
   channelsByGuild: Record<string, Channel[]>;
   selectedChannelId: string | null;
   collapsedCategories: Record<string, boolean>;
+  lastChannelByGuild: Record<string, string>;
   loading: boolean;
 }
+
+const isTextChannel = (c: Channel) => c.type === 'text' || c.type === 'announcement';
 
 export const ChannelStore = signalStore(
   { providedIn: 'root' },
@@ -17,6 +20,7 @@ export const ChannelStore = signalStore(
     channelsByGuild: {},
     selectedChannelId: null,
     collapsedCategories: {},
+    lastChannelByGuild: {},
     loading: false,
   }),
   withComputed((store, guildStore = inject(GuildStore)) => ({
@@ -82,6 +86,22 @@ export const ChannelStore = signalStore(
 
     selectChannel(id: string): void {
       patchState(store, { selectedChannelId: id });
+    },
+
+    /** Record the channel a user was last on in a guild, so re-entering the guild returns there. */
+    rememberChannel(guildId: string, channelId: string): void {
+      patchState(store, {
+        lastChannelByGuild: { ...store.lastChannelByGuild(), [guildId]: channelId },
+      });
+    },
+
+    /** Resolve which channel to open when entering a guild: last-visited if still valid, else first text channel. */
+    resolveDefaultChannel(guildId: string): string | null {
+      const channels = store.channelsByGuild()[guildId] ?? [];
+      const last = store.lastChannelByGuild()[guildId];
+      if (last && channels.some((c) => c.id === last && isTextChannel(c))) return last;
+      const firstText = [...channels].filter(isTextChannel).sort((a, b) => a.position - b.position)[0];
+      return firstText?.id ?? null;
     },
 
     toggleCategory(categoryId: string): void {
