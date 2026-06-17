@@ -21,13 +21,29 @@ export class MessageInput {
     () => this.channelStore.selectedChannel()?.name ?? 'channel',
   );
 
+  // Whether the caller may send here at all (permission + not timed-out). Defaults to
+  // true while capabilities are still loading so normal users aren't briefly blocked;
+  // the server enforces regardless.
+  protected readonly canSendInChannel = computed(
+    () => this.channelStore.currentCapabilities()?.canSend ?? true,
+  );
+
+  // Explains a disabled input — timeout vs missing permission.
+  protected readonly disabledReason = computed(() => {
+    const caps = this.channelStore.currentCapabilities();
+    if (!caps || caps.canSend) return null;
+    return caps.timedOut
+      ? "You're timed out and can't send messages."
+      : 'You do not have permission to send messages in this channel.';
+  });
+
   protected readonly canSend = computed(
-    () => this.draft().trim().length > 0 && !this.sending(),
+    () => this.draft().trim().length > 0 && !this.sending() && this.canSendInChannel(),
   );
 
   async send(): Promise<void> {
     const content = this.draft().trim();
-    if (!content || this.sending()) return;
+    if (!content || this.sending() || !this.canSendInChannel()) return;
     this.sending.set(true);
     this.draft.set('');
     try {

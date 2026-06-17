@@ -51,33 +51,77 @@
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>
       @for (msg of group.messages; track msg.messageId) {
-      <p
-        class="text-sm leading-relaxed wrap-break-words"
-        [class.text-muted]="!msg.pending && !msg.failed"
-        [class.text-primary]="!msg.pending && !msg.failed"
-        [class.opacity-60]="msg.pending"
-        [class.text-danger]="msg.failed"
-      >
-        @if (msg.isDeleted) {
-          <span class="italic text-faint">Message deleted</span>
+      <div class="relative group/msg">
+        @if (editingId() === msg.messageId) {
+        <!-- Inline edit mode -->
+        <textarea
+          autofocusEnd
+          class="w-full bg-surface-3 rounded-lg ring-1 ring-border-subtle focus:ring-2 focus:ring-accent outline-none text-sm px-3 py-2 text-primary resize-none leading-relaxed"
+          rows="2"
+          [ngModel]="editDraft()"
+          (ngModelChange)="editDraft.set($event)"
+          (keydown)="onEditKeydown($event, msg)"
+        ></textarea>
+        <div class="text-2xs text-faint mt-0.5">
+          escape to <button class="underline hover:no-underline" (click)="cancelEdit()">cancel</button>
+          · enter to <button class="underline hover:no-underline" (click)="saveEdit(msg)">save</button>
+        </div>
         } @else {
-          <!-- whitespace-pre-wrap is scoped to the content span only, so template
-               indentation around the interpolation can't leak in as a leading space -->
-          <span class="whitespace-pre-wrap">{{ msg.content }}</span>
-          @if (msg.isEdited) {
-            <span class="text-xs text-faint ml-1">(edited)</span>
+        <p
+          class="text-sm leading-relaxed wrap-break-words"
+          [class.text-muted]="!msg.pending && !msg.failed"
+          [class.text-primary]="!msg.pending && !msg.failed"
+          [class.opacity-60]="msg.pending"
+          [class.text-danger]="msg.failed"
+        >
+          @if (msg.isDeleted) {
+            <span class="italic text-faint">Message deleted</span>
+          } @else {
+            <!-- whitespace-pre-wrap is scoped to the content span only, so template
+                 indentation around the interpolation can't leak in as a leading space -->
+            <span class="whitespace-pre-wrap">{{ msg.content }}</span>
+            @if (msg.isEdited) {
+              <span class="text-xs text-faint ml-1">(edited)</span>
+            }
+            @if (msg.failed) {
+              <span class="text-xs ml-1 inline-flex items-center gap-1.5">
+                <i class="fas fa-circle-exclamation"></i> Failed to send
+                <button
+                  class="underline hover:no-underline text-danger font-medium"
+                  (click)="messageStore.retryMessage(msg.tempId!)"
+                >Retry</button>
+              </span>
+            }
           }
-          @if (msg.failed) {
-            <span class="text-xs ml-1 inline-flex items-center gap-1.5">
-              <i class="fas fa-circle-exclamation"></i> Failed to send
-              <button
-                class="underline hover:no-underline text-danger font-medium"
-                (click)="messageStore.retryMessage(msg.tempId!)"
-              >Retry</button>
-            </span>
+        </p>
+
+        <!-- Hover actions (own message → edit + delete; others → delete with ManageMessages) -->
+        @if (canEdit(msg) || canDelete(msg)) {
+        <div
+          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
+        >
+          @if (canEdit(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Edit"
+            (click)="startEdit(msg)"
+          >
+            <i class="fas fa-pen text-xs"></i>
+          </button>
           }
+          @if (canDelete(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-danger hover:bg-surface-2 transition-micro"
+            title="Delete"
+            (click)="deleteMsg(msg)"
+          >
+            <i class="fas fa-trash text-xs"></i>
+          </button>
+          }
+        </div>
         }
-      </p>
+        }
+      </div>
       }
     </div>
   </div>

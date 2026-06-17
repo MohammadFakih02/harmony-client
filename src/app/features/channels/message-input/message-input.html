@@ -1,4 +1,15 @@
 <!-- Added: w-full, mx-auto, shrink-0, and a matching max-width (e.g., max-w-5xl) -->
+@if (!canSendInChannel()) {
+<!-- Permission/timeout bar replaces the composer entirely (Discord-style). -->
+<div class="w-full mx-auto px-4 py-3 shrink-0">
+  <div
+    class="flex items-center gap-2 px-4 min-h-11 rounded-xl bg-surface-2 ring-1 ring-border-subtle text-sm text-faint"
+  >
+    <i class="fas fa-lock shrink-0"></i>
+    <span>{{ disabledReason() }}</span>
+  </div>
+</div>
+} @else {
 <div class="w-full mx-auto flex items-end gap-2 px-4 py-3 shrink-0">
   <div
     class="flex-1 flex items-center bg-surface-3 rounded-xl min-h-11 ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
@@ -34,3 +45,4 @@
     }
   </button>
 </div>
+}
