@@ -1,12 +1,16 @@
 import {
-  Component, computed, viewChild, effect, inject, Injector,
+  Component, computed, signal, viewChild, effect, inject, Injector,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { Subscription } from 'rxjs';
 import { UiAvatar } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
+import { ChannelStore } from '../../../core/stores/channel.store';
 import { AuthService } from '../../../core/services/auth.service';
+import { MessageService } from '../../../core/services/message.service';
 import { MessageResponse } from '../../../core/models/message.models';
+import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 
 export interface MessageGroup {
@@ -35,14 +39,24 @@ function formatMessageTime(sentAt: number): string {
 @Component({
   selector: 'app-message-list',
   standalone: true,
-  imports: [UiAvatar, ScrollingModule],
+  imports: [UiAvatar, ScrollingModule, FormsModule, AutofocusEnd],
   host: { class: 'flex flex-col min-h-0 h-full' },
   templateUrl: './message-list.html',
 })
 export class MessageList {
   protected readonly messageStore = inject(MessageStore);
+  private readonly channelStore = inject(ChannelStore);
+  private readonly messageService = inject(MessageService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
+
+  // Inline-edit state: the messageId being edited and its working draft.
+  protected readonly editingId = signal<string | null>(null);
+  protected readonly editDraft = signal('');
+
+  protected readonly canManageMessages = computed(
+    () => this.channelStore.currentCapabilities()?.canManageMessages ?? false,
+  );
 
   // Only surface the initial-load spinner if the fetch takes longer than ~200ms,
   // so fast channel switches don't flash it.
@@ -87,6 +101,63 @@ export class MessageList {
 
   protected trackGroup(_: number, g: MessageGroup): string {
     return g.firstMessageId;
+  }
+
+  // -------------------------------------------------------------------------
+  // Edit / delete — own messages always; others' deletable with ManageMessages.
+  // The authoritative change arrives via the MessageEdited/MessageDeleted broadcast
+  // (shell → store), so these just fire the REST call.
+  // -------------------------------------------------------------------------
+
+  protected isMine(msg: MessageResponse): boolean {
+    return msg.userId === this.auth.currentUser()?.id;
+  }
+
+  protected canEdit(msg: MessageResponse): boolean {
+    return this.isMine(msg) && !msg.isDeleted && !msg.pending && !msg.failed;
+  }
+
+  protected canDelete(msg: MessageResponse): boolean {
+    return (
+      (this.isMine(msg) || this.canManageMessages()) &&
+      !msg.isDeleted && !msg.pending && !msg.failed
+    );
+  }
+
+  protected startEdit(msg: MessageResponse): void {
+    this.editingId.set(msg.messageId);
+    this.editDraft.set(msg.content);
+  }
+
+  protected cancelEdit(): void {
+    this.editingId.set(null);
+    this.editDraft.set('');
+  }
+
+  protected async saveEdit(msg: MessageResponse): Promise<void> {
+    const content = this.editDraft().trim();
+    this.cancelEdit();
+    if (!content || content === msg.content) return;
+    await this.messageService
+      .editMessage(msg.guildId, msg.channelId, msg.messageId, content)
+      .catch(() => {});
+  }
+
+  protected async deleteMsg(msg: MessageResponse): Promise<void> {
+    if (!window.confirm('Delete this message?')) return;
+    await this.messageService
+      .deleteMessage(msg.guildId, msg.channelId, msg.messageId)
+      .catch(() => {});
+  }
+
+  protected onEditKeydown(event: KeyboardEvent, msg: MessageResponse): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.saveEdit(msg);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelEdit();
+    }
   }
 
   constructor() {

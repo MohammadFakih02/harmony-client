@@ -1,6 +1,6 @@
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import { Channel, ChannelCategory } from '../models/channel.models';
+import { Channel, ChannelCapabilities, ChannelCategory } from '../models/channel.models';
 import { ChannelService } from '../services/channel.service';
 import { GuildStore } from './guild.store';
 
@@ -9,6 +9,8 @@ interface ChannelState {
   selectedChannelId: string | null;
   collapsedCategories: Record<string, boolean>;
   lastChannelByGuild: Record<string, string>;
+  // The caller's capabilities in the currently-open channel (null while unknown/loading).
+  currentCapabilities: ChannelCapabilities | null;
   loading: boolean;
 }
 
@@ -21,6 +23,7 @@ export const ChannelStore = signalStore(
     selectedChannelId: null,
     collapsedCategories: {},
     lastChannelByGuild: {},
+    currentCapabilities: null,
     loading: false,
   }),
   withComputed((store, guildStore = inject(GuildStore)) => ({
@@ -86,6 +89,20 @@ export const ChannelStore = signalStore(
 
     selectChannel(id: string): void {
       patchState(store, { selectedChannelId: id });
+    },
+
+    /** Fetch the caller's capabilities for a channel (drives input-disable + edit/delete UI). */
+    async loadCapabilities(guildId: string, channelId: string): Promise<void> {
+      patchState(store, { currentCapabilities: null });
+      try {
+        const caps = await service.getCapabilities(guildId, channelId);
+        // Ignore a stale response if the user already switched channels.
+        if (store.selectedChannelId() === channelId) {
+          patchState(store, { currentCapabilities: caps });
+        }
+      } catch {
+        // Leave null → the input stays optimistically enabled; the server still enforces.
+      }
     },
 
     /** Record the channel a user was last on in a guild, so re-entering the guild returns there. */

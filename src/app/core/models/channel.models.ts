@@ -18,3 +18,12 @@ export interface ChannelCategory {
   channels: Channel[];
   collapsed: boolean;
 }
+
+/** The caller's effective capabilities in a channel (computed server-side). */
+export interface ChannelCapabilities {
+  canView: boolean;
+  canSend: boolean;
+  canManageMessages: boolean;
+  canManageChannels: boolean;
+  timedOut: boolean;
+}
