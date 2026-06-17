@@ -42,6 +42,28 @@ export class MessageService {
     );
   }
 
+  editMessage(
+    guildId: string,
+    channelId: string,
+    messageId: string,
+    content: string,
+  ): Promise<void> {
+    return firstValueFrom(
+      this.http.patch<void>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/messages/${messageId}`,
+        { content },
+      ),
+    );
+  }
+
+  deleteMessage(guildId: string, channelId: string, messageId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/messages/${messageId}`,
+      ),
+    );
+  }
+
   markRead(guildId: string, channelId: string, lastReadMessageId: string): Promise<void> {
     return firstValueFrom(
       this.http.post<void>(

@@ -42,6 +42,7 @@ export class Channel implements OnInit, OnDestroy {
 
       this.channelStore.selectChannel(newChannelId);
       this.channelStore.rememberChannel(newGuildId, newChannelId);
+      this.channelStore.loadCapabilities(newGuildId, newChannelId);
       await this.messageStore.loadMessages(newGuildId, newChannelId);
 
       const messages = this.messageStore.messages();

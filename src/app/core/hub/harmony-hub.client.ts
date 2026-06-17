@@ -80,8 +80,10 @@ export class HarmonyHubClient {
         editedAt: Number(payload.editedAt),
       }));
 
-    this.connection.on('MessageDeleted', (messageId: unknown) =>
-      this._messageDeleted.next(String(messageId)));
+    // Backend broadcasts MessageDeletedPayload as a single object argument (like MessageEdited),
+    // so the id must be read off the payload — not treated as a scalar.
+    this.connection.on('MessageDeleted', (payload: { messageId: unknown }) =>
+      this._messageDeleted.next(String(payload.messageId)));
 
     this.connection.on('MessageFailed', (payload: MessageFailedPayload) =>
       this._messageFailed.next(payload));

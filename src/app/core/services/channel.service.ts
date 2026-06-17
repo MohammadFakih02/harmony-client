@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Channel } from '../models/channel.models';
+import { Channel, ChannelCapabilities } from '../models/channel.models';
 
 @Injectable({ providedIn: 'root' })
 export class ChannelService {
@@ -11,6 +11,14 @@ export class ChannelService {
 
   getGuildChannels(guildId: string): Promise<Channel[]> {
     return firstValueFrom(this.http.get<Channel[]>(`${this.base}/guilds/${guildId}/channels`));
+  }
+
+  getCapabilities(guildId: string, channelId: string): Promise<ChannelCapabilities> {
+    return firstValueFrom(
+      this.http.get<ChannelCapabilities>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/permissions`,
+      ),
+    );
   }
 
   createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {

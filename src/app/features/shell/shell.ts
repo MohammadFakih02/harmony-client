@@ -38,12 +38,23 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (!client) return;
 
     // Wire all server → store events
-    this.subs.add(client.messageReceived$.subscribe((msg) => this.messageStore.appendMessage(msg)));
+    this.subs.add(client.messageReceived$.subscribe((msg) => {
+      this.messageStore.appendMessage(msg);
+      // A message arriving in the channel you're currently viewing is already "read" —
+      // mark it so the server count resets and no badge appears on the active channel.
+      if (msg.channelId === this.messageStore.activeChannelId()) {
+        this.unreadStore.markRead(msg.guildId, msg.channelId, msg.messageId).catch(() => {});
+      }
+    }));
     this.subs.add(client.messageEdited$.subscribe(({ messageId, content, editedAt }) =>
       this.messageStore.editMessage(messageId, content, editedAt)));
     this.subs.add(client.messageDeleted$.subscribe((id) => this.messageStore.deleteMessage(id)));
     this.subs.add(client.messageFailed$.subscribe((p) => this.messageStore.handleFailed(p)));
-    this.subs.add(client.unreadCountUpdated$.subscribe((p) => this.unreadStore.setCount(p)));
+    this.subs.add(client.unreadCountUpdated$.subscribe((p) => {
+      // Ignore increments for the channel you're viewing — you're reading it, not accruing unreads.
+      if (p.channelId === this.messageStore.activeChannelId()) return;
+      this.unreadStore.setCount(p);
+    }));
     this.subs.add(client.channelCreated$.subscribe((ch) => this.channelStore.addChannel(ch)));
     this.subs.add(client.channelUpdated$.subscribe((ch) => this.channelStore.updateChannel(ch)));
     this.subs.add(client.channelDeleted$.subscribe((id) => this.channelStore.removeChannel(id)));
