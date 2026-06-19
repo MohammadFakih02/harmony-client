@@ -130,6 +130,35 @@ describe('MessageStore', () => {
       expect(failed).toBeDefined();
       expect(failed?.content).toBe('oops');
     });
+
+    it('carries attachment ids on the optimistic entry and forwards them to the service', async () => {
+      service.sendMessage.mockResolvedValue({ messageId: '600', channelId: '1', guildId: '1' });
+
+      const sendPromise = TestBed.runInInjectionContext(() =>
+        store.sendMessage('look', ['42', '43']),
+      );
+
+      // Optimistic entry shows the attachments before the POST resolves.
+      const optimistic = store.messages().find((m) => m.pending);
+      expect(optimistic?.attachmentIds).toEqual(['42', '43']);
+
+      await sendPromise;
+
+      // The ids reach the service as `attachmentIds` (not the old singular field).
+      expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'look', {
+        attachmentIds: ['42', '43'],
+      });
+    });
+
+    it('sends attachmentIds=undefined when there are no attachments', async () => {
+      service.sendMessage.mockResolvedValue({ messageId: '601', channelId: '1', guildId: '1' });
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('plain'));
+
+      expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'plain', {
+        attachmentIds: undefined,
+      });
+    });
   });
 
   describe('appendMessage() — reconcile', () => {

@@ -95,6 +95,15 @@
           }
         </p>
 
+        <!-- Image attachments (resolved lazily; space reserved from stored dimensions) -->
+        @if (!msg.isDeleted && msg.attachmentIds.length) {
+        <app-message-attachments
+          [attachmentIds]="msg.attachmentIds"
+          [guildId]="msg.guildId"
+          [channelId]="msg.channelId"
+        />
+        }
+
         <!-- Hover actions (own message → edit + delete; others → delete with ManageMessages) -->
         @if (canEdit(msg) || canDelete(msg)) {
         <div

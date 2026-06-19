@@ -10,15 +10,80 @@
   </div>
 </div>
 } @else {
-<div class="w-full mx-auto flex items-end gap-2 px-4 py-3 shrink-0">
-  <div
-    class="flex-1 flex items-center bg-surface-3 rounded-xl min-h-11 ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
-  >
-    <textarea
+<div class="w-full mx-auto px-4 py-3 shrink-0 flex flex-col gap-2">
+  <!-- Upload error -->
+  @if (attachError()) {
+  <div class="flex items-center gap-2 text-xs text-danger">
+    <i class="fas fa-circle-exclamation shrink-0"></i>
+    <span>{{ attachError() }}</span>
+  </div>
+  }
+
+  <!-- Staged attachments (thumbnails with upload progress) -->
+  @if (staged().length) {
+  <div class="flex flex-wrap gap-2">
+    @for (file of staged(); track file.localId) {
+    <div
+      class="relative w-20 h-20 rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 group/att"
+    >
+      <img [src]="file.previewUrl" [alt]="file.name" class="w-full h-full object-cover" />
+
+      <!-- Uploading overlay -->
+      @if (file.status === 'uploading') {
+      <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
+        <i class="fas fa-yin-yang animate-spin text-white text-sm"></i>
+        <span class="text-2xs text-white">{{ file.progress }}%</span>
+      </div>
+      } @else if (file.status === 'error') {
+      <div class="absolute inset-0 bg-danger/60 flex items-center justify-center">
+        <i class="fas fa-triangle-exclamation text-white"></i>
+      </div>
+      }
+
+      <!-- Remove -->
+      <button
+        type="button"
+        class="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-micro"
+        title="Remove"
+        (click)="removeStaged(file.localId)"
+      >
+        <i class="fas fa-xmark text-2xs"></i>
+      </button>
+    </div>
+    }
+  </div>
+  }
+
+  <div class="flex items-end gap-2">
+    <div
+      class="flex-1 flex items-end bg-surface-3 rounded-xl min-h-11 ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
+    >
+      @if (canAttach()) {
+      <input
+        #fileInput
+        type="file"
+        class="hidden"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        (change)="onFilesSelected($event)"
+      />
+      <button
+        type="button"
+        title="Attach images"
+        aria-label="Attach images"
+        class="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl text-faint hover:text-primary transition-micro"
+        (click)="fileInput.click()"
+      >
+        <i class="fas fa-circle-plus text-xl"></i>
+      </button>
+      }
+      <textarea
       autoGrow
       [maxHeight]="200"
       [autoGrowValue]="draft()"
-      class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm px-4 py-2.5 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
+      class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm py-2.5 pr-4 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
+      [class.pl-4]="!canAttach()"
+      [class.pl-1]="canAttach()"
       [placeholder]="'Message #' + channelName()"
       [ngModel]="draft()"
       (ngModelChange)="draft.set($event)"
@@ -44,5 +109,6 @@
     <i class="fas fa-paper-plane"></i>
     }
   </button>
+  </div>
 </div>
 }
