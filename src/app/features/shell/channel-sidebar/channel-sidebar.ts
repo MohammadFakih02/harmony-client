@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -6,8 +6,16 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
+import { PresenceStore } from '../../../core/stores/presence.store';
+import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
+
+interface StatusOption {
+  value: PreferredStatus;
+  label: string;
+  dotClass: string;
+}
 
 @Component({
   selector: 'app-channel-sidebar',
@@ -23,6 +31,7 @@ export class ChannelSidebar {
   protected readonly guildStore = inject(GuildStore);
   protected readonly channelStore = inject(ChannelStore);
   protected readonly unreadStore = inject(UnreadStore);
+  protected readonly presenceStore = inject(PresenceStore);
   private readonly router = inject(Router);
 
   // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
@@ -33,6 +42,25 @@ export class ChannelSidebar {
   protected readonly channelType = signal<'text' | 'voice'>('text');
   protected readonly submitting = signal(false);
   protected readonly error = signal('');
+
+  // Status picker
+  protected readonly showStatusMenu = signal(false);
+  protected readonly myAvatarStatus = computed(() => toAvatarStatus(this.presenceStore.myStatus()));
+  protected readonly statusOptions: StatusOption[] = [
+    { value: 'online', label: 'Online', dotClass: 'bg-success' },
+    { value: 'away', label: 'Idle', dotClass: 'bg-warning' },
+    { value: 'dnd', label: 'Do Not Disturb', dotClass: 'bg-danger' },
+    { value: 'invisible', label: 'Invisible', dotClass: 'bg-surface-3' },
+  ];
+
+  toggleStatusMenu(): void {
+    this.showStatusMenu.update((v) => !v);
+  }
+
+  selectStatus(status: PreferredStatus): void {
+    this.showStatusMenu.set(false);
+    this.presenceStore.setMyStatus(status);
+  }
 
   toggleCategory(categoryId: string | null): void {
     if (categoryId !== null) this.channelStore.toggleCategory(categoryId);

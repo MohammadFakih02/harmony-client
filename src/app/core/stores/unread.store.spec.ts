@@ -63,4 +63,25 @@ describe('UnreadStore', () => {
 
     expect(store.counts()['5']).toBe(0);
   });
+
+  it('guildUnreadCount() sums channel counts per guild, ignoring other guilds', () => {
+    store.setCount({ channelId: 'a', guildId: 'g1', unreadCount: 3 });
+    store.setCount({ channelId: 'b', guildId: 'g1', unreadCount: 4 });
+    store.setCount({ channelId: 'c', guildId: 'g2', unreadCount: 5 });
+
+    expect(store.guildUnreadCount('g1')).toBe(7);
+    expect(store.guildUnreadCount('g2')).toBe(5);
+    expect(store.guildUnreadCount('g3')).toBe(0);
+  });
+
+  it('loadAll() records the channel→guild map for guild rollups', async () => {
+    service.getUnreadCounts.mockResolvedValue([
+      { channelId: 'a', guildId: 'g1', unreadCount: 2 },
+      { channelId: 'b', guildId: 'g1', unreadCount: 6 },
+    ]);
+
+    await TestBed.runInInjectionContext(() => store.loadAll());
+
+    expect(store.guildUnreadCount('g1')).toBe(8);
+  });
 });

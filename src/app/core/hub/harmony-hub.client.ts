@@ -2,6 +2,11 @@ import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { Observable, Subject } from 'rxjs';
 import { Channel } from '../models/channel.models';
 import { MessageFailedPayload, MessageResponse, UnreadCountPayload } from '../models/message.models';
+import {
+  OfflineStatusPayload,
+  OnlineStatusPayload,
+  StatusChangedPayload,
+} from '../models/presence.models';
 
 export interface MessageEditedEvent {
   messageId: string;
@@ -31,6 +36,9 @@ export class HarmonyHubClient {
   private readonly _channelDeleted = new Subject<string>();
   private readonly _typingStarted = new Subject<TypingStartedEvent>();
   private readonly _typingStopped = new Subject<TypingStoppedEvent>();
+  private readonly _onlineStatus = new Subject<OnlineStatusPayload>();
+  private readonly _offlineStatus = new Subject<OfflineStatusPayload>();
+  private readonly _statusChanged = new Subject<StatusChangedPayload>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -42,6 +50,9 @@ export class HarmonyHubClient {
   readonly channelDeleted$: Observable<string> = this._channelDeleted.asObservable();
   readonly typingStarted$: Observable<TypingStartedEvent> = this._typingStarted.asObservable();
   readonly typingStopped$: Observable<TypingStoppedEvent> = this._typingStopped.asObservable();
+  readonly onlineStatus$: Observable<OnlineStatusPayload> = this._onlineStatus.asObservable();
+  readonly offlineStatus$: Observable<OfflineStatusPayload> = this._offlineStatus.asObservable();
+  readonly statusChanged$: Observable<StatusChangedPayload> = this._statusChanged.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -105,6 +116,21 @@ export class HarmonyHubClient {
 
     this.connection.on('TypingStopped', (userId: unknown, channelId: unknown) =>
       this._typingStopped.next({ userId: String(userId), channelId: String(channelId) }));
+
+    this.connection.on('OnlineStatus', (payload: { userId: unknown; status: string }) =>
+      this._onlineStatus.next({ userId: String(payload.userId), status: payload.status }));
+
+    this.connection.on('OfflineStatus', (payload: { userId: unknown }) =>
+      this._offlineStatus.next({ userId: String(payload.userId) }));
+
+    this.connection.on('StatusChanged', (payload: {
+      userId: unknown; status: string; statusMessage: string | null;
+    }) =>
+      this._statusChanged.next({
+        userId: String(payload.userId),
+        status: payload.status,
+        statusMessage: payload.statusMessage ?? null,
+      }));
   }
 
   get state(): HubConnectionState {
@@ -165,5 +191,10 @@ export class HarmonyHubClient {
 
   async heartbeat(): Promise<void> {
     await this.connection.invoke('Heartbeat');
+  }
+
+  /** Reports client activity state — true after ~15 min idle, false on the next interaction. */
+  async setIdle(idle: boolean): Promise<void> {
+    await this.connection.invoke('SetIdle', idle);
   }
 }
