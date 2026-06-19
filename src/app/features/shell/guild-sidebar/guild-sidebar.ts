@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
+import { UnreadStore } from '../../../core/stores/unread.store';
 
 @Component({
   selector: 'app-guild-sidebar',
@@ -16,6 +17,7 @@ import { ChannelStore } from '../../../core/stores/channel.store';
 export class GuildSidebar {
   protected readonly auth = inject(AuthService);
   protected readonly guildStore = inject(GuildStore);
+  protected readonly unreadStore = inject(UnreadStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly router = inject(Router);
 

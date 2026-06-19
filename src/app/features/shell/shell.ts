@@ -2,10 +2,12 @@ import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
+import { IdleService } from '../../core/services/idle.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
 import { UnreadStore } from '../../core/stores/unread.store';
+import { PresenceStore } from '../../core/stores/presence.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
@@ -24,6 +26,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
   private readonly unreadStore = inject(UnreadStore);
+  private readonly presenceStore = inject(PresenceStore);
+  private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
 
@@ -34,6 +38,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.guildStore.loadGuilds(),
     ]);
     this.unreadStore.loadAll();
+    this.presenceStore.initMyStatus();
 
     if (!client) return;
 
@@ -59,7 +64,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.add(client.channelUpdated$.subscribe((ch) => this.channelStore.updateChannel(ch)));
     this.subs.add(client.channelDeleted$.subscribe((id) => this.channelStore.removeChannel(id)));
 
+    // Presence events → store. Friends don't exist yet, so today these mainly carry the
+    // user's own multi-tab status sync (StatusChanged to self) and member-list dots.
+    this.subs.add(client.onlineStatus$.subscribe((p) => this.presenceStore.applyOnline(p)));
+    this.subs.add(client.offlineStatus$.subscribe((p) => this.presenceStore.applyOffline(p)));
+    this.subs.add(client.statusChanged$.subscribe((p) => this.presenceStore.applyStatusChanged(p)));
+
     client.onReconnected(() => this.rejoinGroups());
+
+    // Start reporting inactivity (auto-away) now that we have a live connection.
+    this.idle.start(client);
 
     // Join all guilds immediately so channel CRUD events arrive for all servers
     await this.joinAllGuilds(client);
@@ -67,6 +81,7 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+    this.idle.stop();
     this.signalR.disconnect();
   }
 

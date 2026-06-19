@@ -135,4 +135,48 @@ describe('HarmonyHubClient', () => {
   it('exposes current connection state via .state', () => {
     expect(client.state).toBe(HubConnectionState.Connected);
   });
+
+  it('registers presence event handlers', () => {
+    const registeredEvents = conn.on.mock.calls.map(([event]) => event);
+    expect(registeredEvents).toContain('OnlineStatus');
+    expect(registeredEvents).toContain('OfflineStatus');
+    expect(registeredEvents).toContain('StatusChanged');
+  });
+
+  it('dispatches OnlineStatus to onlineStatus$ coercing userId to a string', () => {
+    const received: unknown[] = [];
+    client.onlineStatus$.subscribe((p) => received.push(p));
+
+    conn.emit('OnlineStatus', { userId: 7, status: 'online' });
+
+    expect(received[0]).toEqual({ userId: '7', status: 'online' });
+  });
+
+  it('dispatches OfflineStatus to offlineStatus$', () => {
+    const received: unknown[] = [];
+    client.offlineStatus$.subscribe((p) => received.push(p));
+
+    conn.emit('OfflineStatus', { userId: 7 });
+
+    expect(received[0]).toEqual({ userId: '7' });
+  });
+
+  it('dispatches StatusChanged to statusChanged$', () => {
+    const received: unknown[] = [];
+    client.statusChanged$.subscribe((p) => received.push(p));
+
+    conn.emit('StatusChanged', { userId: 7, status: 'dnd', statusMessage: null });
+
+    expect(received[0]).toEqual({ userId: '7', status: 'dnd', statusMessage: null });
+  });
+
+  it('setIdle() invokes SetIdle with the boolean flag', async () => {
+    await client.setIdle(true);
+    expect(conn.invoke).toHaveBeenCalledWith('SetIdle', true);
+  });
+
+  it('heartbeat() invokes Heartbeat', async () => {
+    await client.heartbeat();
+    expect(conn.invoke).toHaveBeenCalledWith('Heartbeat');
+  });
 });
