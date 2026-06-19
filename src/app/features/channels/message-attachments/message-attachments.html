@@ -1,0 +1,35 @@
+<div class="flex flex-wrap gap-2 mt-1">
+  @for (att of rendered(); track att.id) {
+    @if (att.meta) {
+      <button
+        type="button"
+        class="block rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 cursor-zoom-in hover:ring-accent transition-micro"
+        [style.width.px]="att.width"
+        [style.height.px]="att.height"
+        title="Click to expand"
+        (click)="open(att.meta)"
+      >
+        <img
+          [src]="att.meta.url"
+          [alt]="att.meta.filename"
+          loading="lazy"
+          class="w-full h-full object-cover"
+        />
+      </button>
+    } @else if (att.failed) {
+      <div
+        class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 ring-1 ring-border-subtle text-xs text-faint"
+      >
+        <i class="fas fa-image-slash"></i>
+        <span>Image unavailable</span>
+      </div>
+    } @else {
+      <!-- Resolving — neutral skeleton occupying the reserved box -->
+      <div
+        class="rounded-lg bg-surface-2 ring-1 ring-border-subtle animate-pulse"
+        [style.width.px]="att.width"
+        [style.height.px]="att.height"
+      ></div>
+    }
+  }
+</div>

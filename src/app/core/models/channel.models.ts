@@ -23,6 +23,7 @@ export interface ChannelCategory {
 export interface ChannelCapabilities {
   canView: boolean;
   canSend: boolean;
+  canAttach: boolean;
   canManageMessages: boolean;
   canManageChannels: boolean;
   timedOut: boolean;

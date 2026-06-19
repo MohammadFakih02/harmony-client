@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractContro
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiInput } from '../../../shared/ui';
+import { extractApiError } from '../../../shared/util/api-error';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -47,13 +48,8 @@ export class RegisterComponent {
         this.form.value.password
       );
       this.router.navigate(['/app']);
-    } catch (err: any) {
-      const apiErrors = err?.error?.errors;
-      this.error.set(
-        Array.isArray(apiErrors)
-          ? apiErrors.join(' ')
-          : (err?.error?.error ?? 'Something went wrong. Please try again.')
-      );
+    } catch (err) {
+      this.error.set(extractApiError(err));
     } finally {
       this.loading.set(false);
     }

@@ -1,0 +1,88 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment';
+import {
+  FileAttachmentResponse,
+  FileDownloadResponse,
+  PresignFileRequest,
+  PresignFileResponse,
+} from '../models/file.models';
+
+@Injectable({ providedIn: 'root' })
+export class FileService {
+  private readonly http = inject(HttpClient);
+  private readonly base = environment.apiUrl;
+
+  private files(guildId: string, channelId: string): string {
+    return `${this.base}/guilds/${guildId}/channels/${channelId}/files`;
+  }
+
+  presign(
+    guildId: string,
+    channelId: string,
+    req: PresignFileRequest,
+  ): Promise<PresignFileResponse> {
+    return firstValueFrom(
+      this.http.post<PresignFileResponse>(`${this.files(guildId, channelId)}/presign`, req),
+    );
+  }
+
+  /**
+   * PUTs the bytes directly to the object store via the presigned URL. Uses a raw
+   * XMLHttpRequest — NOT HttpClient — because the auth interceptor would attach the
+   * JWT + credentials, which breaks the presigned signature and trips CORS. The
+   * Content-Type MUST match the type declared at presign (the signature binds it).
+   */
+  upload(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', file.type);
+
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else {
+          console.error('[upload] PUT failed', xhr.status, xhr.responseText, uploadUrl);
+          reject(new Error(`Upload rejected by storage (HTTP ${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => {
+        // status 0 here = the browser blocked/failed the request before a response
+        // (CORS, connection refused, blocked port…). The real reason is in the console.
+        console.error('[upload] PUT network error (status 0) — see browser console for the block reason. URL:', uploadUrl);
+        reject(new Error('Upload blocked by the browser (network/CORS). Check the console.'));
+      };
+      xhr.send(file);
+    });
+  }
+
+  confirm(
+    guildId: string,
+    channelId: string,
+    fileId: string,
+  ): Promise<FileAttachmentResponse> {
+    return firstValueFrom(
+      this.http.post<FileAttachmentResponse>(
+        `${this.files(guildId, channelId)}/${fileId}/confirm`,
+        {},
+      ),
+    );
+  }
+
+  getDownload(
+    guildId: string,
+    channelId: string,
+    fileId: string,
+  ): Promise<FileDownloadResponse> {
+    return firstValueFrom(
+      this.http.get<FileDownloadResponse>(`${this.files(guildId, channelId)}/${fileId}`),
+    );
+  }
+}

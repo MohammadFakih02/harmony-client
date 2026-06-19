@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiInput } from '../../../shared/ui';
+import { extractApiError } from '../../../shared/util/api-error';
 
 @Component({
   selector: 'app-login',
@@ -38,10 +39,8 @@ export class LoginComponent {
         this.form.value.password
       );
       this.router.navigate(['/app']);
-    } catch (err: any) {
-      this.error.set(
-        err?.error?.error ?? 'Something went wrong. Please try again.'
-      );
+    } catch (err) {
+      this.error.set(extractApiError(err));
     } finally {
       this.loading.set(false);
     }

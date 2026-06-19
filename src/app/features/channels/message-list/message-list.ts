@@ -12,6 +12,7 @@ import { MessageService } from '../../../core/services/message.service';
 import { MessageResponse } from '../../../core/models/message.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
+import { MessageAttachments } from '../message-attachments/message-attachments';
 
 export interface MessageGroup {
   userId: string;
@@ -39,7 +40,7 @@ function formatMessageTime(sentAt: number): string {
 @Component({
   selector: 'app-message-list',
   standalone: true,
-  imports: [UiAvatar, ScrollingModule, FormsModule, AutofocusEnd],
+  imports: [UiAvatar, ScrollingModule, FormsModule, AutofocusEnd, MessageAttachments],
   host: { class: 'flex flex-col min-h-0 h-full' },
   templateUrl: './message-list.html',
 })
