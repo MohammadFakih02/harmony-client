@@ -32,7 +32,7 @@ export class MessageService {
     guildId: string,
     channelId: string,
     content: string,
-    options: { attachmentId?: string; replyToId?: string } = {},
+    options: { attachmentIds?: string[]; replyToId?: string } = {},
   ): Promise<SendMessageResponse> {
     return firstValueFrom(
       this.http.post<SendMessageResponse>(

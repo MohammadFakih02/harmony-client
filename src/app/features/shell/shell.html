@@ -35,6 +35,9 @@
   </main>
 </div>
 
+<!-- App-wide image lightbox -->
+<ui-lightbox />
+
 <!-- Connection status banner -->
 @if (signalR.connectionState() === 'reconnecting' || signalR.connectionState() === 'disconnected') {
 <div

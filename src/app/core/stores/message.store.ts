@@ -102,7 +102,7 @@ export const MessageStore = signalStore(
       }
     },
 
-    async sendMessage(content: string): Promise<void> {
+    async sendMessage(content: string, attachmentIds: string[] = []): Promise<void> {
       const channelId = store.activeChannelId();
       const guildId = store.activeGuildId();
       const user = auth.currentUser();
@@ -123,7 +123,7 @@ export const MessageStore = signalStore(
         editedAt: null,
         isDeleted: false,
         messageType: 'Default',
-        attachmentIds: [],
+        attachmentIds,
         mentionIds: [],
         replyToId: null,
         pending: true,
@@ -132,7 +132,9 @@ export const MessageStore = signalStore(
       patchState(store, { messages: [...store.messages(), optimistic] });
 
       try {
-        const response = await service.sendMessage(guildId, channelId, content);
+        const response = await service.sendMessage(guildId, channelId, content, {
+          attachmentIds: attachmentIds.length ? attachmentIds : undefined,
+        });
         confirmSent(tempId, response.messageId);
       } catch {
         patchState(store, {
@@ -188,7 +190,9 @@ export const MessageStore = signalStore(
       });
 
       try {
-        const response = await service.sendMessage(guildId, channelId, msg.content);
+        const response = await service.sendMessage(guildId, channelId, msg.content, {
+          attachmentIds: msg.attachmentIds.length ? msg.attachmentIds : undefined,
+        });
         confirmSent(newTempId, response.messageId);
       } catch {
         patchState(store, {
