@@ -46,5 +46,6 @@ export interface UnreadCountPayload {
 
 export interface UnreadCountResponse {
   channelId: string;
+  guildId: string;
   unreadCount: number;
 }

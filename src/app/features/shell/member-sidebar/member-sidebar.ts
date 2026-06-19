@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { UiAvatar } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { PresenceStore } from '../../../core/stores/presence.store';
+import { AvatarStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import { environment } from '../../../../environments/environment';
 
 interface GuildMember {
@@ -24,6 +26,7 @@ interface GuildMember {
 })
 export class MemberSidebar {
   protected readonly guildStore = inject(GuildStore);
+  protected readonly presenceStore = inject(PresenceStore);
   private readonly http = inject(HttpClient);
 
   protected readonly members = signal<GuildMember[]>([]);
@@ -51,6 +54,8 @@ export class MemberSidebar {
         this.http.get<GuildMember[]>(`${environment.apiUrl}/guilds/${guildId}/members`),
       );
       this.members.set(raw);
+      // Fetch current presence for these members; live changes arrive via SignalR.
+      this.presenceStore.loadStatuses(raw.map((m) => m.userId));
     } catch {
       this.members.set([]);
     } finally {
@@ -60,5 +65,9 @@ export class MemberSidebar {
 
   protected displayName(m: GuildMember): string {
     return m.nickname ?? m.username;
+  }
+
+  protected avatarStatus(userId: string): AvatarStatus {
+    return toAvatarStatus(this.presenceStore.statusOf(userId));
   }
 }

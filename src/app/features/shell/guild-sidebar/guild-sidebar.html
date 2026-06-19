@@ -33,6 +33,16 @@
       } @else {
         <span class="text-sm font-semibold select-none">{{ guildInitials()[guild.id] }}</span>
       }
+
+      <!-- Unread count badge (sum across the guild's channels) -->
+      @let guildUnread = unreadStore.guildUnreadCount(guild.id);
+      @if (guildUnread > 0) {
+      <span
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface-1"
+      >
+        {{ guildUnread > 99 ? '99+' : guildUnread }}
+      </span>
+      }
     </button>
     }
   </div>
