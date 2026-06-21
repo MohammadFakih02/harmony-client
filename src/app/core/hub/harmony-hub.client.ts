@@ -7,6 +7,7 @@ import {
   OnlineStatusPayload,
   StatusChangedPayload,
 } from '../models/presence.models';
+import { FriendRemovedPayload, FriendUserPayload } from '../models/friend.models';
 
 export interface MessageEditedEvent {
   messageId: string;
@@ -39,6 +40,9 @@ export class HarmonyHubClient {
   private readonly _onlineStatus = new Subject<OnlineStatusPayload>();
   private readonly _offlineStatus = new Subject<OfflineStatusPayload>();
   private readonly _statusChanged = new Subject<StatusChangedPayload>();
+  private readonly _friendRequest = new Subject<FriendUserPayload>();
+  private readonly _friendAccepted = new Subject<FriendUserPayload>();
+  private readonly _friendRemoved = new Subject<FriendRemovedPayload>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -53,6 +57,9 @@ export class HarmonyHubClient {
   readonly onlineStatus$: Observable<OnlineStatusPayload> = this._onlineStatus.asObservable();
   readonly offlineStatus$: Observable<OfflineStatusPayload> = this._offlineStatus.asObservable();
   readonly statusChanged$: Observable<StatusChangedPayload> = this._statusChanged.asObservable();
+  readonly friendRequest$: Observable<FriendUserPayload> = this._friendRequest.asObservable();
+  readonly friendAccepted$: Observable<FriendUserPayload> = this._friendAccepted.asObservable();
+  readonly friendRemoved$: Observable<FriendRemovedPayload> = this._friendRemoved.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -71,7 +78,8 @@ export class HarmonyHubClient {
         ...msg,
         messageId: String(msg.messageId),
         channelId: String(msg.channelId),
-        guildId: String(msg.guildId),
+        // DM messages carry no guild — keep null rather than the string "null".
+        guildId: msg.guildId != null ? String(msg.guildId) : null,
         userId: String(msg.userId),
         // sentAt/editedAt are longs serialized as strings by LongStringConverter
         sentAt: Number(msg.sentAt),
@@ -131,6 +139,26 @@ export class HarmonyHubClient {
         status: payload.status,
         statusMessage: payload.statusMessage ?? null,
       }));
+
+    this.connection.on('FriendRequest', (p: FriendUserPayload) =>
+      this._friendRequest.next(this.coerceFriendUser(p)));
+
+    this.connection.on('FriendAccepted', (p: FriendUserPayload) =>
+      this._friendAccepted.next(this.coerceFriendUser(p)));
+
+    this.connection.on('FriendRemoved', (p: { userId: unknown }) =>
+      this._friendRemoved.next({ userId: String(p.userId) }));
+  }
+
+  /** Coerce the Snowflake id to a string (SignalR may deliver it as a number). */
+  private coerceFriendUser(p: FriendUserPayload): FriendUserPayload {
+    return {
+      id: String(p.id),
+      username: p.username,
+      discriminator: p.discriminator ?? null,
+      avatarKey: p.avatarKey ?? null,
+      bannerKey: p.bannerKey ?? null,
+    };
   }
 
   get state(): HubConnectionState {

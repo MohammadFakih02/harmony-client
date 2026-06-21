@@ -31,6 +31,12 @@ export const routes: Routes = [
           import('./features/friends/friends').then(m => m.Friends),
       },
       {
+        // Direct messages reuse the Channel view with no parent guildId (DM mode).
+        path: 'dm/:channelId',
+        loadComponent: () =>
+          import('./features/channels/channel').then(m => m.Channel),
+      },
+      {
         path: 'guilds/:guildId',
         loadComponent: () =>
           import('./features/guilds/guild').then(m => m.Guild),

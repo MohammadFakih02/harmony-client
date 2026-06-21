@@ -25,7 +25,7 @@ interface RenderedAttachment {
 })
 export class MessageAttachments {
   readonly attachmentIds = input.required<string[]>();
-  readonly guildId = input.required<string>();
+  readonly guildId = input.required<string | null>(); // null for DM attachments
   readonly channelId = input.required<string>();
 
   private readonly fileStore = inject(FileStore);

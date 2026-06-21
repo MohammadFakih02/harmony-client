@@ -1,12 +1,15 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
+import { DmStore } from '../../../core/stores/dm.store';
 import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
@@ -32,10 +35,37 @@ export class ChannelSidebar {
   protected readonly channelStore = inject(ChannelStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
+  protected readonly dmStore = inject(DmStore);
   private readonly router = inject(Router);
 
   // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
   protected readonly showLoading = delayedSignal(this.channelStore.loading);
+
+  // The home column (Friends + DM list) shows whenever we're not inside a guild.
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly inDirectMessages = computed(() => !this.url().includes('/guilds/'));
+  protected readonly activeDmChannelId = computed(() => {
+    const m = this.url().match(/\/dm\/([^/?#]+)/);
+    return m ? m[1] : null;
+  });
+
+  dmAvatarStatus(userId: string): ReturnType<typeof toAvatarStatus> {
+    return toAvatarStatus(this.presenceStore.statusOf(userId));
+  }
+
+  hideDm(channelId: string, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dmStore.hide(channelId);
+    if (this.activeDmChannelId() === channelId) this.router.navigate(['/app/friends']);
+  }
 
   protected readonly showCreateModal = signal(false);
   protected readonly channelName = signal('');

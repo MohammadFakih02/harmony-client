@@ -5,6 +5,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
+import { DmStore } from '../../../core/stores/dm.store';
 
 @Component({
   selector: 'app-guild-sidebar',
@@ -18,8 +19,32 @@ export class GuildSidebar {
   protected readonly auth = inject(AuthService);
   protected readonly guildStore = inject(GuildStore);
   protected readonly unreadStore = inject(UnreadStore);
+  protected readonly dmStore = inject(DmStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly router = inject(Router);
+
+  // DMs with unread messages surface as avatar pills at the top of the rail (Discord-style),
+  // so an incoming DM is reachable even while you're inside a server.
+  protected readonly unreadDms = computed(() =>
+    this.dmStore.dms().filter((d) => (this.unreadStore.counts()[d.channelId] ?? 0) > 0),
+  );
+
+  dmUnreadCount(channelId: string): number {
+    return this.unreadStore.counts()[channelId] ?? 0;
+  }
+
+  dmInitials(username: string): string {
+    return username
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
+  openDm(channelId: string): void {
+    this.router.navigate(['/app/dm', channelId]);
+  }
 
   protected readonly showCreateModal = signal(false);
   protected readonly guildName = signal('');

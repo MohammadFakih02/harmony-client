@@ -10,6 +10,31 @@
     >
       <i class="fas fa-yin-yang text-2xl"></i>
     </a>
+
+    <!-- Unread DM senders — surfaced as avatar pills so an incoming DM is reachable from a server -->
+    @for (dm of unreadDms(); track dm.channelId) {
+    <button
+      class="guild-icon bg-surface-2 text-muted hover:text-primary transition-micro relative"
+      [title]="dm.peerUsername"
+      (click)="openDm(dm.channelId)"
+    >
+      @if (dm.peerAvatarKey) {
+        <img
+          [src]="dm.peerAvatarKey"
+          [alt]="dm.peerUsername"
+          class="w-full h-full object-cover rounded-[inherit]"
+        />
+      } @else {
+        <span class="text-sm font-semibold select-none">{{ dmInitials(dm.peerUsername) }}</span>
+      }
+      <span
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface-1"
+      >
+        {{ dmUnreadCount(dm.channelId) > 99 ? '99+' : dmUnreadCount(dm.channelId) }}
+      </span>
+    </button>
+    }
+
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
   </div>
 

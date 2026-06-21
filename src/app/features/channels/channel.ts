@@ -27,13 +27,15 @@ export class Channel implements OnInit, OnDestroy {
   private readonly signalR = inject(SignalRService);
 
   private channelId = '';
-  private guildId = '';
+  // null = a DM (no owning guild). Guild channels carry their guild id here.
+  private guildId: string | null = null;
   private paramSub?: Subscription;
 
   ngOnInit(): void {
     this.paramSub = this.route.params.subscribe(async (params) => {
       const newChannelId: string = params['channelId'];
-      const newGuildId: string = this.route.snapshot.parent?.params['guildId'] ?? '';
+      // The guild id only exists on the guild route's parent; a DM route has none.
+      const newGuildId: string | null = this.route.snapshot.parent?.params['guildId'] ?? null;
       if (newChannelId === this.channelId) return;
 
       const prev = this.channelId;
@@ -41,8 +43,11 @@ export class Channel implements OnInit, OnDestroy {
       this.guildId = newGuildId;
 
       this.channelStore.selectChannel(newChannelId);
-      this.channelStore.rememberChannel(newGuildId, newChannelId);
-      this.channelStore.loadCapabilities(newGuildId, newChannelId);
+      if (newGuildId) {
+        // Guild-only concerns: last-visited memory + channel capability resolution.
+        this.channelStore.rememberChannel(newGuildId, newChannelId);
+        this.channelStore.loadCapabilities(newGuildId, newChannelId);
+      }
       await this.messageStore.loadMessages(newGuildId, newChannelId);
 
       const messages = this.messageStore.messages();

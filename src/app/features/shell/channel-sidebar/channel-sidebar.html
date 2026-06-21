@@ -1,4 +1,5 @@
 <aside class="flex flex-col w-full h-full bg-transparent">
+  @if (!inDirectMessages()) {
   <!-- Guild header -->
   <div
     class="flex items-center justify-between px-4 h-12 min-h-12 border-b border-border-subtle cursor-pointer transition-micro hover:bg-surface-2 shrink-0"
@@ -109,6 +110,64 @@
     }
     }
   </div>
+  } @else {
+  <!-- Home column: Friends nav + DM list -->
+  <div class="flex items-center px-4 h-12 min-h-12 border-b border-border-subtle shrink-0">
+    <span class="font-semibold text-primary">Direct Messages</span>
+  </div>
+  <div class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
+    <a
+      routerLink="/app/friends"
+      routerLinkActive="bg-surface-3 text-primary"
+      class="flex items-center gap-3 px-2 py-2 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro mb-2"
+    >
+      <i class="fas fa-user-group w-5 text-center"></i>
+      <span class="flex-1">Friends</span>
+    </a>
+
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 mb-1">Direct Messages</p>
+    @if (dmStore.dms().length === 0) {
+    <p class="text-xs text-faint px-2 py-2">No conversations yet.</p>
+    } @else {
+    <div class="flex flex-col gap-0.5">
+      @for (dm of dmStore.dms(); track dm.channelId) {
+      @let unread = activeDmChannelId() === dm.channelId ? 0 : (unreadStore.counts()[dm.channelId] || 0);
+      <a
+        [routerLink]="['/app/dm', dm.channelId]"
+        routerLinkActive="bg-surface-3 text-primary"
+        class="dm-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        [class.font-semibold]="unread > 0"
+        [class.text-primary]="unread > 0"
+      >
+        <ui-avatar
+          [src]="dm.peerAvatarKey"
+          [alt]="dm.peerUsername"
+          [status]="dmAvatarStatus(dm.peerId)"
+          size="sm"
+        />
+        <span class="flex-1 truncate-text">{{ dm.peerUsername }}</span>
+        @if (unread > 0) {
+        <span
+          class="shrink-0 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"
+        >
+          {{ unread > 99 ? '99+' : unread }}
+        </span>
+        } @else {
+        <button
+          type="button"
+          class="opacity-0 group-hover:opacity-100 text-faint hover:text-primary transition-micro"
+          title="Close DM"
+          (click)="hideDm(dm.channelId, $event)"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+        }
+      </a>
+      }
+    </div>
+    }
+  </div>
+  }
 
   <!-- User deck -->
   <div

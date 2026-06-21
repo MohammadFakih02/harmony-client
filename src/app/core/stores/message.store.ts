@@ -61,7 +61,7 @@ export const MessageStore = signalStore(
     };
 
     return {
-    async loadMessages(guildId: string, channelId: string): Promise<void> {
+    async loadMessages(guildId: string | null, channelId: string): Promise<void> {
       patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
       try {
         const response = await service.getMessages(guildId, channelId);
@@ -80,8 +80,8 @@ export const MessageStore = signalStore(
 
     async loadOlder(): Promise<void> {
       const channelId = store.activeChannelId();
-      const guildId = store.activeGuildId();
-      if (!channelId || !guildId || store.isLoading() || !store.hasMore()) return;
+      const guildId = store.activeGuildId(); // null for a DM
+      if (!channelId || store.isLoading() || !store.hasMore()) return;
 
       // Find oldest real (non-optimistic) message
       const oldest = store.messages().find((m) => !m.tempId);
@@ -104,9 +104,9 @@ export const MessageStore = signalStore(
 
     async sendMessage(content: string, attachmentIds: string[] = []): Promise<void> {
       const channelId = store.activeChannelId();
-      const guildId = store.activeGuildId();
+      const guildId = store.activeGuildId(); // null for a DM
       const user = auth.currentUser();
-      if (!channelId || !guildId || !user) return;
+      if (!channelId || !user) return;
 
       const tempId = nextTempId();
       const optimistic: MessageResponse = {
@@ -176,9 +176,9 @@ export const MessageStore = signalStore(
 
     async retryMessage(tempId: number): Promise<void> {
       const channelId = store.activeChannelId();
-      const guildId = store.activeGuildId();
+      const guildId = store.activeGuildId(); // null for a DM
       const msg = store.messages().find((m) => m.tempId === tempId && m.failed);
-      if (!msg || !channelId || !guildId) return;
+      if (!msg || !channelId) return;
 
       const newTempId = nextTempId();
       patchState(store, {
