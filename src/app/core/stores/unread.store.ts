@@ -20,7 +20,7 @@ export const UnreadStore = signalStore(
         const counts: Record<string, number> = {};
         const channelGuild: Record<string, string> = {};
         for (const r of responses) {
-          channelGuild[r.channelId] = r.guildId;
+          if (r.guildId != null) channelGuild[r.channelId] = r.guildId;
           if (r.unreadCount > 0) counts[r.channelId] = r.unreadCount;
         }
         patchState(store, { counts, channelGuild, loading: false });
@@ -32,7 +32,10 @@ export const UnreadStore = signalStore(
     setCount(payload: UnreadCountPayload): void {
       patchState(store, {
         counts: { ...store.counts(), [payload.channelId]: payload.unreadCount },
-        channelGuild: { ...store.channelGuild(), [payload.channelId]: payload.guildId },
+        // Only guild channels roll up to a guild badge; a DM (guildId null) doesn't.
+        ...(payload.guildId != null
+          ? { channelGuild: { ...store.channelGuild(), [payload.channelId]: payload.guildId } }
+          : {}),
       });
     },
 
@@ -47,10 +50,16 @@ export const UnreadStore = signalStore(
       return total;
     },
 
-    async markRead(guildId: string, channelId: string, lastReadMessageId: string): Promise<void> {
+    async markRead(
+      guildId: string | null,
+      channelId: string,
+      lastReadMessageId: string,
+    ): Promise<void> {
       patchState(store, {
         counts: { ...store.counts(), [channelId]: 0 },
-        channelGuild: { ...store.channelGuild(), [channelId]: guildId },
+        ...(guildId != null
+          ? { channelGuild: { ...store.channelGuild(), [channelId]: guildId } }
+          : {}),
       });
       try {
         await service.markRead(guildId, channelId, lastReadMessageId);

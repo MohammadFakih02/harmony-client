@@ -1,6 +1,7 @@
-import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { filter, map, startWith, Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
 import { IdleService } from '../../core/services/idle.service';
 import { GuildStore } from '../../core/stores/guild.store';
@@ -8,6 +9,8 @@ import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
+import { FriendStore } from '../../core/stores/friend.store';
+import { DmStore } from '../../core/stores/dm.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
@@ -22,11 +25,25 @@ import { UiIconButton, Lightbox } from '../../shared/ui';
 export class ShellComponent implements OnInit, OnDestroy {
   protected readonly signalR = inject(SignalRService);
   protected readonly showMembers = signal(true);
+  private readonly router = inject(Router);
+
+  // The member list only applies inside a guild — not on Friends / DM screens.
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly inGuild = computed(() => this.url().includes('/guilds/'));
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
+  private readonly friendStore = inject(FriendStore);
+  private readonly dmStore = inject(DmStore);
   private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
@@ -39,6 +56,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     ]);
     this.unreadStore.loadAll();
     this.presenceStore.initMyStatus();
+    this.friendStore.load();
+    this.dmStore.load();
 
     if (!client) return;
 
@@ -50,6 +69,8 @@ export class ShellComponent implements OnInit, OnDestroy {
       if (msg.channelId === this.messageStore.activeChannelId()) {
         this.unreadStore.markRead(msg.guildId, msg.channelId, msg.messageId).catch(() => {});
       }
+      // A DM message can resurface a conversation the recipient had hidden.
+      if (msg.guildId == null) this.dmStore.ensureVisible(msg.channelId);
     }));
     this.subs.add(client.messageEdited$.subscribe(({ messageId, content, editedAt }) =>
       this.messageStore.editMessage(messageId, content, editedAt)));
@@ -59,6 +80,9 @@ export class ShellComponent implements OnInit, OnDestroy {
       // Ignore increments for the channel you're viewing — you're reading it, not accruing unreads.
       if (p.channelId === this.messageStore.activeChannelId()) return;
       this.unreadStore.setCount(p);
+      // A DM unread is the reliable cross-cutting signal that a conversation exists for us
+      // (we may not be joined to its channel group). Surface it in our DM list if it's new.
+      if (p.guildId == null) this.dmStore.ensureVisible(p.channelId);
     }));
     this.subs.add(client.channelCreated$.subscribe((ch) => this.channelStore.addChannel(ch)));
     this.subs.add(client.channelUpdated$.subscribe((ch) => this.channelStore.updateChannel(ch)));
@@ -69,6 +93,11 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.add(client.onlineStatus$.subscribe((p) => this.presenceStore.applyOnline(p)));
     this.subs.add(client.offlineStatus$.subscribe((p) => this.presenceStore.applyOffline(p)));
     this.subs.add(client.statusChanged$.subscribe((p) => this.presenceStore.applyStatusChanged(p)));
+
+    // Friend events → store (incoming requests, accepts, removals/blocks).
+    this.subs.add(client.friendRequest$.subscribe((p) => this.friendStore.applyFriendRequest(p)));
+    this.subs.add(client.friendAccepted$.subscribe((p) => this.friendStore.applyFriendAccepted(p)));
+    this.subs.add(client.friendRemoved$.subscribe((p) => this.friendStore.applyFriendRemoved(p)));
 
     client.onReconnected(() => this.rejoinGroups());
 

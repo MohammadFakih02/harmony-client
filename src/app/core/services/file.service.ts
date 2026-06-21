@@ -14,12 +14,15 @@ export class FileService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiUrl;
 
-  private files(guildId: string, channelId: string): string {
-    return `${this.base}/guilds/${guildId}/channels/${channelId}/files`;
+  // A guild channel nests its files under the guild; a DM (guildId null) under /dm/{channelId}.
+  private files(guildId: string | null, channelId: string): string {
+    return guildId == null
+      ? `${this.base}/dm/${channelId}/files`
+      : `${this.base}/guilds/${guildId}/channels/${channelId}/files`;
   }
 
   presign(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     req: PresignFileRequest,
   ): Promise<PresignFileResponse> {
@@ -64,7 +67,7 @@ export class FileService {
   }
 
   confirm(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     fileId: string,
   ): Promise<FileAttachmentResponse> {
@@ -77,7 +80,7 @@ export class FileService {
   }
 
   getDownload(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     fileId: string,
   ): Promise<FileDownloadResponse> {

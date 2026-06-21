@@ -47,10 +47,15 @@ export class MessageInput {
     () => this.channelStore.currentCapabilities()?.canSend ?? true,
   );
 
+  // A DM (no active guild) has no capability endpoint — attaching is always allowed there.
+  protected readonly isDm = computed(
+    () => this.messageStore.activeChannelId() != null && this.messageStore.activeGuildId() == null,
+  );
+
   // Attach button is hidden when the caller lacks AttachFiles (defaults to false until
-  // capabilities load — the server enforces regardless).
+  // capabilities load — the server enforces regardless). Always available in DMs.
   protected readonly canAttach = computed(
-    () => this.channelStore.currentCapabilities()?.canAttach ?? false,
+    () => this.isDm() || (this.channelStore.currentCapabilities()?.canAttach ?? false),
   );
 
   // Explains a disabled input — timeout vs missing permission.
@@ -142,9 +147,9 @@ export class MessageInput {
     };
     this.staged.update((s) => [...s, entry]);
 
-    const guildId = this.messageStore.activeGuildId();
+    const guildId = this.messageStore.activeGuildId(); // null for a DM
     const channelId = this.messageStore.activeChannelId();
-    if (!guildId || !channelId) {
+    if (!channelId) {
       this.patchStaged(localId, { status: 'error' });
       return;
     }

@@ -31,7 +31,7 @@ export const FileStore = signalStore(
        * re-mints the URL). Fail-soft: returns null on error so the list never breaks.
        */
       async resolve(
-        guildId: string,
+        guildId: string | null,
         channelId: string,
         fileId: string,
       ): Promise<FileDownloadResponse | null> {
