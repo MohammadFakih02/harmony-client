@@ -13,8 +13,19 @@ export class MessageService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiUrl;
 
+  /**
+   * Base URL for a channel's message surface. A guild channel nests under its guild;
+   * a DM (guildId null) lives under /dm/{channelId}. Both expose the same
+   * messages / read endpoints, so every method below just builds on this.
+   */
+  private channelBase(guildId: string | null, channelId: string): string {
+    return guildId == null
+      ? `${this.base}/dm/${channelId}`
+      : `${this.base}/guilds/${guildId}/channels/${channelId}`;
+  }
+
   getMessages(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     options: { before?: string; limit?: number } = {},
   ): Promise<ChannelMessagesResponse> {
@@ -22,54 +33,51 @@ export class MessageService {
     if (options.before != null) params['before'] = options.before;
     return firstValueFrom(
       this.http.get<ChannelMessagesResponse>(
-        `${this.base}/guilds/${guildId}/channels/${channelId}/messages`,
+        `${this.channelBase(guildId, channelId)}/messages`,
         { params },
       ),
     );
   }
 
   sendMessage(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     content: string,
     options: { attachmentIds?: string[]; replyToId?: string } = {},
   ): Promise<SendMessageResponse> {
     return firstValueFrom(
       this.http.post<SendMessageResponse>(
-        `${this.base}/guilds/${guildId}/channels/${channelId}/messages`,
+        `${this.channelBase(guildId, channelId)}/messages`,
         { content, ...options },
       ),
     );
   }
 
   editMessage(
-    guildId: string,
+    guildId: string | null,
     channelId: string,
     messageId: string,
     content: string,
   ): Promise<void> {
     return firstValueFrom(
       this.http.patch<void>(
-        `${this.base}/guilds/${guildId}/channels/${channelId}/messages/${messageId}`,
+        `${this.channelBase(guildId, channelId)}/messages/${messageId}`,
         { content },
       ),
     );
   }
 
-  deleteMessage(guildId: string, channelId: string, messageId: string): Promise<void> {
+  deleteMessage(guildId: string | null, channelId: string, messageId: string): Promise<void> {
     return firstValueFrom(
       this.http.delete<void>(
-        `${this.base}/guilds/${guildId}/channels/${channelId}/messages/${messageId}`,
+        `${this.channelBase(guildId, channelId)}/messages/${messageId}`,
       ),
     );
   }
 
-  markRead(guildId: string, channelId: string, lastReadMessageId: string): Promise<void> {
+  markRead(guildId: string | null, channelId: string, lastReadMessageId: string): Promise<void> {
     return firstValueFrom(
-      this.http.post<void>(
-        `${this.base}/guilds/${guildId}/channels/${channelId}/read`,
-        { lastReadMessageId },
-      ),
+      this.http.post<void>(`${this.channelBase(guildId, channelId)}/read`, { lastReadMessageId }),
     );
   }
 

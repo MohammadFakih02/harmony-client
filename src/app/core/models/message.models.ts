@@ -1,7 +1,7 @@
 export interface MessageResponse {
   messageId: string;
   channelId: string;
-  guildId: string;
+  guildId: string | null;
   userId: string;
   username: string;
   avatarKey: string | null;
@@ -29,23 +29,23 @@ export interface ChannelMessagesResponse {
 export interface SendMessageResponse {
   messageId: string;
   channelId: string;
-  guildId: string;
+  guildId: string | null;
 }
 
 export interface MessageFailedPayload {
   messageId: string;
   channelId: string;
-  guildId: string;
+  guildId: string | null;
 }
 
 export interface UnreadCountPayload {
   channelId: string;
-  guildId: string;
+  guildId: string | null;
   unreadCount: number;
 }
 
 export interface UnreadCountResponse {
   channelId: string;
-  guildId: string;
+  guildId: string | null;
   unreadCount: number;
 }
