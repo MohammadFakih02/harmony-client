@@ -11,15 +11,25 @@ import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { NotificationStore } from '../../core/stores/notification.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
+import { NotificationBell } from './notification-bell/notification-bell';
 import { UiIconButton, Lightbox } from '../../shared/ui';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, GuildSidebar, ChannelSidebar, MemberSidebar, UiIconButton, Lightbox],
+  imports: [
+    RouterOutlet,
+    GuildSidebar,
+    ChannelSidebar,
+    MemberSidebar,
+    NotificationBell,
+    UiIconButton,
+    Lightbox,
+  ],
   templateUrl: './shell.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {
@@ -44,6 +54,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly presenceStore = inject(PresenceStore);
   private readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
+  private readonly notificationStore = inject(NotificationStore);
   private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
@@ -58,6 +69,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.presenceStore.initMyStatus();
     this.friendStore.load();
     this.dmStore.load();
+    this.notificationStore.load();
 
     if (!client) return;
 
@@ -98,6 +110,10 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.add(client.friendRequest$.subscribe((p) => this.friendStore.applyFriendRequest(p)));
     this.subs.add(client.friendAccepted$.subscribe((p) => this.friendStore.applyFriendAccepted(p)));
     this.subs.add(client.friendRemoved$.subscribe((p) => this.friendStore.applyFriendRemoved(p)));
+
+    // Live notification pushes (mentions, friend requests) → store.
+    this.subs.add(client.notificationReceived$.subscribe((p) =>
+      this.notificationStore.applyNotificationReceived(p)));
 
     client.onReconnected(() => this.rejoinGroups());
 

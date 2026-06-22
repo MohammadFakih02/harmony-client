@@ -8,6 +8,7 @@ import {
   StatusChangedPayload,
 } from '../models/presence.models';
 import { FriendRemovedPayload, FriendUserPayload } from '../models/friend.models';
+import { NotificationPayload } from '../models/notification.models';
 
 export interface MessageEditedEvent {
   messageId: string;
@@ -43,6 +44,7 @@ export class HarmonyHubClient {
   private readonly _friendRequest = new Subject<FriendUserPayload>();
   private readonly _friendAccepted = new Subject<FriendUserPayload>();
   private readonly _friendRemoved = new Subject<FriendRemovedPayload>();
+  private readonly _notificationReceived = new Subject<NotificationPayload>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -60,6 +62,8 @@ export class HarmonyHubClient {
   readonly friendRequest$: Observable<FriendUserPayload> = this._friendRequest.asObservable();
   readonly friendAccepted$: Observable<FriendUserPayload> = this._friendAccepted.asObservable();
   readonly friendRemoved$: Observable<FriendRemovedPayload> = this._friendRemoved.asObservable();
+  readonly notificationReceived$: Observable<NotificationPayload> =
+    this._notificationReceived.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -148,6 +152,20 @@ export class HarmonyHubClient {
 
     this.connection.on('FriendRemoved', (p: { userId: unknown }) =>
       this._friendRemoved.next({ userId: String(p.userId) }));
+
+    this.connection.on('NotificationReceived', (p: {
+      id: unknown; type: string; actorId: unknown;
+      guildId: unknown; channelId: unknown; messageId: unknown; createdAt: unknown;
+    }) =>
+      this._notificationReceived.next({
+        id: String(p.id),
+        type: p.type,
+        actorId: String(p.actorId),
+        guildId: p.guildId != null ? String(p.guildId) : null,
+        channelId: p.channelId != null ? String(p.channelId) : null,
+        messageId: p.messageId != null ? String(p.messageId) : null,
+        createdAt: Number(p.createdAt),
+      }));
   }
 
   /** Coerce the Snowflake id to a string (SignalR may deliver it as a number). */
