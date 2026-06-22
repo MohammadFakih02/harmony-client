@@ -1,0 +1,61 @@
+<div class="relative">
+  <ui-icon-button size="md" [active]="showPanel()" label="Notifications" (click)="togglePanel()">
+    <i class="fas fa-bell"></i>
+  </ui-icon-button>
+
+  @if (store.unreadCount() > 0) {
+  <span
+    class="absolute -top-1 -right-1 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 pointer-events-none"
+  >
+    {{ store.unreadCount() > 99 ? '99+' : store.unreadCount() }}
+  </span>
+  }
+
+  @if (showPanel()) {
+  <div class="fixed inset-0 z-40" (click)="closePanel()"></div>
+  <div
+    class="absolute top-full right-0 mt-2 z-50 w-80 max-h-96 flex flex-col rounded-xl bg-surface shadow-modal border border-border overflow-hidden animate-slide-down"
+  >
+    <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-border-subtle shrink-0">
+      <span class="font-semibold text-primary text-sm">Notifications</span>
+      @if (store.unreadCount() > 0) {
+      <button
+        type="button"
+        class="text-xs font-medium text-accent hover:underline"
+        (click)="markAllRead()"
+      >
+        Mark all read
+      </button>
+      }
+    </div>
+
+    <div class="flex-1 overflow-y-auto">
+      @if (store.notifications().length === 0) {
+      <div class="flex flex-col items-center gap-2 px-4 py-10 text-center">
+        <i class="fas fa-check-double text-2xl text-faint"></i>
+        <p class="text-xs text-muted">You're all caught up.</p>
+      </div>
+      } @else {
+      @for (n of store.notifications(); track n.id) {
+      <button
+        type="button"
+        class="flex items-start gap-2.5 w-full px-3.5 py-2.5 text-left hover:bg-surface-2 transition-micro relative"
+        (click)="open(n)"
+      >
+        @if (!n.isRead) {
+        <span class="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent"></span>
+        }
+        <ui-avatar [src]="actorOf(n)?.avatarKey ?? null" [alt]="actorOf(n)?.username ?? ''" size="sm" />
+        <div class="flex-1 min-w-0">
+          <p class="text-sm leading-snug" [class.font-semibold]="!n.isRead" [class.text-primary]="!n.isRead" [class.text-muted]="n.isRead">
+            {{ message(n) }}
+          </p>
+          <span class="text-2xs text-faint">{{ timeAgo(n.createdAt) }}</span>
+        </div>
+      </button>
+      }
+      }
+    </div>
+  </div>
+  }
+</div>
