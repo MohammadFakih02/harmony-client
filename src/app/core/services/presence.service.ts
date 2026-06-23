@@ -23,14 +23,33 @@ export class PresenceService {
     );
   }
 
-  /** The current user's durable preferred status + custom status message (from GET /me). */
-  async getMyProfile(): Promise<{ preferredStatus: string; statusMessage: string | null }> {
+  /**
+   * The current user's durable preferred status + custom status message (from GET /me),
+   * including the unix-ms auto-clear timestamps. Those are `long?` server-side, so they
+   * arrive as strings (LongStringConverter) and are coerced to numbers here.
+   */
+  async getMyProfile(): Promise<{
+    preferredStatus: string;
+    statusMessage: string | null;
+    preferredStatusExpiresAt: number | null;
+    statusMessageExpiresAt: number | null;
+  }> {
     const me = await firstValueFrom(
-      this.http.get<{ preferredStatus: string; statusMessage: string | null }>(
-        `${this.base}/users/me`,
-      ),
+      this.http.get<{
+        preferredStatus: string;
+        statusMessage: string | null;
+        preferredStatusExpiresAt: string | null;
+        statusMessageExpiresAt: string | null;
+      }>(`${this.base}/users/me`),
     );
-    return { preferredStatus: me.preferredStatus, statusMessage: me.statusMessage };
+    return {
+      preferredStatus: me.preferredStatus,
+      statusMessage: me.statusMessage,
+      preferredStatusExpiresAt:
+        me.preferredStatusExpiresAt != null ? Number(me.preferredStatusExpiresAt) : null,
+      statusMessageExpiresAt:
+        me.statusMessageExpiresAt != null ? Number(me.statusMessageExpiresAt) : null,
+    };
   }
 
   /** Sets the preferred status; expiresInMinutes auto-reverts it to online (null = never). */

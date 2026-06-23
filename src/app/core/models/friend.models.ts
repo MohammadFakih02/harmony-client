@@ -2,7 +2,6 @@
 export interface Friend {
   id: string;
   username: string;
-  discriminator: string | null;
   avatarKey: string | null;
   bannerKey: string | null;
   since: number;
@@ -12,7 +11,6 @@ export interface Friend {
 export interface PendingFriend {
   id: string;
   username: string;
-  discriminator: string | null;
   avatarKey: string | null;
   bannerKey: string | null;
   direction: 'incoming' | 'outgoing';
@@ -23,7 +21,6 @@ export interface PendingFriend {
 export interface FriendUserPayload {
   id: string;
   username: string;
-  discriminator: string | null;
   avatarKey: string | null;
   bannerKey: string | null;
 }

@@ -185,6 +185,21 @@
     <div
       class="w-64 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1 animate-slide-up"
     >
+      <!-- Current status summary — what you're set to + when it auto-clears -->
+      <div class="flex items-center gap-2 px-1 pt-0.5 pb-1.5">
+        <span
+          class="w-2.5 h-2.5 rounded-full shrink-0"
+          [class]="currentStatusOption()?.dotClass ?? 'bg-surface-3'"
+        ></span>
+        <span class="text-sm font-semibold text-primary">
+          {{ currentStatusOption()?.label ?? 'Offline' }}
+        </span>
+        @if (statusExpiryLabel(); as left) {
+        <span class="ml-auto text-2xs text-faint">Clears in {{ left }}</span>
+        }
+      </div>
+      <div class="h-px bg-border-subtle mb-0.5"></div>
+
       <!-- Custom status message -->
       <div class="flex items-center gap-1">
         <input
@@ -207,6 +222,9 @@
         </button>
         }
       </div>
+      @if (customStatusExpiryLabel(); as left) {
+      <span class="px-1 text-2xs text-faint">Current status clears in {{ left }}</span>
+      }
       <div class="flex items-center gap-1.5">
         <span class="text-2xs text-faint shrink-0">Clear after</span>
         <select
@@ -298,10 +316,6 @@
       </span>
       @if (presenceStore.myStatusMessage(); as msg) {
       <span class="text-xs text-faint leading-tight truncate-text" [title]="msg">{{ msg }}</span>
-      } @else {
-      <span class="text-xs text-faint leading-tight truncate-text">
-        #{{ auth.currentUser()?.discriminator }}
-      </span>
       }
     </div>
     <div class="flex gap-0.5">

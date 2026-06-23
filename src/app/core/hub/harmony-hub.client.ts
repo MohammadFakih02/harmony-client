@@ -173,7 +173,6 @@ export class HarmonyHubClient {
     return {
       id: String(p.id),
       username: p.username,
-      discriminator: p.discriminator ?? null,
       avatarKey: p.avatarKey ?? null,
       bannerKey: p.bannerKey ?? null,
     };
