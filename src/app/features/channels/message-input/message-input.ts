@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, output, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { ChannelStore } from '../../../core/stores/channel.store';
@@ -9,6 +9,13 @@ import { FileService } from '../../../core/services/file.service';
 import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
 import { MentionAutocomplete } from '../../../shared/ui';
 import { MentionCandidate } from '../../../core/models/member.models';
+import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
+import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
+import {
+  MentionTrigger,
+  applyMention,
+  detectMentionTrigger,
+} from '../../../shared/util/mention-trigger';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024; // mirrors backend MaxFileSizeBytes
@@ -25,11 +32,6 @@ interface StagedFile {
   fileId?: string; // server id, once confirmed
 }
 
-interface MentionTrigger {
-  start: number; // index of '@' in the draft
-  query: string; // text typed after '@', lowercased comparison done by callers
-}
-
 @Component({
   selector: 'app-message-input',
   standalone: true,
@@ -44,6 +46,10 @@ export class MessageInput {
   private readonly fileService = inject(FileService);
 
   protected readonly draftInput = viewChild<ElementRef<HTMLTextAreaElement>>('draftInput');
+
+  // Emitted when the user presses ArrowUp on an empty composer — the channel wires this
+  // to the message list to start editing their last message (Discord shortcut).
+  readonly editLastRequested = output<void>();
 
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
@@ -64,9 +70,11 @@ export class MessageInput {
   private readonly guildCandidates = computed<MentionCandidate[]>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (!guildId) return [];
-    return this.memberStore
+    const members = this.memberStore
       .membersOf(guildId)
       .map((m) => ({ userId: m.userId, username: m.username, avatarKey: m.avatarKey }));
+    // @everyone / @here lead the pool (guild channels only).
+    return [...EVERYONE_MENTION_CANDIDATES, ...members];
   });
 
   private readonly dmCandidates = computed<MentionCandidate[]>(() => {
@@ -80,11 +88,8 @@ export class MessageInput {
     const trigger = this.mentionTrigger();
     if (!trigger) return [];
     const pool = this.isDm() ? this.dmCandidates() : this.guildCandidates();
-    const query = trigger.query.toLowerCase();
-    const filtered = query
-      ? pool.filter((c) => c.username.toLowerCase().startsWith(query))
-      : pool;
-    return filtered.slice(0, 10);
+    // Fuzzy match so "owner" finds "seed_owner" and a small typo still resolves.
+    return fuzzyFilter(pool, trigger.query, (c) => c.username).slice(0, 10);
   });
 
   protected readonly channelName = computed(
@@ -147,36 +152,23 @@ export class MessageInput {
     this.draft.set(value);
     const el = this.draftInput()?.nativeElement;
     const caret = el?.selectionStart ?? value.length;
-    this.mentionTrigger.set(this.detectMentionTrigger(value, caret));
+    this.mentionTrigger.set(detectMentionTrigger(value, caret));
     this.mentionHighlightedIndex.set(0);
-  }
-
-  /** Scans backwards from the caret for an unterminated `@token` (no whitespace inside it). */
-  private detectMentionTrigger(value: string, caret: number): MentionTrigger | null {
-    let start = caret;
-    while (start > 0 && !/\s/.test(value[start - 1])) start--;
-    const word = value.slice(start, caret);
-    if (!word.startsWith('@')) return null;
-    return { start, query: word.slice(1) };
   }
 
   selectMention(candidate: MentionCandidate): void {
     const trigger = this.mentionTrigger();
     if (!trigger) return;
 
-    const value = this.draft();
-    const before = value.slice(0, trigger.start);
-    const after = value.slice(trigger.start + 1 + trigger.query.length);
-    const insertion = `@${candidate.username} `;
-    this.draft.set(before + insertion + after);
+    const { text, caret } = applyMention(this.draft(), trigger, candidate.username);
+    this.draft.set(text);
     this.closeMentionAutocomplete();
 
-    const caretPos = before.length + insertion.length;
     queueMicrotask(() => {
       const el = this.draftInput()?.nativeElement;
       if (!el) return;
       el.focus();
-      el.setSelectionRange(caretPos, caretPos);
+      el.setSelectionRange(caret, caret);
     });
   }
 
@@ -322,6 +314,13 @@ export class MessageInput {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.send();
+      return;
+    }
+
+    // ArrowUp on an empty composer jumps to editing your last message.
+    if (event.key === 'ArrowUp' && this.draft() === '' && this.staged().length === 0) {
+      event.preventDefault();
+      this.editLastRequested.emit();
     }
   }
 }

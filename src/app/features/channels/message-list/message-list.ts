@@ -1,10 +1,11 @@
 import {
-  Component, computed, signal, viewChild, effect, inject, Injector,
+  Component, ElementRef, computed, signal, viewChild, effect, inject, Injector,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { Subscription } from 'rxjs';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, MentionAutocomplete } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -12,9 +13,13 @@ import { DmStore } from '../../../core/stores/dm.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { MessageResponse } from '../../../core/models/message.models';
+import { MentionCandidate } from '../../../core/models/member.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { MentionToken, tokenizeMentions } from '../../../shared/util/mention-tokens';
+import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
+import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
+import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 
 export interface MessageGroup {
@@ -40,11 +45,23 @@ function formatMessageTime(sentAt: number): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ` at ${time}`;
 }
 
+function formatBannerDate(sentAt: number): string {
+  return new Date(sentAt).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 @Component({
   selector: 'app-message-list',
   standalone: true,
-  imports: [UiAvatar, ScrollingModule, FormsModule, AutofocusEnd, MessageAttachments],
-  host: { class: 'flex flex-col min-h-0 h-full' },
+  imports: [
+    UiAvatar,
+    ScrollingModule,
+    FormsModule,
+    AutofocusEnd,
+    MessageAttachments,
+    OverlayModule,
+    MentionAutocomplete,
+  ],
+  host: { class: 'flex flex-col min-h-0 h-full relative' },
   templateUrl: './message-list.html',
 })
 export class MessageList {
@@ -74,6 +91,35 @@ export class MessageList {
   // Inline-edit state: the messageId being edited and its working draft.
   protected readonly editingId = signal<string | null>(null);
   protected readonly editDraft = signal('');
+
+  // @-mention autocomplete inside the inline editor (only one edit box is open at a time,
+  // so a single viewChild + trigger signal suffice). Mirrors the composer's behaviour.
+  protected readonly editInput = viewChild<ElementRef<HTMLTextAreaElement>>('editInput');
+  protected readonly editMentionTrigger = signal<MentionTrigger | null>(null);
+  protected readonly editMentionOpen = computed(() => this.editMentionTrigger() !== null);
+  protected readonly editMentionHighlightedIndex = signal(0);
+  protected readonly editMentionOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+  private readonly editMentionPool = computed<MentionCandidate[]>(() => {
+    const guildId = this.messageStore.activeGuildId();
+    if (guildId) {
+      const members = this.memberStore
+        .membersOf(guildId)
+        .map((m) => ({ userId: m.userId, username: m.username, avatarKey: m.avatarKey }));
+      return [...EVERYONE_MENTION_CANDIDATES, ...members];
+    }
+    const channelId = this.messageStore.activeChannelId();
+    const dm = channelId ? this.dmStore.peerOf(channelId) : undefined;
+    return dm
+      ? [{ userId: dm.peerId, username: dm.peerUsername, avatarKey: dm.peerAvatarKey }]
+      : [];
+  });
+  protected readonly editMentionCandidates = computed<MentionCandidate[]>(() => {
+    const trigger = this.editMentionTrigger();
+    if (!trigger) return [];
+    return fuzzyFilter(this.editMentionPool(), trigger.query, (c) => c.username).slice(0, 10);
+  });
 
   protected readonly canManageMessages = computed(
     () => this.channelStore.currentCapabilities()?.canManageMessages ?? false,
@@ -125,6 +171,43 @@ export class MessageList {
   }
 
   // -------------------------------------------------------------------------
+  // "X new messages" jump banner — driven by the unread count captured when the
+  // channel opened (messageStore.unreadOnOpen). The boundary message id isn't on
+  // the client, so the first unread is approximated as the last `count` loaded
+  // messages (exact enough to jump to where you left off).
+  // -------------------------------------------------------------------------
+  protected readonly unreadBanner = computed(() => {
+    const count = this.messageStore.unreadOnOpen();
+    if (count <= 0) return null;
+    const msgs = this.messageStore.messages();
+    const idx = msgs.length - count;
+    const firstUnread = idx >= 0 ? msgs[idx] : msgs[0];
+    if (!firstUnread) return null;
+    return {
+      count,
+      // Only show the date when the boundary message is actually loaded.
+      since: idx >= 0 ? formatBannerDate(firstUnread.sentAt) : null,
+      firstUnreadId: firstUnread.messageId,
+    };
+  });
+
+  protected jumpToUnread(): void {
+    const banner = this.unreadBanner();
+    if (!banner) return;
+    const gi = this.messageGroups().findIndex((g) =>
+      g.messages.some((m) => m.messageId === banner.firstUnreadId),
+    );
+    if (gi >= 0) this.viewport()?.scrollToIndex(gi, 'smooth');
+    this.messageStore.dismissUnreadBanner();
+  }
+
+  protected dismissUnreadBanner(): void {
+    // Server-side read state was already updated when the channel opened; this just
+    // clears the banner.
+    this.messageStore.dismissUnreadBanner();
+  }
+
+  // -------------------------------------------------------------------------
   // Edit / delete — own messages always; others' deletable with ManageMessages.
   // The authoritative change arrives via the MessageEdited/MessageDeleted broadcast
   // (shell → store), so these just fire the REST call.
@@ -148,11 +231,46 @@ export class MessageList {
   protected startEdit(msg: MessageResponse): void {
     this.editingId.set(msg.messageId);
     this.editDraft.set(msg.content);
+    this.editMentionTrigger.set(null);
+  }
+
+  /** Starts editing the user's most recent editable message (the composer ArrowUp shortcut). */
+  editLastOwnMessage(): void {
+    const msgs = this.messageStore.messages();
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (this.canEdit(msgs[i])) {
+        this.startEdit(msgs[i]);
+        return;
+      }
+    }
   }
 
   protected cancelEdit(): void {
     this.editingId.set(null);
     this.editDraft.set('');
+    this.editMentionTrigger.set(null);
+  }
+
+  protected onEditInput(value: string): void {
+    this.editDraft.set(value);
+    const el = this.editInput()?.nativeElement;
+    const caret = el?.selectionStart ?? value.length;
+    this.editMentionTrigger.set(detectMentionTrigger(value, caret));
+    this.editMentionHighlightedIndex.set(0);
+  }
+
+  protected selectEditMention(candidate: MentionCandidate): void {
+    const trigger = this.editMentionTrigger();
+    if (!trigger) return;
+    const { text, caret } = applyMention(this.editDraft(), trigger, candidate.username);
+    this.editDraft.set(text);
+    this.editMentionTrigger.set(null);
+    queueMicrotask(() => {
+      const el = this.editInput()?.nativeElement;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
   }
 
   protected async saveEdit(msg: MessageResponse): Promise<void> {
@@ -172,6 +290,38 @@ export class MessageList {
   }
 
   protected onEditKeydown(event: KeyboardEvent, msg: MessageResponse): void {
+    // The mention popup intercepts navigation/commit keys while it's open.
+    if (this.editMentionOpen()) {
+      const candidates = this.editMentionCandidates();
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          this.editMentionHighlightedIndex.set(
+            candidates.length ? (this.editMentionHighlightedIndex() + 1) % candidates.length : 0,
+          );
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.editMentionHighlightedIndex.set(
+            candidates.length
+              ? (this.editMentionHighlightedIndex() - 1 + candidates.length) % candidates.length
+              : 0,
+          );
+          return;
+        case 'Enter':
+        case 'Tab':
+          event.preventDefault();
+          if (candidates.length > 0)
+            this.selectEditMention(candidates[this.editMentionHighlightedIndex()]);
+          else this.editMentionTrigger.set(null);
+          return;
+        case 'Escape':
+          event.preventDefault();
+          this.editMentionTrigger.set(null);
+          return;
+      }
+    }
+
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.saveEdit(msg);

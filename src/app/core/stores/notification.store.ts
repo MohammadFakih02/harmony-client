@@ -50,6 +50,46 @@ export const NotificationStore = signalStore(
         await service.markAllRead().catch(() => {});
       },
 
+      /** Marks every unread `mention` for a channel read — used when the user opens it. */
+      async markChannelMentionsRead(channelId: string): Promise<void> {
+        const targets = store
+          .notifications()
+          .filter((n) => !n.isRead && n.type === 'mention' && n.channelId === channelId);
+        if (targets.length === 0) return;
+        patchState(store, {
+          notifications: store
+            .notifications()
+            .map((n) => (targets.some((t) => t.id === n.id) ? { ...n, isRead: true } : n)),
+          unreadCount: Math.max(0, store.unreadCount() - targets.length),
+        });
+        await Promise.all(targets.map((t) => service.markRead(t.id).catch(() => {})));
+      },
+
+      /** Marks an unread `friend_request` from an actor read — used when it's accepted. */
+      async markFriendRequestRead(actorId: string): Promise<void> {
+        const target = store
+          .notifications()
+          .find((n) => !n.isRead && n.type === 'friend_request' && n.actorId === actorId);
+        if (!target) return;
+        patchState(store, {
+          notifications: store
+            .notifications()
+            .map((n) => (n.id === target.id ? { ...n, isRead: true } : n)),
+          unreadCount: Math.max(0, store.unreadCount() - 1),
+        });
+        await service.markRead(target.id).catch(() => {});
+      },
+
+      async delete(id: string): Promise<void> {
+        const target = store.notifications().find((n) => n.id === id);
+        if (!target) return;
+        patchState(store, {
+          notifications: store.notifications().filter((n) => n.id !== id),
+          unreadCount: target.isRead ? store.unreadCount() : Math.max(0, store.unreadCount() - 1),
+        });
+        await service.delete(id).catch(() => {});
+      },
+
       // --- SignalR-driven ---
 
       applyNotificationReceived(payload: NotificationPayload): void {

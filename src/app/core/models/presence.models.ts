@@ -23,6 +23,12 @@ export interface StatusChangedPayload {
   statusMessage: string | null;
 }
 
+/** One user's presence as returned by GET /api/users/presence. */
+export interface UserPresence {
+  status: string;
+  statusMessage: string | null;
+}
+
 /** Avatar dot vocabulary — maps backend `away`→`idle` and `invisible`→`offline`. */
 export type AvatarStatus = 'online' | 'idle' | 'dnd' | 'offline';
 

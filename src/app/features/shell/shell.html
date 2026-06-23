@@ -11,9 +11,29 @@
 
   <!-- Content Workspace -->
   <main class="flex-1 h-full bg-surface overflow-hidden flex min-w-0">
-    <div class="flex-1 flex flex-col overflow-hidden min-w-0 relative">
-      <!-- Notification bell (always) + member list toggle (guild channels only), top-right of chat -->
-      <div class="absolute top-2 right-3 z-10 flex items-center gap-1">
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+      <!-- Header bar: channel / DM context on the left, controls on the right. Only shown in
+           a guild channel or a DM — the Friends/home screen renders its own header. -->
+      @if (inGuild() || inDm()) {
+      <header class="flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0">
+        @if (inGuild() && headerChannel(); as ch) {
+        <i class="fas fa-hashtag text-faint shrink-0"></i>
+        <span class="font-semibold text-primary text-sm truncate shrink-0 max-w-[40%]">{{ ch.name }}</span>
+        @if (ch.topic) {
+        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
+        <span class="text-xs text-muted truncate min-w-0">{{ ch.topic }}</span>
+        }
+        } @else if (inDm() && dmPeer(); as peer) {
+        <ui-avatar [src]="peer.peerAvatarKey" [alt]="peer.peerUsername" size="sm" [status]="dmPeerStatus()" />
+        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ peer.peerUsername }}</span>
+        @if (dmPeerMessage(); as msg) {
+        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
+        <span class="text-xs text-muted truncate min-w-0" [title]="msg">{{ msg }}</span>
+        }
+        }
+
+        <div class="flex-1 min-w-0"></div>
+
         <app-notification-bell />
         @if (inGuild()) {
         <ui-icon-button
@@ -25,7 +45,18 @@
           <i class="fas fa-users"></i>
         </ui-icon-button>
         }
-      </div>
+        @if (inDm() && dmPeer()) {
+        <ui-icon-button
+          size="md"
+          [active]="showDmProfile()"
+          label="Toggle Profile"
+          (click)="showDmProfile.set(!showDmProfile())"
+        >
+          <i class="fas fa-user"></i>
+        </ui-icon-button>
+        }
+      </header>
+      }
       <router-outlet />
     </div>
 
@@ -33,6 +64,37 @@
     @if (inGuild() && showMembers()) {
     <div class="w-60 min-w-60 h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0">
       <app-member-sidebar />
+    </div>
+    }
+
+    <!-- DM profile panel (togglable) — direct messages only -->
+    @if (inDm() && showDmProfile() && dmPeer(); as peer) {
+    <div class="w-80 min-w-80 h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0">
+      <!-- Banner -->
+      <div class="h-24 bg-accent/30"></div>
+      <div class="px-4 -mt-10">
+        <div class="inline-block rounded-full ring-[6px] ring-surface-2">
+          <ui-avatar
+            [src]="peer.peerAvatarKey"
+            [alt]="peer.peerUsername"
+            size="xl"
+            [status]="dmPeerStatus()"
+            ringClass="border-surface-2"
+          />
+        </div>
+        <div class="mt-3 rounded-lg bg-surface p-3">
+          <p class="text-lg font-bold text-primary leading-tight">{{ peer.peerUsername }}</p>
+          @if (peer.peerDiscriminator) {
+          <p class="text-sm text-muted">{{ peer.peerUsername }}#{{ peer.peerDiscriminator }}</p>
+          }
+          @if (dmPeerMessage(); as msg) {
+          <p class="text-sm text-muted mt-2 whitespace-pre-wrap wrap-break-word">{{ msg }}</p>
+          }
+          <div class="h-px bg-border-subtle my-3"></div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint">Member Since</p>
+          <p class="text-sm text-muted mt-0.5">{{ memberSince(peer.peerId) }}</p>
+        </div>
+      </div>
     </div>
     }
   </main>

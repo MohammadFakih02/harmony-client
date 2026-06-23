@@ -173,30 +173,119 @@
   <div
     class="relative flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border h-13 min-h-13 shadow-sm animate-slide-up shrink-0"
   >
-    <!-- Status picker -->
-    @if (showStatusMenu()) {
-    <div class="fixed inset-0 z-40" (click)="showStatusMenu.set(false)"></div>
-    <div
-      class="absolute bottom-full left-2 mb-2 z-50 w-48 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-up"
+    <!-- Status picker — in a CDK overlay so it escapes the sidebar's overflow-hidden -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="statusTrigger"
+      [cdkConnectedOverlayOpen]="showStatusMenu()"
+      [cdkConnectedOverlayPositions]="statusOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showStatusMenu.set(false)"
     >
+    <div
+      class="w-64 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1 animate-slide-up"
+    >
+      <!-- Custom status message -->
+      <div class="flex items-center gap-1">
+        <input
+          type="text"
+          maxlength="128"
+          placeholder="What's happening?"
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-2.5 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-accent"
+          [ngModel]="customDraft()"
+          (ngModelChange)="customDraft.set($event)"
+          (keydown.enter)="saveCustomStatus()"
+        />
+        @if (presenceStore.myStatusMessage()) {
+        <button
+          type="button"
+          class="w-7 h-7 shrink-0 flex items-center justify-center rounded text-faint hover:text-primary hover:bg-surface-2"
+          (click)="clearCustomStatus()"
+          aria-label="Clear custom status"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+        }
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-2xs text-faint shrink-0">Clear after</span>
+        <select
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none"
+          [ngModel]="customExpiry()"
+          (ngModelChange)="customExpiry.set($event)"
+        >
+          @for (e of expiryOptions; track e.label) {
+          <option [ngValue]="e.minutes">{{ e.minutes === null ? "Don't clear" : e.label }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="shrink-0 px-2.5 py-1 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-110"
+          (click)="saveCustomStatus()"
+        >
+          Save
+        </button>
+      </div>
+
+      <div class="h-px bg-border-subtle my-0.5"></div>
+
+      <!-- Status options (with descriptions) -->
       @for (opt of statusOptions; track opt.value) {
       <button
         type="button"
-        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        class="flex items-start gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
         [class.bg-surface-2]="presenceStore.myStatus() === opt.value"
         (click)="selectStatus(opt.value)"
       >
-        <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="opt.dotClass"></span>
-        <span class="flex-1 text-left">{{ opt.label }}</span>
-        @if (presenceStore.myStatus() === opt.value) {
-        <i class="fas fa-check text-xs text-accent"></i>
-        }
+        <span class="w-2.5 h-2.5 mt-1 rounded-full shrink-0" [class]="opt.dotClass"></span>
+        <span class="flex-1 min-w-0">
+          <span class="flex items-center gap-1.5">
+            <span class="text-sm font-medium">{{ opt.label }}</span>
+            @if (presenceStore.myStatus() === opt.value) {
+            <i class="fas fa-check text-xs text-accent"></i>
+            }
+          </span>
+          @if (opt.description) {
+          <span class="block text-2xs text-faint leading-snug">{{ opt.description }}</span>
+          }
+        </span>
       </button>
       }
-    </div>
-    }
 
-    <button type="button" class="shrink-0" (click)="toggleStatusMenu()" aria-label="Set status">
+      <div class="h-px bg-border-subtle my-0.5"></div>
+
+      <!-- Clear-after applied to the next status pick -->
+      <div class="px-1 pb-0.5">
+        <span class="text-2xs text-faint">Clear status after</span>
+        <div class="flex flex-wrap gap-1 mt-1">
+          @for (e of expiryOptions; track e.label) {
+          <button
+            type="button"
+            class="px-1.5 py-0.5 rounded text-2xs font-medium border transition-micro"
+            [class.bg-accent]="selectedExpiry() === e.minutes"
+            [class.text-white]="selectedExpiry() === e.minutes"
+            [class.border-accent]="selectedExpiry() === e.minutes"
+            [class.border-border]="selectedExpiry() !== e.minutes"
+            [class.text-muted]="selectedExpiry() !== e.minutes"
+            [class.hover:bg-surface-2]="selectedExpiry() !== e.minutes"
+            (click)="selectedExpiry.set(e.minutes)"
+          >
+            {{ e.label }}
+          </button>
+          }
+        </div>
+      </div>
+    </div>
+    </ng-template>
+
+    <button
+      type="button"
+      class="shrink-0"
+      cdkOverlayOrigin
+      #statusTrigger="cdkOverlayOrigin"
+      (click)="toggleStatusMenu()"
+      aria-label="Set status"
+    >
       <ui-avatar
         [src]="auth.currentUser()?.avatarKey ?? null"
         [alt]="auth.currentUser()?.username ?? ''"
@@ -207,9 +296,13 @@
       <span class="text-sm font-semibold text-primary leading-tight truncate-text">
         {{ auth.currentUser()?.username }}
       </span>
+      @if (presenceStore.myStatusMessage(); as msg) {
+      <span class="text-xs text-faint leading-tight truncate-text" [title]="msg">{{ msg }}</span>
+      } @else {
       <span class="text-xs text-faint leading-tight truncate-text">
         #{{ auth.currentUser()?.discriminator }}
       </span>
+      }
     </div>
     <div class="flex gap-0.5">
       <ui-icon-button

@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith, Subscription } from 'rxjs';
@@ -16,7 +16,9 @@ import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
-import { UiIconButton, Lightbox } from '../../shared/ui';
+import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
+import { toAvatarStatus } from '../../core/models/presence.models';
+import { snowflakeToDate } from '../../shared/util/snowflake';
 
 @Component({
   selector: 'app-shell',
@@ -27,6 +29,7 @@ import { UiIconButton, Lightbox } from '../../shared/ui';
     ChannelSidebar,
     MemberSidebar,
     NotificationBell,
+    UiAvatar,
     UiIconButton,
     Lightbox,
   ],
@@ -47,17 +50,50 @@ export class ShellComponent implements OnInit, OnDestroy {
     { initialValue: this.router.url },
   );
   protected readonly inGuild = computed(() => this.url().includes('/guilds/'));
+  protected readonly inDm = computed(() => this.url().includes('/dm/'));
+  // Right-hand DM profile panel (mirrors the guild member-list toggle).
+  protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
+
+  // --- Header bar context (guild channel name+topic, or DM peer identity) ---
+  protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
+  protected readonly dmPeer = computed(() => {
+    const channelId = this.messageStore.activeChannelId();
+    return this.inDm() && channelId ? this.dmStore.peerOf(channelId) : undefined;
+  });
+  protected readonly dmPeerStatus = computed(() => {
+    const peer = this.dmPeer();
+    return peer ? toAvatarStatus(this.presenceStore.statusOf(peer.peerId)) : null;
+  });
+  protected readonly dmPeerMessage = computed(() => {
+    const peer = this.dmPeer();
+    return peer ? this.presenceStore.statusMessageOf(peer.peerId) : null;
+  });
   private readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
   private readonly notificationStore = inject(NotificationStore);
   private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
+
+  constructor() {
+    // Opening a channel counts as "viewing the cause": clear any unread mention
+    // notifications for it, mirroring how the unread badge resets on the active channel.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      if (channelId) this.notificationStore.markChannelMentionsRead(channelId);
+    });
+  }
+
+  /** "Member Since" date for the DM profile panel, derived from the peer's snowflake id. */
+  protected memberSince(userId: string): string {
+    const date = snowflakeToDate(userId);
+    return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  }
 
   async ngOnInit(): Promise<void> {
     // Load guilds and connect in parallel; guild data must be ready before joining groups
@@ -112,8 +148,14 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.add(client.friendRemoved$.subscribe((p) => this.friendStore.applyFriendRemoved(p)));
 
     // Live notification pushes (mentions, friend requests) → store.
-    this.subs.add(client.notificationReceived$.subscribe((p) =>
-      this.notificationStore.applyNotificationReceived(p)));
+    this.subs.add(client.notificationReceived$.subscribe((p) => {
+      this.notificationStore.applyNotificationReceived(p);
+      // A mention in the channel you're already viewing shouldn't ping — record it read
+      // immediately so it lands in history without bumping the badge.
+      if (p.type === 'mention' && p.channelId && p.channelId === this.messageStore.activeChannelId()) {
+        this.notificationStore.markRead(p.id);
+      }
+    }));
 
     client.onReconnected(() => this.rejoinGroups());
 
