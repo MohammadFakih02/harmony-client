@@ -7,7 +7,6 @@ import { environment } from "../../../environments/environment";
 export interface User {
   id: string;
   username: string;
-  discriminator: string | null;
   email: string;
   avatarKey: string | null;
   accountStatus: string;

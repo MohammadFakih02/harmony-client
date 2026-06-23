@@ -120,9 +120,38 @@ export class ChannelSidebar {
   protected readonly customDraft = signal('');
   protected readonly customExpiry = signal<number | null>(null);
 
+  // Snapshot of "now", refreshed each time the picker opens — powers the time-left labels
+  // without a perpetual interval (the popup is transient, so a value-on-open is enough).
+  protected readonly now = signal(Date.now());
+
+  // The status option matching the current preferred status — header dot + label.
+  protected readonly currentStatusOption = computed(() =>
+    this.statusOptions.find((o) => o.value === this.presenceStore.myStatus()),
+  );
+
+  // Human "clears in 42m" for the preferred status / custom message, or null when no expiry.
+  protected readonly statusExpiryLabel = computed(() =>
+    this.remainingLabel(this.presenceStore.myStatusExpiresAt()),
+  );
+  protected readonly customStatusExpiryLabel = computed(() =>
+    this.remainingLabel(this.presenceStore.myStatusMessageExpiresAt()),
+  );
+
+  private remainingLabel(expiresAt: number | null): string | null {
+    if (expiresAt == null) return null;
+    const ms = expiresAt - this.now();
+    if (ms <= 0) return null;
+    const minutes = Math.ceil(ms / 60_000);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const rem = minutes % 60;
+    return rem ? `${hours}h ${rem}m` : `${hours}h`;
+  }
+
   toggleStatusMenu(): void {
     const opening = !this.showStatusMenu();
     if (opening) {
+      this.now.set(Date.now()); // fresh reference for the time-left labels
       // Seed the editor from the current custom status; reset both expiry pickers.
       this.customDraft.set(this.presenceStore.myStatusMessage() ?? '');
       this.customExpiry.set(null);

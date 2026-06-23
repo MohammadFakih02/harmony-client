@@ -2,7 +2,6 @@
 export interface GuildMember {
   userId: string;
   username: string;
-  discriminator: string;
   nickname: string | null;
   avatarKey: string | null;
   isOwner: boolean;
