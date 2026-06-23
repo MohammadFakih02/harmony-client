@@ -14,6 +14,13 @@ interface PresenceState {
   statusMessages: Record<string, string | null>; // userId → custom status text (others' view)
   myStatus: string; // the current user's displayed status (drives the user-deck dot)
   myStatusMessage: string | null; // the current user's custom status text
+  myStatusExpiresAt: number | null; // unix-ms the preferred status auto-reverts to online
+  myStatusMessageExpiresAt: number | null; // unix-ms the custom message auto-clears
+}
+
+/** Converts an "auto-clear after N minutes" choice into an absolute unix-ms timestamp. */
+function expiryFromMinutes(minutes: number | null): number | null {
+  return minutes != null ? Date.now() + minutes * 60_000 : null;
 }
 
 /** Invisible is masked to offline; every other status is its own effective value. */
@@ -28,6 +35,8 @@ export const PresenceStore = signalStore(
     statusMessages: {},
     myStatus: 'offline',
     myStatusMessage: null,
+    myStatusExpiresAt: null,
+    myStatusMessageExpiresAt: null,
   }),
   withMethods((store, presence = inject(PresenceService), auth = inject(AuthService)) => ({
     /** Reads presence (status + custom message) for a set of users and merges it in. */
@@ -76,9 +85,14 @@ export const PresenceStore = signalStore(
       const myId = auth.currentUser()?.id;
       if (p.userId === myId) {
         // Self broadcast carries the raw preferred value — keep our own dot in sync.
+        // The payload has no expiry field, so only clear the locally-tracked expiries when
+        // the status/message has actually gone (reverted to online / message cleared) —
+        // never on an echo of our own just-set expiring status (which would wipe it).
         patchState(store, {
           myStatus: p.status,
           myStatusMessage: p.statusMessage,
+          myStatusExpiresAt: p.status === 'online' ? null : store.myStatusExpiresAt(),
+          myStatusMessageExpiresAt: p.statusMessage ? store.myStatusMessageExpiresAt() : null,
           statuses: { ...store.statuses(), [p.userId]: effectiveOf(p.status) },
           statusMessages: { ...store.statusMessages(), [p.userId]: p.statusMessage },
         });
@@ -97,6 +111,8 @@ export const PresenceStore = signalStore(
         patchState(store, {
           myStatus: profile.preferredStatus,
           myStatusMessage: profile.statusMessage,
+          myStatusExpiresAt: profile.preferredStatusExpiresAt,
+          myStatusMessageExpiresAt: profile.statusMessageExpiresAt,
         });
       } catch {
         patchState(store, { myStatus: 'online' });
@@ -109,9 +125,13 @@ export const PresenceStore = signalStore(
      */
     async setMyStatus(status: PreferredStatus, expiresInMinutes: number | null = null): Promise<void> {
       const previous = store.myStatus();
+      const previousExpiry = store.myStatusExpiresAt();
       const myId = auth.currentUser()?.id;
+      // Online is the revert target, so it never carries an expiry.
+      const expiresAt = status === 'online' ? null : expiryFromMinutes(expiresInMinutes);
       patchState(store, {
         myStatus: status,
+        myStatusExpiresAt: expiresAt,
         ...(myId
           ? { statuses: { ...store.statuses(), [myId]: effectiveOf(status) } }
           : {}),
@@ -119,19 +139,23 @@ export const PresenceStore = signalStore(
       try {
         await presence.setMyStatus(status, expiresInMinutes);
       } catch {
-        patchState(store, { myStatus: previous }); // revert on failure
+        patchState(store, { myStatus: previous, myStatusExpiresAt: previousExpiry }); // revert on failure
       }
     },
 
     /** Optimistically updates and persists the custom status message (null clears it). */
     async setCustomStatus(message: string | null, expiresInMinutes: number | null = null): Promise<void> {
       const previous = store.myStatusMessage();
+      const previousExpiry = store.myStatusMessageExpiresAt();
       const next = message && message.trim() ? message.trim() : null;
-      patchState(store, { myStatusMessage: next });
+      // No message → no expiry to track.
+      const expiresAt = next ? expiryFromMinutes(expiresInMinutes) : null;
+      patchState(store, { myStatusMessage: next, myStatusMessageExpiresAt: expiresAt });
       try {
         await presence.setCustomStatus(next, expiresInMinutes);
       } catch {
-        patchState(store, { myStatusMessage: previous }); // revert on failure
+        // revert on failure
+        patchState(store, { myStatusMessage: previous, myStatusMessageExpiresAt: previousExpiry });
       }
     },
   })),

@@ -3,7 +3,6 @@ export interface DirectMessageChannel {
   channelId: string;
   peerId: string;
   peerUsername: string;
-  peerDiscriminator: string | null;
   peerAvatarKey: string | null;
   lastReadId: string;
 }

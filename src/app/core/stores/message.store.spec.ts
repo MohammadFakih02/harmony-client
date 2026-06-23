@@ -22,7 +22,7 @@ const makeMsg = (overrides: Partial<MessageResponse> & { messageId: string }): M
   ...overrides,
 });
 
-const AUTH_USER = { id: '10', username: 'alice', discriminator: '0001', email: 'a@a.com', avatarKey: null, accountStatus: 'active' };
+const AUTH_USER = { id: '10', username: 'alice', email: 'a@a.com', avatarKey: null, accountStatus: 'active' };
 
 describe('MessageStore', () => {
   let store: InstanceType<typeof MessageStore>;

@@ -4,7 +4,6 @@ import { MemberService } from '../services/member.service';
 import { GuildMember } from '../models/member.models';
 
 const makeMember = (overrides: Partial<GuildMember> & { userId: string; username: string }): GuildMember => ({
-  discriminator: '0001',
   nickname: null,
   avatarKey: null,
   isOwner: false,
