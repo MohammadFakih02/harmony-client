@@ -15,8 +15,8 @@ import { MessageInput } from './message-input/message-input';
   imports: [MessageList, MessageInput],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
-    <app-message-list class="flex-1 min-h-0" />
-    <app-message-input />
+    <app-message-list #list class="flex-1 min-h-0" />
+    <app-message-input (editLastRequested)="list.editLastOwnMessage()" />
   `,
 })
 export class Channel implements OnInit, OnDestroy {
@@ -42,6 +42,9 @@ export class Channel implements OnInit, OnDestroy {
       this.channelId = newChannelId;
       this.guildId = newGuildId;
 
+      // Capture the unread count BEFORE mark-read resets it — drives the jump banner.
+      const unreadOnOpen = this.unreadStore.counts()[newChannelId] ?? 0;
+
       this.channelStore.selectChannel(newChannelId);
       if (newGuildId) {
         // Guild-only concerns: last-visited memory + channel capability resolution.
@@ -49,6 +52,7 @@ export class Channel implements OnInit, OnDestroy {
         this.channelStore.loadCapabilities(newGuildId, newChannelId);
       }
       await this.messageStore.loadMessages(newGuildId, newChannelId);
+      this.messageStore.setUnreadOnOpen(unreadOnOpen);
 
       const messages = this.messageStore.messages();
       const newest = [...messages].reverse().find((m: MessageResponse) => !m.tempId);

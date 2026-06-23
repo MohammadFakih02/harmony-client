@@ -37,22 +37,31 @@
       </div>
       } @else {
       @for (n of store.notifications(); track n.id) {
-      <button
-        type="button"
-        class="flex items-start gap-2.5 w-full px-3.5 py-2.5 text-left hover:bg-surface-2 transition-micro relative"
-        (click)="open(n)"
+      <div
+        class="group flex items-start gap-2.5 w-full px-3.5 py-2.5 hover:bg-surface-2 transition-micro relative"
+        [class.opacity-55]="n.isRead"
       >
         @if (!n.isRead) {
         <span class="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent"></span>
         }
-        <ui-avatar [src]="actorOf(n)?.avatarKey ?? null" [alt]="actorOf(n)?.username ?? ''" size="sm" />
-        <div class="flex-1 min-w-0">
-          <p class="text-sm leading-snug" [class.font-semibold]="!n.isRead" [class.text-primary]="!n.isRead" [class.text-muted]="n.isRead">
-            {{ message(n) }}
-          </p>
-          <span class="text-2xs text-faint">{{ timeAgo(n.createdAt) }}</span>
-        </div>
-      </button>
+        <button type="button" class="flex items-start gap-2.5 flex-1 min-w-0 text-left" (click)="open(n)">
+          <ui-avatar [src]="actorOf(n)?.avatarKey ?? null" [alt]="actorOf(n)?.username ?? ''" size="sm" />
+          <div class="flex-1 min-w-0 pr-4">
+            <p class="text-sm leading-snug" [class.font-semibold]="!n.isRead" [class.text-primary]="!n.isRead" [class.text-muted]="n.isRead">
+              {{ message(n) }}
+            </p>
+            <span class="text-2xs text-faint">{{ timeAgo(n.createdAt) }}</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          class="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded text-faint opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-surface-3 hover:text-primary transition-micro"
+          aria-label="Delete notification"
+          (click)="remove(n, $event)"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
       }
       }
     </div>

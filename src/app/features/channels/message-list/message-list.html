@@ -1,3 +1,23 @@
+<!-- "X new messages" jump banner -->
+@if (unreadBanner(); as banner) {
+<button
+  type="button"
+  class="absolute top-0 inset-x-0 z-20 flex items-center justify-between gap-2 px-4 py-1.5 bg-accent text-white text-xs font-semibold shadow-sm hover:brightness-110 transition-micro"
+  (click)="jumpToUnread()"
+>
+  <span class="truncate">
+    {{ banner.count }} new {{ banner.count === 1 ? 'message' : 'messages' }}
+    @if (banner.since) { <span class="font-normal opacity-80">since {{ banner.since }}</span> }
+  </span>
+  <span
+    class="flex items-center gap-1.5 shrink-0 hover:underline"
+    (click)="$event.stopPropagation(); dismissUnreadBanner()"
+  >
+    Mark As Read <i class="fas fa-check text-2xs"></i>
+  </span>
+</button>
+}
+
 <!-- Degraded banner -->
 @if (messageStore.degraded()) {
 <div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs shrink-0">
@@ -55,13 +75,30 @@
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <textarea
+          #editInput
+          cdkOverlayOrigin
+          #editOrigin="cdkOverlayOrigin"
           autofocusEnd
           class="w-full bg-surface-3 rounded-lg ring-1 ring-border-subtle focus:ring-2 focus:ring-accent outline-none text-sm px-3 py-2 text-primary resize-none leading-relaxed"
           rows="2"
           [ngModel]="editDraft()"
-          (ngModelChange)="editDraft.set($event)"
+          (ngModelChange)="onEditInput($event)"
           (keydown)="onEditKeydown($event, msg)"
         ></textarea>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayOrigin]="editOrigin"
+          [cdkConnectedOverlayOpen]="editMentionOpen()"
+          [cdkConnectedOverlayPositions]="editMentionOverlayPositions"
+          [cdkConnectedOverlayHasBackdrop]="false"
+          (overlayOutsideClick)="editMentionTrigger.set(null)"
+        >
+          <app-mention-autocomplete
+            [candidates]="editMentionCandidates()"
+            [highlightedIndex]="editMentionHighlightedIndex()"
+            (select)="selectEditMention($event)"
+          />
+        </ng-template>
         <div class="text-2xs text-faint mt-0.5">
           escape to <button class="underline hover:no-underline" (click)="cancelEdit()">cancel</button>
           · enter to <button class="underline hover:no-underline" (click)="saveEdit(msg)">save</button>

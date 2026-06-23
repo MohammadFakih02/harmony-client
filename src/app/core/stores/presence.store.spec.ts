@@ -7,16 +7,18 @@ describe('PresenceStore', () => {
   let store: InstanceType<typeof PresenceStore>;
   let presence: {
     getStatuses: ReturnType<typeof vi.fn>;
-    getMyPreferredStatus: ReturnType<typeof vi.fn>;
+    getMyProfile: ReturnType<typeof vi.fn>;
     setMyStatus: ReturnType<typeof vi.fn>;
+    setCustomStatus: ReturnType<typeof vi.fn>;
   };
   let currentUser: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     presence = {
       getStatuses: vi.fn().mockResolvedValue({}),
-      getMyPreferredStatus: vi.fn().mockResolvedValue('online'),
+      getMyProfile: vi.fn().mockResolvedValue({ preferredStatus: 'online', statusMessage: null }),
       setMyStatus: vi.fn().mockResolvedValue(undefined),
+      setCustomStatus: vi.fn().mockResolvedValue(undefined),
     };
     currentUser = vi.fn().mockReturnValue({ id: 'me' });
 
@@ -34,13 +36,17 @@ describe('PresenceStore', () => {
     expect(store.statusOf('nobody')).toBe('offline');
   });
 
-  it('loadStatuses() merges fetched statuses', async () => {
-    presence.getStatuses.mockResolvedValue({ '1': 'online', '2': 'dnd' });
+  it('loadStatuses() merges fetched statuses + messages', async () => {
+    presence.getStatuses.mockResolvedValue({
+      '1': { status: 'online', statusMessage: null },
+      '2': { status: 'dnd', statusMessage: 'busy' },
+    });
 
     await TestBed.runInInjectionContext(() => store.loadStatuses(['1', '2']));
 
     expect(store.statusOf('1')).toBe('online');
     expect(store.statusOf('2')).toBe('dnd');
+    expect(store.statusMessageOf('2')).toBe('busy');
   });
 
   it('applyOnline / applyOffline update a user’s status', () => {
@@ -68,7 +74,7 @@ describe('PresenceStore', () => {
 
     expect(store.myStatus()).toBe('dnd');
     expect(store.statusOf('me')).toBe('dnd');
-    expect(presence.setMyStatus).toHaveBeenCalledWith('dnd');
+    expect(presence.setMyStatus).toHaveBeenCalledWith('dnd', null);
   });
 
   it('setMyStatus() reverts on failure', async () => {
@@ -80,10 +86,11 @@ describe('PresenceStore', () => {
   });
 
   it('initMyStatus() loads the preferred status from the service', async () => {
-    presence.getMyPreferredStatus.mockResolvedValue('away');
+    presence.getMyProfile.mockResolvedValue({ preferredStatus: 'away', statusMessage: 'brb' });
 
     await TestBed.runInInjectionContext(() => store.initMyStatus());
 
     expect(store.myStatus()).toBe('away');
+    expect(store.myStatusMessage()).toBe('brb');
   });
 });

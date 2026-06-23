@@ -4,7 +4,7 @@
   @if (candidates().length === 0) {
   <p class="text-xs text-faint text-center py-3">No matches</p>
   } @else {
-  @for (candidate of candidates(); track candidate.userId; let i = $index) {
+  @for (candidate of candidates(); track candidate.username; let i = $index) {
   <button
     type="button"
     class="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-micro"
@@ -13,8 +13,23 @@
     [class.hover:bg-surface-3]="i !== highlightedIndex()"
     (click)="select.emit(candidate)"
   >
+    @if (candidate.special) {
+    <span class="w-6 h-6 flex items-center justify-center rounded-full bg-accent/20 text-accent shrink-0">
+      <i class="fas fa-at text-2xs"></i>
+    </span>
+    } @else {
     <ui-avatar [src]="candidate.avatarKey" [alt]="candidate.username" size="sm" />
-    <span class="text-sm font-medium truncate">{{ candidate.username }}</span>
+    }
+    <span class="flex flex-col min-w-0">
+      <span class="text-sm font-medium truncate">{{ candidate.username }}</span>
+      @if (candidate.description) {
+      <span
+        class="text-2xs truncate"
+        [class.text-white]="i === highlightedIndex()"
+        [class.text-faint]="i !== highlightedIndex()"
+      >{{ candidate.description }}</span>
+      }
+    </span>
   </button>
   }
   }

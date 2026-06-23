@@ -72,6 +72,12 @@ export class NotificationBell {
     }
   }
 
+  remove(n: AppNotification, event: Event): void {
+    // Don't let the click reach the row's open handler or the panel backdrop.
+    event.stopPropagation();
+    this.store.delete(n.id);
+  }
+
   markAllRead(): void {
     this.store.markAllRead();
   }

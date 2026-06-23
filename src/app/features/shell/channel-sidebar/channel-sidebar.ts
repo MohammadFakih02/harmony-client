@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
@@ -18,12 +19,18 @@ interface StatusOption {
   value: PreferredStatus;
   label: string;
   dotClass: string;
+  description?: string;
+}
+
+interface ExpiryOption {
+  label: string;
+  minutes: number | null; // null = don't clear
 }
 
 @Component({
   selector: 'app-channel-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, UiAvatar, UiIconButton, FormsModule],
+  imports: [RouterLink, RouterLinkActive, UiAvatar, UiIconButton, FormsModule, OverlayModule],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
   styleUrl: './channel-sidebar.scss',
@@ -73,23 +80,72 @@ export class ChannelSidebar {
   protected readonly submitting = signal(false);
   protected readonly error = signal('');
 
-  // Status picker
+  // Status picker — rendered in a CDK overlay so it isn't clipped by the sidebar's
+  // overflow-hidden. Anchored above the user-deck avatar, aligned to its left edge.
   protected readonly showStatusMenu = signal(false);
+  protected readonly statusOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+  ];
   protected readonly myAvatarStatus = computed(() => toAvatarStatus(this.presenceStore.myStatus()));
   protected readonly statusOptions: StatusOption[] = [
     { value: 'online', label: 'Online', dotClass: 'bg-success' },
     { value: 'away', label: 'Idle', dotClass: 'bg-warning' },
-    { value: 'dnd', label: 'Do Not Disturb', dotClass: 'bg-danger' },
-    { value: 'invisible', label: 'Invisible', dotClass: 'bg-surface-3' },
+    {
+      value: 'dnd',
+      label: 'Do Not Disturb',
+      dotClass: 'bg-danger',
+      description: 'You will not receive notification pings.',
+    },
+    {
+      value: 'invisible',
+      label: 'Invisible',
+      dotClass: 'bg-surface-3',
+      description: 'You will appear offline.',
+    },
+  ];
+  protected readonly expiryOptions: ExpiryOption[] = [
+    { label: '15m', minutes: 15 },
+    { label: '30m', minutes: 30 },
+    { label: '1h', minutes: 60 },
+    { label: '2h', minutes: 120 },
+    { label: '4h', minutes: 240 },
+    { label: '8h', minutes: 480 },
+    { label: '24h', minutes: 1440 },
+    { label: "Don't clear", minutes: null },
   ];
 
+  // "Clear after" duration applied to the next status pick (null = don't clear).
+  protected readonly selectedExpiry = signal<number | null>(null);
+  // Custom status draft + its own clear-after.
+  protected readonly customDraft = signal('');
+  protected readonly customExpiry = signal<number | null>(null);
+
   toggleStatusMenu(): void {
-    this.showStatusMenu.update((v) => !v);
+    const opening = !this.showStatusMenu();
+    if (opening) {
+      // Seed the editor from the current custom status; reset both expiry pickers.
+      this.customDraft.set(this.presenceStore.myStatusMessage() ?? '');
+      this.customExpiry.set(null);
+      this.selectedExpiry.set(null);
+    }
+    this.showStatusMenu.set(opening);
   }
 
   selectStatus(status: PreferredStatus): void {
     this.showStatusMenu.set(false);
-    this.presenceStore.setMyStatus(status);
+    // Online is the default/revert target, so an expiry on it is meaningless.
+    this.presenceStore.setMyStatus(status, status === 'online' ? null : this.selectedExpiry());
+  }
+
+  saveCustomStatus(): void {
+    const message = this.customDraft().trim();
+    this.presenceStore.setCustomStatus(message || null, message ? this.customExpiry() : null);
+    this.showStatusMenu.set(false);
+  }
+
+  clearCustomStatus(): void {
+    this.customDraft.set('');
+    this.presenceStore.setCustomStatus(null);
   }
 
   toggleCategory(categoryId: string | null): void {

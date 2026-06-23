@@ -4,7 +4,7 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { GuildMember } from '../../../core/models/member.models';
-import { AvatarStatus, toAvatarStatus } from '../../../core/models/presence.models';
+import { toAvatarStatus } from '../../../core/models/presence.models';
 
 @Component({
   selector: 'app-member-sidebar',
@@ -30,6 +30,20 @@ export class MemberSidebar {
     }),
   );
 
+  // Bake each member's avatar status into a computed so the view tracks the `statuses`
+  // signal directly. Reading it through a per-row method binding wasn't re-rendering on a
+  // live status change (e.g. the current user changing their own status) until the panel
+  // was reopened — this guarantees a re-render whenever any status changes.
+  protected readonly rows = computed(() => {
+    const statuses = this.presenceStore.statuses();
+    const messages = this.presenceStore.statusMessages();
+    return this.sortedMembers().map((member) => ({
+      member,
+      status: toAvatarStatus(statuses[member.userId] ?? 'offline'),
+      statusMessage: messages[member.userId] ?? null,
+    }));
+  });
+
   constructor() {
     effect(() => {
       const guildId = this.guildStore.selectedGuildId();
@@ -43,9 +57,5 @@ export class MemberSidebar {
 
   protected displayName(m: GuildMember): string {
     return m.nickname ?? m.username;
-  }
-
-  protected avatarStatus(userId: string): AvatarStatus {
-    return toAvatarStatus(this.presenceStore.statusOf(userId));
   }
 }
