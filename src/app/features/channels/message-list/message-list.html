@@ -79,7 +79,12 @@
           } @else {
             <!-- whitespace-pre-wrap is scoped to the content span only, so template
                  indentation around the interpolation can't leak in as a leading space -->
-            <span class="whitespace-pre-wrap">{{ msg.content }}</span>
+            <span class="whitespace-pre-wrap"
+              >@for (tok of tokensOf(msg); track $index) {@if (tok.isMention) {<span
+                  class="bg-accent/20 text-accent rounded px-1 font-medium"
+                  >{{ tok.text }}</span
+                >} @else {{{ tok.text }}}}</span
+            >
             @if (msg.isEdited) {
               <span class="text-xs text-faint ml-1">(edited)</span>
             }
