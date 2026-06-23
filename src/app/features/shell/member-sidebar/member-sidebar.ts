@@ -1,21 +1,10 @@
-import { Component, inject, effect, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Component, inject, effect, computed } from '@angular/core';
 import { UiAvatar } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
+import { MemberStore } from '../../../core/stores/member.store';
+import { GuildMember } from '../../../core/models/member.models';
 import { AvatarStatus, toAvatarStatus } from '../../../core/models/presence.models';
-import { environment } from '../../../../environments/environment';
-
-interface GuildMember {
-  userId: string;
-  username: string;
-  discriminator: string;
-  nickname: string | null;
-  avatarKey: string | null;
-  isOwner: boolean;
-  joinedAt: number;
-}
 
 @Component({
   selector: 'app-member-sidebar',
@@ -27,10 +16,12 @@ interface GuildMember {
 export class MemberSidebar {
   protected readonly guildStore = inject(GuildStore);
   protected readonly presenceStore = inject(PresenceStore);
-  private readonly http = inject(HttpClient);
+  protected readonly memberStore = inject(MemberStore);
 
-  protected readonly members = signal<GuildMember[]>([]);
-  protected readonly loading = signal(false);
+  protected readonly members = computed<GuildMember[]>(() => {
+    const guildId = this.guildStore.selectedGuildId();
+    return guildId ? this.memberStore.membersOf(guildId) : [];
+  });
 
   protected readonly sortedMembers = computed(() =>
     [...this.members()].sort((a, b) => {
@@ -42,25 +33,12 @@ export class MemberSidebar {
   constructor() {
     effect(() => {
       const guildId = this.guildStore.selectedGuildId();
-      if (guildId) this.loadMembers(guildId);
-      else this.members.set([]);
+      if (!guildId) return;
+      this.memberStore.loadIfNeeded(guildId).then(() => {
+        // Fetch current presence for these members; live changes arrive via SignalR.
+        this.presenceStore.loadStatuses(this.memberStore.membersOf(guildId).map((m) => m.userId));
+      });
     });
-  }
-
-  private async loadMembers(guildId: string): Promise<void> {
-    this.loading.set(true);
-    try {
-      const raw = await firstValueFrom(
-        this.http.get<GuildMember[]>(`${environment.apiUrl}/guilds/${guildId}/members`),
-      );
-      this.members.set(raw);
-      // Fetch current presence for these members; live changes arrive via SignalR.
-      this.presenceStore.loadStatuses(raw.map((m) => m.userId));
-    } catch {
-      this.members.set([]);
-    } finally {
-      this.loading.set(false);
-    }
   }
 
   protected displayName(m: GuildMember): string {
