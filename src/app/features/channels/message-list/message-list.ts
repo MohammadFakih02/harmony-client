@@ -7,11 +7,14 @@ import { Subscription } from 'rxjs';
 import { UiAvatar } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
+import { MemberStore } from '../../../core/stores/member.store';
+import { DmStore } from '../../../core/stores/dm.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { MessageResponse } from '../../../core/models/message.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
+import { MentionToken, tokenizeMentions } from '../../../shared/util/mention-tokens';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 
 export interface MessageGroup {
@@ -47,9 +50,26 @@ function formatMessageTime(sentAt: number): string {
 export class MessageList {
   protected readonly messageStore = inject(MessageStore);
   private readonly channelStore = inject(ChannelStore);
+  private readonly memberStore = inject(MemberStore);
+  private readonly dmStore = inject(DmStore);
   private readonly messageService = inject(MessageService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
+
+  // Candidate usernames for mention-chip rendering — guild members, or the DM peer.
+  private readonly knownUsernamesLower = computed<Set<string>>(() => {
+    const guildId = this.messageStore.activeGuildId();
+    if (guildId) {
+      return new Set(this.memberStore.membersOf(guildId).map((m) => m.username.toLowerCase()));
+    }
+    const channelId = this.messageStore.activeChannelId();
+    const dm = channelId ? this.dmStore.peerOf(channelId) : undefined;
+    return dm ? new Set([dm.peerUsername.toLowerCase()]) : new Set<string>();
+  });
+
+  protected tokensOf(msg: MessageResponse): MentionToken[] {
+    return tokenizeMentions(msg.content, this.knownUsernamesLower());
+  }
 
   // Inline-edit state: the messageId being edited and its working draft.
   protected readonly editingId = signal<string | null>(null);
