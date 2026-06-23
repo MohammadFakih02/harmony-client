@@ -14,6 +14,9 @@ interface MessageState {
   degraded: boolean;
   activeChannelId: string | null;
   activeGuildId: string | null;
+  // Unread count captured when the channel was opened (before mark-read resets it) —
+  // drives the "X new messages" jump banner. 0 = no banner.
+  unreadOnOpen: number;
   // Maps server messageId (string) → local tempId (number)
   realIdToTempId: Record<string, number>;
 }
@@ -27,6 +30,7 @@ export const MessageStore = signalStore(
     degraded: false,
     activeChannelId: null,
     activeGuildId: null,
+    unreadOnOpen: 0,
     realIdToTempId: {},
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
@@ -226,8 +230,19 @@ export const MessageStore = signalStore(
         degraded: false,
         activeChannelId: null,
         activeGuildId: null,
+        unreadOnOpen: 0,
         realIdToTempId: {},
       });
+    },
+
+    /** Records how many messages were unread when the channel opened (for the jump banner). */
+    setUnreadOnOpen(count: number): void {
+      patchState(store, { unreadOnOpen: count });
+    },
+
+    /** Dismisses the "X new messages" jump banner. */
+    dismissUnreadBanner(): void {
+      patchState(store, { unreadOnOpen: 0 });
     },
     };
   }),

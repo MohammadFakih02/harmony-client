@@ -36,4 +36,8 @@ export class NotificationService {
   markAllRead(): Promise<void> {
     return firstValueFrom(this.http.post<void>(`${this.base}/notifications/read-all`, {}));
   }
+
+  delete(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/notifications/${id}`));
+  }
 }

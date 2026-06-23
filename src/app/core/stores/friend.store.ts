@@ -2,6 +2,7 @@ import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import { Friend, FriendRemovedPayload, FriendUserPayload, PendingFriend } from '../models/friend.models';
 import { FriendService } from '../services/friend.service';
+import { NotificationStore } from './notification.store';
 
 interface FriendState {
   friends: Friend[];
@@ -18,7 +19,7 @@ export const FriendStore = signalStore(
     incomingCount: computed(() => pending().filter((p) => p.direction === 'incoming').length),
     friendCount: computed(() => friends().length),
   })),
-  withMethods((store, service = inject(FriendService)) => {
+  withMethods((store, service = inject(FriendService), notifications = inject(NotificationStore)) => {
     const reload = async (): Promise<void> => {
       const [friends, pending] = await Promise.all([service.getFriends(), service.getPending()]);
       patchState(store, { friends, pending });
@@ -42,6 +43,8 @@ export const FriendStore = signalStore(
 
       async accept(requesterId: string): Promise<void> {
         await service.accept(requesterId);
+        // Accepting the request is "viewing the cause" — clear its notification.
+        notifications.markFriendRequestRead(requesterId);
         await reload();
       },
 

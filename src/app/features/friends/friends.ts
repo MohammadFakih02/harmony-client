@@ -6,13 +6,14 @@ import { DmStore } from '../../core/stores/dm.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import { UiAvatar } from '../../shared/ui';
+import { NotificationBell } from '../shell/notification-bell/notification-bell';
 
 type FriendsTab = 'all' | 'pending' | 'add';
 
 @Component({
   selector: 'app-friends',
   standalone: true,
-  imports: [FormsModule, UiAvatar],
+  imports: [FormsModule, UiAvatar, NotificationBell],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   templateUrl: './friends.html',
 })
