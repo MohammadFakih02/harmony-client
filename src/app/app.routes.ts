@@ -51,6 +51,13 @@ export const routes: Routes = [
     ],
   },
   {
+    // Public shared-invite landing — handles its own auth (sends guests to login with a
+    // returnUrl so the link survives), then previews + joins.
+    path: 'invite/:code',
+    loadComponent: () =>
+      import('./features/guilds/invite-landing/invite-landing').then((m) => m.InviteLanding),
+  },
+  {
     path: '',
     redirectTo: 'login',
     pathMatch: 'full',

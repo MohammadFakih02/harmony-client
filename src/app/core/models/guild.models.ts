@@ -6,6 +6,5 @@ export interface GuildSummary {
   bannerKey: string | null;
   memberCount: number;
   isPublic: boolean;
-  inviteCode: string;
   ownerId: string;
 }

@@ -11,7 +11,6 @@ const makeGuild = (id: string, name: string): GuildSummary => ({
   bannerKey: null,
   memberCount: 1,
   isPublic: false,
-  inviteCode: 'abc',
   ownerId: '1',
 });
 
