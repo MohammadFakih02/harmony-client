@@ -6,11 +6,12 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { JoinServerModal } from '../../guilds/join-server-modal/join-server-modal';
 
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, JoinServerModal],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',
@@ -46,6 +47,10 @@ export class GuildSidebar {
     this.router.navigate(['/app/dm', channelId]);
   }
 
+  // "+" rail button opens a small Create / Join chooser.
+  protected readonly showAddMenu = signal(false);
+  protected readonly showJoinModal = signal(false);
+
   protected readonly showCreateModal = signal(false);
   protected readonly guildName = signal('');
   protected readonly submitting = signal(false);
@@ -73,6 +78,16 @@ export class GuildSidebar {
     const url = this.router.url;
     if (url.includes(`/guilds/${guildId}/`) || url.endsWith(`/guilds/${guildId}`)) return;
     this.router.navigate(['/app/guilds', guildId]);
+  }
+
+  chooseCreate(): void {
+    this.showAddMenu.set(false);
+    this.openCreateModal();
+  }
+
+  chooseJoin(): void {
+    this.showAddMenu.set(false);
+    this.showJoinModal.set(true);
   }
 
   openCreateModal(): void {

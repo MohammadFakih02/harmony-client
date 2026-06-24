@@ -16,6 +16,7 @@ import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
+import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
@@ -29,6 +30,7 @@ import { snowflakeToDate } from '../../shared/util/snowflake';
     ChannelSidebar,
     MemberSidebar,
     NotificationBell,
+    InvitePeopleModal,
     UiAvatar,
     UiIconButton,
     Lightbox,
@@ -51,6 +53,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   );
   protected readonly inGuild = computed(() => this.url().includes('/guilds/'));
   protected readonly inDm = computed(() => this.url().includes('/dm/'));
+  // Invite People modal (guild header) — keyed to the currently-selected guild.
+  protected readonly showInviteModal = signal(false);
+  protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
   protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);

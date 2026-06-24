@@ -36,6 +36,9 @@
 
         <app-notification-bell />
         @if (inGuild()) {
+        <ui-icon-button size="md" label="Invite People" (click)="showInviteModal.set(true)">
+          <i class="fas fa-user-plus"></i>
+        </ui-icon-button>
         <ui-icon-button
           size="md"
           [active]="showMembers()"
@@ -99,6 +102,11 @@
 
 <!-- App-wide image lightbox -->
 <ui-lightbox />
+
+<!-- Invite People (guild header) -->
+@if (showInviteModal() && activeGuildId(); as guildId) {
+<app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
+}
 
 <!-- Connection status banner -->
 @if (signalR.connectionState() === 'reconnecting' || signalR.connectionState() === 'disconnected') {
