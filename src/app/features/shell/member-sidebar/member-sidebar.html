@@ -1,8 +1,18 @@
 <div class="flex flex-col h-full">
-  <div class="px-4 h-12 min-h-12 flex items-center border-b border-border-subtle shrink-0">
+  <div class="px-4 h-12 min-h-12 flex items-center gap-2 border-b border-border-subtle shrink-0">
     <span class="text-xs font-bold uppercase tracking-wider text-faint">
       Members — {{ members().length }}
     </span>
+    @if (caps()?.canBan) {
+    <button
+      type="button"
+      class="ml-auto text-faint hover:text-primary transition-micro"
+      title="Banned users"
+      (click)="showBans.set(true)"
+    >
+      <i class="fas fa-gavel text-xs"></i>
+    </button>
+    }
   </div>
 
   <div class="flex-1 overflow-y-auto py-2 px-2">
@@ -14,7 +24,13 @@
     <p class="text-xs text-faint text-center pt-6">No members found.</p>
     } @else {
     @for (row of rows(); track row.member.userId) {
-    <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 transition-micro">
+    <div
+      cdkOverlayOrigin
+      #origin="cdkOverlayOrigin"
+      class="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 transition-micro"
+      [class.cursor-pointer]="row.moderatable"
+      (click)="row.moderatable && openMenu(row.member, origin)"
+    >
       <ui-avatar
         [src]="row.member.avatarKey"
         [alt]="displayName(row.member)"
@@ -29,6 +45,9 @@
           @if (row.member.isOwner) {
           <i class="fas fa-crown text-warning text-xs shrink-0"></i>
           }
+          @if (row.timedOut) {
+          <i class="fas fa-clock text-faint text-xs shrink-0" title="Timed out"></i>
+          }
         </div>
         @if (row.statusMessage) {
         <span class="text-xs text-faint truncate leading-tight" [title]="row.statusMessage">{{ row.statusMessage }}</span>
@@ -36,8 +55,34 @@
         <span class="text-xs text-faint truncate leading-tight">{{ row.member.username }}</span>
         }
       </div>
+      @if (row.moderatable) {
+      <i class="fas fa-ellipsis-vertical text-faint text-xs opacity-0 group-hover:opacity-100 transition-micro shrink-0"></i>
+      }
     </div>
     }
     }
   </div>
 </div>
+
+<!-- Moderation action menu (anchored to the clicked row) -->
+@if (menuMember(); as member) {
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="menuOrigin()!"
+  [cdkConnectedOverlayOpen]="true"
+  [cdkConnectedOverlayPositions]="menuPositions"
+  [cdkConnectedOverlayHasBackdrop]="false"
+  (overlayOutsideClick)="closeMenu()"
+>
+  <app-member-actions-menu
+    [guildId]="guildStore.selectedGuildId()!"
+    [member]="member"
+    [caps]="caps()!"
+    (close)="closeMenu()"
+  />
+</ng-template>
+}
+
+@if (showBans()) {
+<app-bans-modal [guildId]="guildStore.selectedGuildId()!" (close)="showBans.set(false)" />
+}

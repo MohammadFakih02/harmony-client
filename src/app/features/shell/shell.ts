@@ -9,6 +9,7 @@ import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
+import { MemberStore } from '../../core/stores/member.store';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
 import { NotificationStore } from '../../core/stores/notification.store';
@@ -63,6 +64,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly messageStore = inject(MessageStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
+  private readonly memberStore = inject(MemberStore);
 
   // --- Header bar context (guild channel name+topic, or DM peer identity) ---
   protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
@@ -162,6 +164,14 @@ export class ShellComponent implements OnInit, OnDestroy {
       }
     }));
 
+    // Member moderation events. MemberRemoved/MemberUpdated reach the whole guild group;
+    // Kicked reaches only the affected user, so any emission means *we* were removed.
+    this.subs.add(client.memberRemoved$.subscribe((p) =>
+      this.memberStore.removeMember(p.guildId, p.userId)));
+    this.subs.add(client.memberUpdated$.subscribe((p) =>
+      this.memberStore.applyMemberUpdated(p.guildId, p.userId, p.communicationDisabledUntil)));
+    this.subs.add(client.kicked$.subscribe((p) => this.handleKicked(p.guildId)));
+
     client.onReconnected(() => this.rejoinGroups());
 
     // Start reporting inactivity (auto-away) now that we have a live connection.
@@ -175,6 +185,14 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.unsubscribe();
     this.idle.stop();
     this.signalR.disconnect();
+  }
+
+  /** We were kicked or banned from a guild: drop it locally, leave its group, and navigate out if open. */
+  private async handleKicked(guildId: string): Promise<void> {
+    const wasViewing = this.router.url.includes(`/guilds/${guildId}`);
+    await this.signalR.client?.leaveGuild(guildId).catch(() => {});
+    this.guildStore.removeGuild(guildId);
+    if (wasViewing) this.router.navigate(['/friends']);
   }
 
   private async joinAllGuilds(client = this.signalR.client): Promise<void> {
