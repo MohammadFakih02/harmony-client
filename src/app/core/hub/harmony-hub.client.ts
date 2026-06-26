@@ -9,6 +9,11 @@ import {
 } from '../models/presence.models';
 import { FriendRemovedPayload, FriendUserPayload } from '../models/friend.models';
 import { NotificationPayload } from '../models/notification.models';
+import {
+  KickedPayload,
+  MemberRemovedPayload,
+  MemberUpdatedPayload,
+} from '../models/member.models';
 
 export interface MessageEditedEvent {
   messageId: string;
@@ -45,6 +50,9 @@ export class HarmonyHubClient {
   private readonly _friendAccepted = new Subject<FriendUserPayload>();
   private readonly _friendRemoved = new Subject<FriendRemovedPayload>();
   private readonly _notificationReceived = new Subject<NotificationPayload>();
+  private readonly _memberRemoved = new Subject<MemberRemovedPayload>();
+  private readonly _kicked = new Subject<KickedPayload>();
+  private readonly _memberUpdated = new Subject<MemberUpdatedPayload>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -64,6 +72,9 @@ export class HarmonyHubClient {
   readonly friendRemoved$: Observable<FriendRemovedPayload> = this._friendRemoved.asObservable();
   readonly notificationReceived$: Observable<NotificationPayload> =
     this._notificationReceived.asObservable();
+  readonly memberRemoved$: Observable<MemberRemovedPayload> = this._memberRemoved.asObservable();
+  readonly kicked$: Observable<KickedPayload> = this._kicked.asObservable();
+  readonly memberUpdated$: Observable<MemberUpdatedPayload> = this._memberUpdated.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -165,6 +176,22 @@ export class HarmonyHubClient {
         channelId: p.channelId != null ? String(p.channelId) : null,
         messageId: p.messageId != null ? String(p.messageId) : null,
         createdAt: Number(p.createdAt),
+      }));
+
+    this.connection.on('MemberRemoved', (p: { guildId: unknown; userId: unknown }) =>
+      this._memberRemoved.next({ guildId: String(p.guildId), userId: String(p.userId) }));
+
+    this.connection.on('Kicked', (p: { guildId: unknown; reason: string | null; banned: boolean }) =>
+      this._kicked.next({ guildId: String(p.guildId), reason: p.reason ?? null, banned: p.banned }));
+
+    this.connection.on('MemberUpdated', (p: {
+      guildId: unknown; userId: unknown; communicationDisabledUntil: unknown;
+    }) =>
+      this._memberUpdated.next({
+        guildId: String(p.guildId),
+        userId: String(p.userId),
+        communicationDisabledUntil:
+          p.communicationDisabledUntil != null ? Number(p.communicationDisabledUntil) : null,
       }));
   }
 

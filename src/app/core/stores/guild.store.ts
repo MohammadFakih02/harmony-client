@@ -34,6 +34,14 @@ export const GuildStore = signalStore(
       patchState(store, { guilds: [...store.guilds(), guild] });
     },
 
+    /** Drops a guild from local state (left, kicked, or banned). Clears the selection if it was active. */
+    removeGuild(guildId: string): void {
+      patchState(store, {
+        guilds: store.guilds().filter((g) => g.id !== guildId),
+        selectedGuildId: store.selectedGuildId() === guildId ? null : store.selectedGuildId(),
+      });
+    },
+
     async createGuild(name: string, description?: string): Promise<GuildSummary> {
       const guild = await service.createGuild(name, description);
       patchState(store, { guilds: [...store.guilds(), guild] });

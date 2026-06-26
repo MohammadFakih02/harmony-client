@@ -6,6 +6,52 @@ export interface GuildMember {
   avatarKey: string | null;
   isOwner: boolean;
   joinedAt: number;
+  /** Unix-ms timeout expiry, or null. A future value means the member is currently timed out. */
+  communicationDisabledUntil: number | null;
+}
+
+/** The caller's guild-level capabilities (resolved server-side) — drives moderation/management UI. */
+export interface GuildCapabilities {
+  canManageGuild: boolean;
+  canManageChannels: boolean;
+  canManageRoles: boolean;
+  canCreateInvite: boolean;
+  canManageInvites: boolean;
+  canKick: boolean;
+  canBan: boolean;
+  canTimeout: boolean;
+  canViewAuditLog: boolean;
+}
+
+/** A guild ban row, enriched with banned-user + banning-moderator identity. */
+export interface GuildBan {
+  userId: string;
+  username: string | null;
+  avatarKey: string | null;
+  bannedBy: string;
+  bannedByUsername: string | null;
+  reason: string | null;
+  createdAt: number;
+}
+
+/** SignalR: a member was removed from a guild (kick / ban / leave). */
+export interface MemberRemovedPayload {
+  guildId: string;
+  userId: string;
+}
+
+/** SignalR: the recipient was kicked or banned. `banned` distinguishes a ban from a kick. */
+export interface KickedPayload {
+  guildId: string;
+  reason: string | null;
+  banned: boolean;
+}
+
+/** SignalR: a member's moderation state changed (timeout set/cleared). */
+export interface MemberUpdatedPayload {
+  guildId: string;
+  userId: string;
+  communicationDisabledUntil: number | null;
 }
 
 /** A minimal mentionable identity — what the @-autocomplete dropdown needs to render and insert. */
