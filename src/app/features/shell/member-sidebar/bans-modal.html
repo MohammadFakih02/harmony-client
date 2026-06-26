@@ -1,0 +1,56 @@
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  (click)="close.emit()"
+>
+  <div
+    class="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 flex flex-col gap-4"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="flex flex-col gap-1">
+      <h2 class="text-lg font-bold text-primary text-center">Banned Users</h2>
+      <p class="text-sm text-muted text-center">Revoke a ban to let the user rejoin via an invite.</p>
+    </div>
+
+    @if (error()) {
+    <p class="text-sm text-danger text-center">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+    <div class="flex justify-center py-8">
+      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+    </div>
+    } @else if (list().length === 0) {
+    <p class="text-sm text-faint text-center py-8">No banned users.</p>
+    } @else {
+    <div class="flex flex-col gap-1 max-h-80 overflow-y-auto">
+      @for (ban of list(); track ban.userId) {
+      <div class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-micro">
+        <ui-avatar [src]="ban.avatarKey" [alt]="ban.username ?? 'Unknown'" size="sm" />
+        <div class="flex flex-col min-w-0 flex-1">
+          <span class="text-sm font-medium text-primary truncate">{{ ban.username ?? 'Unknown user' }}</span>
+          @if (ban.reason) {
+          <span class="text-xs text-faint truncate" [title]="ban.reason">{{ ban.reason }}</span>
+          }
+        </div>
+        <button
+          type="button"
+          class="px-2.5 py-1 rounded-md text-xs font-medium bg-surface-3 text-primary hover:bg-surface-2 transition-micro disabled:opacity-50"
+          [disabled]="busyId() === ban.userId"
+          (click)="unban(ban.userId)"
+        >
+          Unban
+        </button>
+      </div>
+      }
+    </div>
+    }
+
+    <button
+      type="button"
+      class="self-center px-4 py-2 rounded-lg text-sm text-muted hover:bg-surface-2 transition-micro"
+      (click)="close.emit()"
+    >
+      Close
+    </button>
+  </div>
+</div>
