@@ -1,0 +1,63 @@
+<div
+  class="mt-1 max-w-sm rounded-lg bg-surface-2 border border-border-subtle p-3 flex items-center gap-3"
+>
+  @if (loading()) {
+  <div class="w-12 h-12 rounded-2xl bg-surface-3 animate-pulse shrink-0"></div>
+  <div class="flex-1 min-w-0 flex flex-col gap-1.5">
+    <div class="h-2.5 w-16 rounded bg-surface-3 animate-pulse"></div>
+    <div class="h-3.5 w-32 rounded bg-surface-3 animate-pulse"></div>
+  </div>
+  } @else if (unavailable()) {
+  <div
+    class="w-12 h-12 rounded-2xl bg-surface-3 text-faint shrink-0 flex items-center justify-center"
+  >
+    <i class="fas fa-link-slash"></i>
+  </div>
+  <div class="flex-1 min-w-0">
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint">Invite</p>
+    <p class="text-sm font-semibold text-muted">Invite invalid or expired</p>
+  </div>
+  } @else if (preview(); as p) {
+  <!-- Server icon -->
+  <div
+    class="w-12 h-12 rounded-2xl overflow-hidden bg-surface-3 shrink-0 flex items-center justify-center"
+  >
+    @if (p.iconKey) {
+    <img [src]="p.iconKey" [alt]="p.guildName" class="w-full h-full object-cover" />
+    } @else {
+    <span class="text-sm font-bold text-muted select-none">{{ initials() }}</span>
+    }
+  </div>
+
+  <!-- Name + member count -->
+  <div class="flex-1 min-w-0">
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint">
+      {{ isMember() ? 'You’re a member of' : 'You’ve been invited to join' }}
+    </p>
+    <p class="text-sm font-semibold text-primary truncate-text">{{ p.guildName }}</p>
+    <p class="text-xs text-faint">
+      {{ p.memberCount }} {{ p.memberCount === 1 ? 'member' : 'members' }}
+    </p>
+  </div>
+
+  <!-- Join / Joined -->
+  <button
+    type="button"
+    class="shrink-0 px-3.5 py-1.5 rounded-md text-sm font-semibold transition-micro disabled:opacity-60 disabled:cursor-not-allowed"
+    [class.bg-success]="!isMember()"
+    [class.text-white]="!isMember()"
+    [class.hover:brightness-110]="!isMember()"
+    [class.bg-surface-3]="isMember()"
+    [class.text-muted]="isMember()"
+    [class.hover:text-primary]="isMember()"
+    [disabled]="joining()"
+    (click)="accept()"
+  >
+    @if (joining()) {
+    <i class="fas fa-yin-yang animate-spin"></i>
+    } @else {
+    {{ isMember() ? 'Joined' : 'Join' }}
+    }
+  </button>
+  }
+</div>

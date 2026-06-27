@@ -50,6 +50,13 @@ export const NotificationStore = signalStore(
         await service.markAllRead().catch(() => {});
       },
 
+      /** Removes every notification ("clear all"); optimistic with a fail-open server call. */
+      async clearAll(): Promise<void> {
+        if (store.notifications().length === 0) return;
+        patchState(store, { notifications: [], unreadCount: 0 });
+        await service.clearAll().catch(() => {});
+      },
+
       /** Marks every unread `mention` for a channel read — used when the user opens it. */
       async markChannelMentionsRead(channelId: string): Promise<void> {
         const targets = store

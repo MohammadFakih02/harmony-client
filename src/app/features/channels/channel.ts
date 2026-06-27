@@ -53,6 +53,8 @@ export class Channel implements OnInit, OnDestroy {
       }
       await this.messageStore.loadMessages(newGuildId, newChannelId);
       this.messageStore.setUnreadOnOpen(unreadOnOpen);
+      // Highlight the unread mentions of me in this view (clears on leave/rejoin).
+      this.messageStore.seedMentionHighlights();
 
       const messages = this.messageStore.messages();
       const newest = [...messages].reverse().find((m: MessageResponse) => !m.tempId);

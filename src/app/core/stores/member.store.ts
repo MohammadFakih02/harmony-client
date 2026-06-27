@@ -6,12 +6,14 @@ import { MemberService } from '../services/member.service';
 interface MemberState {
   byGuild: Record<string, GuildMember[]>;
   capsByGuild: Record<string, GuildCapabilities>;
+  // Member ids that can ViewChannel a given channel, keyed by channelId (null = not loaded).
+  viewersByChannel: Record<string, string[]>;
   loading: boolean;
 }
 
 export const MemberStore = signalStore(
   { providedIn: 'root' },
-  withState<MemberState>({ byGuild: {}, capsByGuild: {}, loading: false }),
+  withState<MemberState>({ byGuild: {}, capsByGuild: {}, viewersByChannel: {}, loading: false }),
   withMethods((store, service = inject(MemberService)) => ({
     /** Returns the cached member list for a guild, or an empty array if not loaded yet. */
     membersOf(guildId: string): GuildMember[] {
@@ -32,6 +34,27 @@ export const MemberStore = signalStore(
         patchState(store, { byGuild: { ...store.byGuild(), [guildId]: members }, loading: false });
       } catch {
         patchState(store, { loading: false });
+      }
+    },
+
+    /**
+     * The member ids that can view a channel, or null if not loaded yet. Null means
+     * "don't filter" (show everyone) — the sidebar only restricts once the set is known.
+     */
+    channelViewers(channelId: string): string[] | null {
+      return store.viewersByChannel()[channelId] ?? null;
+    },
+
+    /** Fetches the channel's viewer id set once and caches it per channel; a no-op if cached. */
+    async loadViewersIfNeeded(guildId: string, channelId: string): Promise<void> {
+      if (store.viewersByChannel()[channelId]) return;
+      try {
+        const viewers = await service.getChannelViewers(guildId, channelId);
+        patchState(store, {
+          viewersByChannel: { ...store.viewersByChannel(), [channelId]: viewers },
+        });
+      } catch {
+        // Fail open — leave unset so the sidebar shows everyone rather than hiding members.
       }
     },
 

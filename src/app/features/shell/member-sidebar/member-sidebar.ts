@@ -2,6 +2,7 @@ import { Component, inject, effect, computed, signal, OnDestroy } from '@angular
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { UiAvatar } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { ChannelStore } from '../../../core/stores/channel.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { AuthService } from '../../../core/services/auth.service';
@@ -19,6 +20,7 @@ import { BansModal } from './bans-modal';
 })
 export class MemberSidebar implements OnDestroy {
   protected readonly guildStore = inject(GuildStore);
+  protected readonly channelStore = inject(ChannelStore);
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly memberStore = inject(MemberStore);
   private readonly auth = inject(AuthService);
@@ -40,6 +42,19 @@ export class MemberSidebar implements OnDestroy {
     return guildId ? this.memberStore.membersOf(guildId) : [];
   });
 
+  // Only members who can ViewChannel the open channel are listed, so override-hidden channels
+  // (e.g. #staff) don't reveal who's in them. The viewer set is resolved server-side; until it
+  // loads (or if it fails) we show everyone rather than flashing an over-restricted list.
+  protected readonly visibleMembers = computed<GuildMember[]>(() => {
+    const all = this.members();
+    const channelId = this.channelStore.selectedChannelId();
+    if (!channelId) return all;
+    const viewers = this.memberStore.channelViewers(channelId);
+    if (!viewers) return all;
+    const set = new Set(viewers);
+    return all.filter((m) => set.has(m.userId));
+  });
+
   protected readonly caps = computed(() => {
     const guildId = this.guildStore.selectedGuildId();
     return guildId ? this.memberStore.capabilitiesOf(guildId) : null;
@@ -52,7 +67,7 @@ export class MemberSidebar implements OnDestroy {
   });
 
   protected readonly sortedMembers = computed(() =>
-    [...this.members()].sort((a, b) => {
+    [...this.visibleMembers()].sort((a, b) => {
       if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
       return this.displayName(a).localeCompare(this.displayName(b));
     }),
@@ -94,6 +109,14 @@ export class MemberSidebar implements OnDestroy {
         // Fetch current presence for these members; live changes arrive via SignalR.
         this.presenceStore.loadStatuses(this.memberStore.membersOf(guildId).map((m) => m.userId));
       });
+    });
+
+    // Resolve which members can view the open channel (server-side), so the list hides members
+    // an override excludes. Cached per channel, so re-opening a channel is instant.
+    effect(() => {
+      const guildId = this.guildStore.selectedGuildId();
+      const channelId = this.channelStore.selectedChannelId();
+      if (guildId && channelId) this.memberStore.loadViewersIfNeeded(guildId, channelId);
     });
   }
 

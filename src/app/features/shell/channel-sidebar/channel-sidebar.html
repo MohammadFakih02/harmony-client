@@ -8,7 +8,7 @@
       {{ guildStore.selectedGuild()?.name ?? 'Select a server' }}
     </span>
     <div class="flex items-center gap-1">
-      @if (guildStore.selectedGuildId()) {
+      @if (guildStore.selectedGuildId() && canManageChannels()) {
       <ui-icon-button size="sm" label="Create Channel" (click)="openCreateChannel()">
         <i class="fas fa-plus"></i>
       </ui-icon-button>
@@ -33,12 +33,14 @@
     <div class="flex flex-col items-center gap-3 px-4 pt-10 text-center">
       <i class="fas fa-hashtag text-3xl text-faint"></i>
       <p class="text-xs text-muted">No channels yet.</p>
+      @if (canManageChannels()) {
       <button
         class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
         (click)="openCreateChannel()"
       >
         <i class="fas fa-plus mr-1"></i> Create a Channel
       </button>
+      }
     </div>
     } @else {
     @for (category of channelStore.currentCategories(); track category.id) {
@@ -56,11 +58,13 @@
           ></i>
           <span class="flex-1 text-left">{{ category.name }}</span>
         </button>
+        @if (canManageChannels()) {
         <span class="opacity-0 group-hover:opacity-100 transition-micro">
           <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
             <i class="fas fa-plus"></i>
           </ui-icon-button>
         </span>
+        }
       </div>
       }
 
@@ -92,14 +96,18 @@
           >
             {{ unread > 99 ? '99+' : unread }}
           </span>
-          } @else {
+          } @else if (canCreateInvite() || canManageChannels()) {
           <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro">
+            @if (canCreateInvite()) {
             <ui-icon-button size="xs" hover="surface-3" label="Create Invite" (click)="$event.preventDefault()">
               <i class="fas fa-user-plus"></i>
             </ui-icon-button>
+            }
+            @if (canManageChannels()) {
             <ui-icon-button size="xs" hover="surface-3" label="Channel Settings" (click)="$event.preventDefault()">
               <i class="fas fa-gear"></i>
             </ui-icon-button>
+            }
           </div>
           }
         </a>
@@ -173,7 +181,7 @@
   <div
     class="relative flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border h-13 min-h-13 shadow-sm animate-slide-up shrink-0"
   >
-    <!-- Status picker — in a CDK overlay so it escapes the sidebar's overflow-hidden -->
+    <!-- Status-select menu — its own CDK overlay (escapes the sidebar's overflow-hidden) -->
     <ng-template
       cdkConnectedOverlay
       [cdkConnectedOverlayOrigin]="statusTrigger"
@@ -199,53 +207,6 @@
         }
       </div>
       <div class="h-px bg-border-subtle mb-0.5"></div>
-
-      <!-- Custom status message -->
-      <div class="flex items-center gap-1">
-        <input
-          type="text"
-          maxlength="128"
-          placeholder="What's happening?"
-          class="flex-1 min-w-0 bg-surface-2 rounded-md px-2.5 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-accent"
-          [ngModel]="customDraft()"
-          (ngModelChange)="customDraft.set($event)"
-          (keydown.enter)="saveCustomStatus()"
-        />
-        @if (presenceStore.myStatusMessage()) {
-        <button
-          type="button"
-          class="w-7 h-7 shrink-0 flex items-center justify-center rounded text-faint hover:text-primary hover:bg-surface-2"
-          (click)="clearCustomStatus()"
-          aria-label="Clear custom status"
-        >
-          <i class="fas fa-xmark text-xs"></i>
-        </button>
-        }
-      </div>
-      @if (customStatusExpiryLabel(); as left) {
-      <span class="px-1 text-2xs text-faint">Current status clears in {{ left }}</span>
-      }
-      <div class="flex items-center gap-1.5">
-        <span class="text-2xs text-faint shrink-0">Clear after</span>
-        <select
-          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none"
-          [ngModel]="customExpiry()"
-          (ngModelChange)="customExpiry.set($event)"
-        >
-          @for (e of expiryOptions; track e.label) {
-          <option [ngValue]="e.minutes">{{ e.minutes === null ? "Don't clear" : e.label }}</option>
-          }
-        </select>
-        <button
-          type="button"
-          class="shrink-0 px-2.5 py-1 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-110"
-          (click)="saveCustomStatus()"
-        >
-          Save
-        </button>
-      </div>
-
-      <div class="h-px bg-border-subtle my-0.5"></div>
 
       <!-- Status options (with descriptions) -->
       @for (opt of statusOptions; track opt.value) {
@@ -292,6 +253,91 @@
           </button>
           }
         </div>
+      </div>
+
+      <div class="h-px bg-border-subtle my-0.5"></div>
+
+      <!-- Entry point to the separate custom-status editor -->
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        (click)="openCustomStatus()"
+      >
+        <i class="fas fa-face-smile w-2.5 text-center text-faint"></i>
+        <span class="flex-1 min-w-0 truncate-text text-sm font-medium">
+          {{ presenceStore.myStatusMessage() ? 'Edit Custom Status' : 'Set a Custom Status' }}
+        </span>
+        <i class="fas fa-chevron-right text-2xs text-faint"></i>
+      </button>
+    </div>
+    </ng-template>
+
+    <!-- Custom-status editor — separate CDK overlay so saving doesn't dismiss the status menu -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="statusTrigger"
+      [cdkConnectedOverlayOpen]="showCustomStatus()"
+      [cdkConnectedOverlayPositions]="statusOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showCustomStatus.set(false)"
+    >
+    <div
+      class="w-64 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1.5 animate-slide-up"
+    >
+      <div class="flex items-center gap-2 px-1 pt-0.5 pb-1">
+        <button
+          type="button"
+          class="text-faint hover:text-primary transition-micro"
+          (click)="showCustomStatus.set(false); showStatusMenu.set(true)"
+          aria-label="Back to status menu"
+        >
+          <i class="fas fa-chevron-left text-xs"></i>
+        </button>
+        <span class="text-sm font-semibold text-primary">Custom Status</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <input
+          type="text"
+          maxlength="128"
+          placeholder="What's happening?"
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-2.5 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-accent"
+          [ngModel]="customDraft()"
+          (ngModelChange)="customDraft.set($event)"
+          (keydown.enter)="saveCustomStatus()"
+        />
+        @if (presenceStore.myStatusMessage()) {
+        <button
+          type="button"
+          class="w-7 h-7 shrink-0 flex items-center justify-center rounded text-faint hover:text-primary hover:bg-surface-2"
+          (click)="clearCustomStatus()"
+          aria-label="Clear custom status"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+        }
+      </div>
+      @if (customStatusExpiryLabel(); as left) {
+      <span class="px-1 text-2xs text-faint">Current status clears in {{ left }}</span>
+      }
+      <div class="flex items-center gap-1.5">
+        <span class="text-2xs text-faint shrink-0">Clear after</span>
+        <select
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none"
+          [ngModel]="customExpiry()"
+          (ngModelChange)="customExpiry.set($event)"
+        >
+          @for (e of expiryOptions; track e.label) {
+          <option [ngValue]="e.minutes">{{ e.minutes === null ? "Don't clear" : e.label }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="shrink-0 px-2.5 py-1 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-110"
+          (click)="saveCustomStatus()"
+        >
+          Save
+        </button>
       </div>
     </div>
     </ng-template>
