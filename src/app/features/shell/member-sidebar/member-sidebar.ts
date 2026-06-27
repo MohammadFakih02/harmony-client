@@ -5,16 +5,34 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { MemberStore } from '../../../core/stores/member.store';
+import { RoleStore } from '../../../core/stores/role.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { GuildMember } from '../../../core/models/member.models';
+import { memberColor, memberHoistRole } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { MemberActionsMenu } from './member-actions-menu';
 import { BansModal } from './bans-modal';
+import { UserProfilePopout } from '../user-profile-popout/user-profile-popout';
+
+interface MemberRow {
+  member: GuildMember;
+  status: ReturnType<typeof toAvatarStatus>;
+  statusMessage: string | null;
+  timedOut: boolean;
+  moderatable: boolean;
+  color: string | null; // highest-role colour for the username, or null
+}
+
+interface MemberSection {
+  key: string; // role id, or '_members' for the ungrouped bucket
+  label: string;
+  rows: MemberRow[];
+}
 
 @Component({
   selector: 'app-member-sidebar',
   standalone: true,
-  imports: [UiAvatar, OverlayModule, MemberActionsMenu, BansModal],
+  imports: [UiAvatar, OverlayModule, MemberActionsMenu, BansModal, UserProfilePopout],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './member-sidebar.html',
 })
@@ -23,6 +41,7 @@ export class MemberSidebar implements OnDestroy {
   protected readonly channelStore = inject(ChannelStore);
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly memberStore = inject(MemberStore);
+  protected readonly roleStore = inject(RoleStore);
   private readonly auth = inject(AuthService);
 
   // Wall-clock signal so the timed-out indicator clears itself when a timeout lapses. A timeout
@@ -66,30 +85,59 @@ export class MemberSidebar implements OnDestroy {
     return !!c && (c.canKick || c.canBan || c.canTimeout || c.canManageRoles);
   });
 
-  protected readonly sortedMembers = computed(() =>
-    [...this.visibleMembers()].sort((a, b) => {
-      if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
-      return this.displayName(a).localeCompare(this.displayName(b));
-    }),
-  );
+  // The active guild's roles, rank-sorted (RoleStore.rolesOf already sorts) — drives both the
+  // hoisted-role member sections and each member's username colour.
+  private readonly roles = computed(() => {
+    const guildId = this.guildStore.selectedGuildId();
+    return guildId ? this.roleStore.rolesOf(guildId) : [];
+  });
 
-  // Bake each member's avatar status into a computed so the view tracks the `statuses`
-  // signal directly. Reading it through a per-row method binding wasn't re-rendering on a
-  // live status change (e.g. the current user changing their own status) until the panel
-  // was reopened — this guarantees a re-render whenever any status changes.
-  protected readonly rows = computed(() => {
+  // Members grouped into Discord-style sections by their highest hoisted role (rank order), with an
+  // ungrouped "Members" bucket last. Each row bakes in status/colour so the view tracks the presence
+  // + role signals directly (a per-row method binding wouldn't re-render on a live status change).
+  protected readonly sections = computed<MemberSection[]>(() => {
     const statuses = this.presenceStore.statuses();
     const messages = this.presenceStore.statusMessages();
     const now = this.now();
-    return this.sortedMembers().map((member) => ({
+    const roles = this.roles();
+
+    const buildRow = (member: GuildMember): MemberRow => ({
       member,
       status: toAvatarStatus(statuses[member.userId] ?? 'offline'),
       statusMessage: messages[member.userId] ?? null,
       timedOut:
         member.communicationDisabledUntil != null && member.communicationDisabledUntil > now,
       moderatable: this.canModerate(member),
-    }));
+      color: memberColor(member.roleIds, roles),
+    });
+    const byName = (a: GuildMember, b: GuildMember) =>
+      this.displayName(a).localeCompare(this.displayName(b));
+
+    const byRole = new Map<string, GuildMember[]>();
+    const ungrouped: GuildMember[] = [];
+    for (const m of this.visibleMembers()) {
+      const hoist = memberHoistRole(m.roleIds, roles);
+      if (hoist) (byRole.get(hoist.id) ?? byRole.set(hoist.id, []).get(hoist.id)!).push(m);
+      else ungrouped.push(m);
+    }
+
+    const sections: MemberSection[] = [];
+    for (const role of roles.filter((r) => r.isHoisted)) {
+      const members = byRole.get(role.id);
+      if (members?.length) {
+        sections.push({ key: role.id, label: role.name, rows: members.sort(byName).map(buildRow) });
+      }
+    }
+    if (ungrouped.length) {
+      sections.push({ key: '_members', label: 'Members', rows: ungrouped.sort(byName).map(buildRow) });
+    }
+    return sections;
   });
+
+  /** Hide the section header when there's only the default ungrouped bucket (a plain flat list). */
+  protected showSectionHeader(section: MemberSection): boolean {
+    return section.key !== '_members' || this.sections().length > 1;
+  }
 
   // --- moderation action menu (CDK overlay anchored to the clicked row) ---
   protected readonly menuMember = signal<GuildMember | null>(null);
@@ -98,6 +146,14 @@ export class MemberSidebar implements OnDestroy {
   protected readonly menuPositions: ConnectionPositionPair[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  // --- profile popout (opened by a plain row click; opens leftward out of the right sidebar) ---
+  protected readonly profileMember = signal<GuildMember | null>(null);
+  protected readonly profileOrigin = signal<CdkOverlayOrigin | null>(null);
+  protected readonly profilePositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'top', overlayX: 'end', overlayY: 'top', offsetX: -8 },
+    { originX: 'start', originY: 'bottom', overlayX: 'end', overlayY: 'bottom', offsetX: -8 },
   ];
 
   constructor() {
@@ -137,6 +193,16 @@ export class MemberSidebar implements OnDestroy {
   protected closeMenu(): void {
     this.menuMember.set(null);
     this.menuOrigin.set(null);
+  }
+
+  protected openProfile(member: GuildMember, origin: CdkOverlayOrigin): void {
+    this.profileOrigin.set(origin);
+    this.profileMember.set(member);
+  }
+
+  protected closeProfile(): void {
+    this.profileMember.set(null);
+    this.profileOrigin.set(null);
   }
 
   protected displayName(m: GuildMember): string {

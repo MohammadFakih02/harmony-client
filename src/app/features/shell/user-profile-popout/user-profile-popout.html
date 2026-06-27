@@ -1,0 +1,65 @@
+<div class="w-64 rounded-xl bg-surface shadow-modal border border-border overflow-hidden animate-slide-up">
+  <!-- Banner strip + avatar -->
+  <div class="h-12 bg-surface-3"></div>
+  <div class="px-4 pb-4 -mt-7">
+    <ui-avatar
+      [src]="avatarKey()"
+      [alt]="displayName()"
+      size="lg"
+      [status]="avatarStatus()"
+      ringClass="border-surface"
+    />
+
+    <div class="mt-2 flex items-center gap-1.5 min-w-0">
+      <span class="text-base font-bold text-primary truncate">{{ displayName() }}</span>
+      @if (isOwner()) {
+      <i class="fas fa-crown text-warning text-xs shrink-0" title="Server owner"></i>
+      }
+    </div>
+    @if (hasNickname()) {
+    <p class="text-xs text-faint truncate">{{ username() }}</p>
+    }
+    @if (statusMessage(); as msg) {
+    <p class="mt-1 text-xs text-muted truncate" [title]="msg">{{ msg }}</p>
+    }
+
+    <!-- Roles -->
+    @if (roleChips().length) {
+    <div class="mt-3">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
+      <div class="flex flex-wrap gap-1">
+        @for (role of roleChips(); track role.id) {
+        <span
+          class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border-subtle text-xs text-muted"
+        >
+          <span
+            class="w-2 h-2 rounded-full shrink-0"
+            [style.background-color]="role.color ?? 'var(--color-surface-3, #999)'"
+          ></span>
+          {{ role.name }}
+        </span>
+        }
+      </div>
+    </div>
+    }
+
+    <!-- Member since -->
+    @if (memberSince(); as since) {
+    <div class="mt-3">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Member Since</p>
+      <p class="text-xs text-muted">{{ since }}</p>
+    </div>
+    }
+
+    <!-- Message action (not for yourself) -->
+    @if (!isSelf()) {
+    <button
+      type="button"
+      class="mt-4 w-full px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
+      (click)="message()"
+    >
+      <i class="fas fa-message mr-1.5"></i> Message
+    </button>
+    }
+  </div>
+</div>

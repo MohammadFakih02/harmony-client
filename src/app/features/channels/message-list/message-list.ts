@@ -4,13 +4,15 @@ import {
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
-import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { Subscription } from 'rxjs';
 import { UiAvatar, MentionAutocomplete } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MemberStore } from '../../../core/stores/member.store';
+import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { memberColor } from '../../../core/models/role.models';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { MessageResponse } from '../../../core/models/message.models';
@@ -24,6 +26,7 @@ import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../sha
 import { extractInviteCodes } from '../../../shared/util/invite-links';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
+import { UserProfilePopout } from '../../shell/user-profile-popout/user-profile-popout';
 
 export interface MessageGroup {
   userId: string;
@@ -67,6 +70,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     AutofocusEnd,
     MessageAttachments,
     InviteEmbed,
+    UserProfilePopout,
     OverlayModule,
     MentionAutocomplete,
   ],
@@ -77,6 +81,7 @@ export class MessageList {
   protected readonly messageStore = inject(MessageStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly memberStore = inject(MemberStore);
+  private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
   private readonly messageService = inject(MessageService);
   private readonly auth = inject(AuthService);
@@ -107,6 +112,32 @@ export class MessageList {
     const codes = extractInviteCodes(msg.content);
     this.inviteCodeCache.set(msg, { content: msg.content, codes });
     return codes;
+  }
+
+  /** Role colour for a message author's name — their highest coloured role in this guild (null in DMs). */
+  protected authorColor(userId: string): string | null {
+    const guildId = this.messageStore.activeGuildId();
+    if (!guildId) return null;
+    const member = this.memberStore.membersOf(guildId).find((m) => m.userId === userId);
+    return member ? memberColor(member.roleIds, this.roleStore.rolesOf(guildId)) : null;
+  }
+
+  // --- author profile popout (opened by clicking a message author's name/avatar) ---
+  protected readonly profileGroup = signal<MessageGroup | null>(null);
+  protected readonly profileOrigin = signal<CdkOverlayOrigin | null>(null);
+  protected readonly profilePositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  protected openProfile(group: MessageGroup, origin: CdkOverlayOrigin): void {
+    this.profileOrigin.set(origin);
+    this.profileGroup.set(group);
+  }
+
+  protected closeProfile(): void {
+    this.profileGroup.set(null);
+    this.profileOrigin.set(null);
   }
 
   // Inline-edit state: the messageId being edited and its working draft.
