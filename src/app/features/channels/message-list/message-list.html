@@ -63,11 +63,20 @@
       [alt]="group.username"
       size="md"
       ringClass="border-surface-2 group-hover:border-surface-2"
-      class="mt-0.5 shrink-0"
+      class="mt-0.5 shrink-0 cursor-pointer"
+      (click)="openProfile(group, authorOrigin)"
     />
     <div class="flex flex-col gap-0.5 flex-1 min-w-0">
       <div class="flex items-baseline gap-2">
-        <span class="text-sm font-semibold text-primary leading-tight">{{ group.username }}</span>
+        <span
+          cdkOverlayOrigin
+          #authorOrigin="cdkOverlayOrigin"
+          class="text-sm font-semibold leading-tight cursor-pointer hover:underline"
+          [class.text-primary]="!authorColor(group.userId)"
+          [style.color]="authorColor(group.userId)"
+          (click)="openProfile(group, authorOrigin)"
+          >{{ group.username }}</span
+        >
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>
       @for (msg of group.messages; track msg.messageId) {
@@ -188,4 +197,24 @@
   </div>
 </cdk-virtual-scroll-viewport>
 
+}
+
+<!-- Author profile popout (anchored to the clicked name/avatar) -->
+@if (profileGroup(); as group) {
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="profileOrigin()!"
+  [cdkConnectedOverlayOpen]="true"
+  [cdkConnectedOverlayPositions]="profilePositions"
+  [cdkConnectedOverlayHasBackdrop]="false"
+  (overlayOutsideClick)="closeProfile()"
+>
+  <app-user-profile-popout
+    [userId]="group.userId"
+    [guildId]="messageStore.activeGuildId()"
+    [fallbackUsername]="group.username"
+    [fallbackAvatarKey]="group.avatarKey"
+    (close)="closeProfile()"
+  />
+</ng-template>
 }
