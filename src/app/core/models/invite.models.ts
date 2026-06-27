@@ -14,6 +14,7 @@ export interface InvitePreview {
   code: string;
   guildId: string;
   guildName: string;
+  iconKey: string | null;
   memberCount: number;
   channelId: string | null;
 }

@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, computed, signal, viewChild, effect, inject, Injector,
 } from '@angular/core';
+import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
@@ -20,7 +21,9 @@ import { MentionToken, tokenizeMentions } from '../../../shared/util/mention-tok
 import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
 import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
+import { extractInviteCodes } from '../../../shared/util/invite-links';
 import { MessageAttachments } from '../message-attachments/message-attachments';
+import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
 
 export interface MessageGroup {
   userId: string;
@@ -49,6 +52,10 @@ function formatBannerDate(sentAt: number): string {
   return new Date(sentAt).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// The jump banner only appears after a long absence — if the oldest unread is newer than
+// this, you were here recently and don't need a "jump to where you left off" prompt.
+const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+
 @Component({
   selector: 'app-message-list',
   standalone: true,
@@ -56,8 +63,10 @@ function formatBannerDate(sentAt: number): string {
     UiAvatar,
     ScrollingModule,
     FormsModule,
+    NgClass,
     AutofocusEnd,
     MessageAttachments,
+    InviteEmbed,
     OverlayModule,
     MentionAutocomplete,
   ],
@@ -86,6 +95,18 @@ export class MessageList {
 
   protected tokensOf(msg: MessageResponse): MentionToken[] {
     return tokenizeMentions(msg.content, this.knownUsernamesLower());
+  }
+
+  // Invite codes from any full invite links in the message → inline embed cards. Memoized per
+  // message (keyed on content so an edit re-scans) to keep the regex off the change-detection path.
+  private readonly inviteCodeCache = new WeakMap<MessageResponse, { content: string; codes: string[] }>();
+  protected inviteCodesOf(msg: MessageResponse): string[] {
+    if (msg.isDeleted || !msg.content) return [];
+    const cached = this.inviteCodeCache.get(msg);
+    if (cached && cached.content === msg.content) return cached.codes;
+    const codes = extractInviteCodes(msg.content);
+    this.inviteCodeCache.set(msg, { content: msg.content, codes });
+    return codes;
   }
 
   // Inline-edit state: the messageId being edited and its working draft.
@@ -183,6 +204,9 @@ export class MessageList {
     const idx = msgs.length - count;
     const firstUnread = idx >= 0 ? msgs[idx] : msgs[0];
     if (!firstUnread) return null;
+    // Suppress the banner unless you've been away from this channel for a while — gated on
+    // the age of the oldest unread message (a proxy for how long since you last read here).
+    if (Date.now() - firstUnread.sentAt < UNREAD_BANNER_MIN_AGE_MS) return null;
     return {
       count,
       // Only show the date when the boundary message is actually loaded.

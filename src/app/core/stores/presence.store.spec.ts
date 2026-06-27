@@ -49,6 +49,21 @@ describe('PresenceStore', () => {
     expect(store.statusMessageOf('2')).toBe('busy');
   });
 
+  it('loadStatuses() does not let a stale server offline override our own known status', async () => {
+    // Establish our own status first (as initMyStatus would on startup).
+    await TestBed.runInInjectionContext(() => store.initMyStatus()); // preferred: 'online'
+    // A just-connected user's Redis key isn't set yet → the server returns us as offline.
+    presence.getStatuses.mockResolvedValue({
+      me: { status: 'offline', statusMessage: null },
+      '1': { status: 'online', statusMessage: null },
+    });
+
+    await TestBed.runInInjectionContext(() => store.loadStatuses(['me', '1']));
+
+    expect(store.statusOf('me')).toBe('online'); // our own status is preserved
+    expect(store.statusOf('1')).toBe('online');
+  });
+
   it('applyOnline / applyOffline update a user’s status', () => {
     store.applyOnline({ userId: '1', status: 'online' });
     expect(store.statusOf('1')).toBe('online');
@@ -92,5 +107,15 @@ describe('PresenceStore', () => {
 
     expect(store.myStatus()).toBe('away');
     expect(store.myStatusMessage()).toBe('brb');
+  });
+
+  it('initMyStatus() seeds our own effective status into the dot map (masking invisible)', async () => {
+    presence.getMyProfile.mockResolvedValue({ preferredStatus: 'away', statusMessage: null });
+    await TestBed.runInInjectionContext(() => store.initMyStatus());
+    expect(store.statusOf('me')).toBe('away');
+
+    presence.getMyProfile.mockResolvedValue({ preferredStatus: 'invisible', statusMessage: null });
+    await TestBed.runInInjectionContext(() => store.initMyStatus());
+    expect(store.statusOf('me')).toBe('offline'); // invisible is masked in the others'-view map
   });
 });

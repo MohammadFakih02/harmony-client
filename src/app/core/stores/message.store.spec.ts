@@ -270,4 +270,48 @@ describe('MessageStore', () => {
     expect(store.messages()).toEqual([]);
     expect(store.activeChannelId()).toBeNull();
   });
+
+  describe('mention highlights', () => {
+    it('seeds highlights for unread-block messages that mention me', async () => {
+      // newest-first from the API → oldest-first in the store: [1, 2, 3]
+      service.getMessages.mockResolvedValue({
+        messages: [
+          makeMsg({ messageId: '3', mentionIds: ['10'] }), // unread + mentions me
+          makeMsg({ messageId: '2', mentionIds: [] }), // unread, no mention
+          makeMsg({ messageId: '1', mentionIds: ['10'] }), // already read (below boundary)
+        ],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+      store.setUnreadOnOpen(2); // last two (ids 2,3) are unread
+
+      store.seedMentionHighlights();
+
+      expect(store.isMentionHighlight('3')).toBe(true);
+      expect(store.isMentionHighlight('2')).toBe(false);
+      expect(store.isMentionHighlight('1')).toBe(false); // read mention isn't highlighted
+    });
+
+    it('loadMessages clears prior highlights', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '3', mentionIds: ['10'] })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+      store.setUnreadOnOpen(1);
+      store.seedMentionHighlights();
+      expect(store.isMentionHighlight('3')).toBe(true);
+
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '2'));
+      expect(store.isMentionHighlight('3')).toBe(false);
+    });
+
+    it('appendMessage highlights a live message that mentions me, not others', () => {
+      store.appendMessage(makeMsg({ messageId: '20', userId: '99', mentionIds: ['10'] }));
+      store.appendMessage(makeMsg({ messageId: '21', userId: '99', mentionIds: [] }));
+
+      expect(store.isMentionHighlight('20')).toBe(true);
+      expect(store.isMentionHighlight('21')).toBe(false);
+    });
+  });
 });

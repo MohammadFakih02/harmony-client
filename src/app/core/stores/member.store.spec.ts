@@ -18,6 +18,7 @@ describe('MemberStore', () => {
   let service: {
     getMembers: ReturnType<typeof vi.fn>;
     getCapabilities: ReturnType<typeof vi.fn>;
+    getChannelViewers: ReturnType<typeof vi.fn>;
     kick: ReturnType<typeof vi.fn>;
     ban: ReturnType<typeof vi.fn>;
     timeout: ReturnType<typeof vi.fn>;
@@ -34,6 +35,7 @@ describe('MemberStore', () => {
     service = {
       getMembers: vi.fn(),
       getCapabilities: vi.fn().mockResolvedValue(caps),
+      getChannelViewers: vi.fn().mockResolvedValue([]),
       kick: vi.fn().mockResolvedValue(undefined),
       ban: vi.fn().mockResolvedValue(undefined),
       timeout: vi.fn().mockResolvedValue(undefined),
@@ -95,6 +97,25 @@ describe('MemberStore', () => {
 
     expect(store.capabilitiesOf('1')).toEqual(caps);
     expect(service.getCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it('channelViewers() is null until loaded, then returns the cached set (fetched once)', async () => {
+    expect(store.channelViewers('c1')).toBeNull();
+    service.getChannelViewers.mockResolvedValue(['10', '20']);
+
+    await store.loadViewersIfNeeded('1', 'c1');
+    await store.loadViewersIfNeeded('1', 'c1');
+
+    expect(store.channelViewers('c1')).toEqual(['10', '20']);
+    expect(service.getChannelViewers).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves channelViewers() null when the fetch fails (fail open → show everyone)', async () => {
+    service.getChannelViewers.mockRejectedValue(new Error('network error'));
+
+    await store.loadViewersIfNeeded('1', 'c1');
+
+    expect(store.channelViewers('c1')).toBeNull();
   });
 
   it('kick() calls the API then removes the member locally', async () => {

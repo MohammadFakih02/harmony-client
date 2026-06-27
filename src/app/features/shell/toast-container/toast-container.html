@@ -1,0 +1,29 @@
+<div class="fixed bottom-4 right-4 z-70 flex flex-col gap-2 w-72 pointer-events-none">
+  @for (t of toast.toasts(); track t.id) {
+  <div
+    class="pointer-events-auto flex items-start gap-3 p-3 rounded-xl bg-surface shadow-modal border border-border animate-slide-up"
+    [class.cursor-pointer]="t.route"
+    (click)="open(t)"
+  >
+    <div
+      class="w-8 h-8 shrink-0 rounded-full bg-accent/20 text-accent flex items-center justify-center"
+    >
+      <i class="fas {{ t.icon }}"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-semibold text-primary">{{ t.title }}</p>
+      @if (t.body) {
+      <p class="text-xs text-muted truncate-text">{{ t.body }}</p>
+      }
+    </div>
+    <button
+      type="button"
+      class="shrink-0 text-faint hover:text-primary transition-micro"
+      aria-label="Dismiss"
+      (click)="$event.stopPropagation(); toast.dismiss(t.id)"
+    >
+      <i class="fas fa-xmark text-xs"></i>
+    </button>
+  </div>
+  }
+</div>

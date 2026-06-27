@@ -71,7 +71,12 @@
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>
       @for (msg of group.messages; track msg.messageId) {
-      <div class="relative group/msg">
+      <div
+        class="relative group/msg"
+        [ngClass]="messageStore.isMentionHighlight(msg.messageId)
+          ? 'border-l-2 border-warning bg-warning/10 -ml-3 pl-3 rounded-r'
+          : ''"
+      >
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <textarea
@@ -144,6 +149,11 @@
           [guildId]="msg.guildId"
           [channelId]="msg.channelId"
         />
+        }
+
+        <!-- Inline invite cards for any invite links in the message -->
+        @for (code of inviteCodesOf(msg); track code) {
+        <app-invite-embed [code]="code" />
         }
 
         <!-- Hover actions (own message → edit + delete; others → delete with ManageMessages) -->

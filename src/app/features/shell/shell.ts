@@ -18,11 +18,13 @@ import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
+import { ToastContainer } from './toast-container/toast-container';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { RolesModal } from '../guilds/roles-modal/roles-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-shell',
@@ -38,6 +40,7 @@ import { snowflakeToDate } from '../../shared/util/snowflake';
     UiAvatar,
     UiIconButton,
     Lightbox,
+    ToastContainer,
   ],
   templateUrl: './shell.html',
 })
@@ -66,6 +69,11 @@ export class ShellComponent implements OnInit, OnDestroy {
     const guildId = this.activeGuildId();
     return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canManageRoles;
   });
+  // Invite People is gated on CreateInvite (every member has it by default, but a role can deny it).
+  protected readonly canCreateInvite = computed(() => {
+    const guildId = this.activeGuildId();
+    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canCreateInvite;
+  });
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
   protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);
@@ -75,6 +83,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly presenceStore = inject(PresenceStore);
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
+  private readonly toast = inject(ToastService);
 
   // --- Header bar context (guild channel name+topic, or DM peer identity) ---
   protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
@@ -113,6 +122,13 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.memberStore.loadCapabilitiesIfNeeded(guildId);
       this.roleStore.loadIfNeeded(guildId);
     });
+  }
+
+  /** Best-effort `#channel` / DM name for a mention toast — null if that guild isn't loaded. */
+  private resolveChannelName(guildId: string | null, channelId: string): string | null {
+    if (!guildId) return this.dmStore.peerOf(channelId)?.peerUsername ?? null;
+    const channel = this.channelStore.channelsByGuild()[guildId]?.find((c) => c.id === channelId);
+    return channel ? `#${channel.name}` : null;
   }
 
   /** "Member Since" date for the DM profile panel, derived from the peer's snowflake id. */
@@ -176,10 +192,18 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Live notification pushes (mentions, friend requests) → store.
     this.subs.add(client.notificationReceived$.subscribe((p) => {
       this.notificationStore.applyNotificationReceived(p);
-      // A mention in the channel you're already viewing shouldn't ping — record it read
-      // immediately so it lands in history without bumping the badge.
-      if (p.type === 'mention' && p.channelId && p.channelId === this.messageStore.activeChannelId()) {
-        this.notificationStore.markRead(p.id);
+      if (p.type === 'mention' && p.channelId) {
+        // A mention in the channel you're already viewing shouldn't ping — record it read
+        // immediately so it lands in history without bumping the badge.
+        if (p.channelId === this.messageStore.activeChannelId()) {
+          this.notificationStore.markRead(p.id);
+        } else {
+          // Otherwise raise a (aggregating) mention toast that jumps to the message on click.
+          const route = p.guildId
+            ? ['/app/guilds', p.guildId, 'channels', p.channelId]
+            : ['/app/dm', p.channelId];
+          this.toast.pushMention(this.resolveChannelName(p.guildId, p.channelId), route);
+        }
       }
     }));
 
