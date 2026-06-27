@@ -120,6 +120,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       const guildId = this.activeGuildId();
       if (!guildId) return;
       this.memberStore.loadCapabilitiesIfNeeded(guildId);
+      this.memberStore.loadIfNeeded(guildId); // also needed for chat author role colours when the sidebar is closed
       this.roleStore.loadIfNeeded(guildId);
     });
   }
