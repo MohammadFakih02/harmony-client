@@ -45,10 +45,10 @@ export class MemberSidebar implements OnDestroy {
     return guildId ? this.memberStore.capabilitiesOf(guildId) : null;
   });
 
-  /** Whether the caller can run any moderation action (drives the row affordance + bans button). */
+  /** Whether the caller can run any member action (moderation or role assignment) — drives the row menu. */
   protected readonly canModerateAny = computed(() => {
     const c = this.caps();
-    return !!c && (c.canKick || c.canBan || c.canTimeout);
+    return !!c && (c.canKick || c.canBan || c.canTimeout || c.canManageRoles);
   });
 
   protected readonly sortedMembers = computed(() =>
