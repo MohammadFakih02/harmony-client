@@ -36,9 +36,11 @@
 
         <app-notification-bell />
         @if (inGuild()) {
+        @if (canCreateInvite()) {
         <ui-icon-button size="md" label="Invite People" (click)="showInviteModal.set(true)">
           <i class="fas fa-user-plus"></i>
         </ui-icon-button>
+        }
         @if (canManageRoles()) {
         <ui-icon-button size="md" label="Roles" (click)="showRolesModal.set(true)">
           <i class="fas fa-user-shield"></i>
@@ -139,3 +141,6 @@
   }
 </div>
 }
+
+<!-- Transient toasts (mentions, etc.) -->
+<app-toast-container />

@@ -19,6 +19,10 @@ interface MessageState {
   unreadOnOpen: number;
   // Maps server messageId (string) → local tempId (number)
   realIdToTempId: Record<string, number>;
+  // Message ids highlighted as unseen mentions of the current user. Session-scoped: seeded from
+  // the unread block on open, extended by live mentions, and reset when the channel changes
+  // (leave/rejoin). Deliberately NOT cleared by a later message arriving.
+  mentionHighlights: Record<string, true>;
 }
 
 export const MessageStore = signalStore(
@@ -32,6 +36,7 @@ export const MessageStore = signalStore(
     activeGuildId: null,
     unreadOnOpen: 0,
     realIdToTempId: {},
+    mentionHighlights: {},
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
     /**
@@ -76,6 +81,7 @@ export const MessageStore = signalStore(
           degraded: response.degraded,
           isLoading: false,
           realIdToTempId: {},
+          mentionHighlights: {}, // new channel view → clear any prior highlights
         });
       } catch {
         patchState(store, { isLoading: false });
@@ -165,7 +171,15 @@ export const MessageStore = signalStore(
       } else {
         const exists = store.messages().some((m) => m.messageId === msg.messageId);
         if (!exists) {
-          patchState(store, { messages: [...store.messages(), msg] });
+          const myId = auth.currentUser()?.id;
+          // A live message that mentions me lights up until I leave/rejoin the channel.
+          const highlight = myId && msg.mentionIds.includes(myId);
+          patchState(store, {
+            messages: [...store.messages(), msg],
+            ...(highlight
+              ? { mentionHighlights: { ...store.mentionHighlights(), [msg.messageId]: true as const } }
+              : {}),
+          });
         }
       }
     },
@@ -232,12 +246,35 @@ export const MessageStore = signalStore(
         activeGuildId: null,
         unreadOnOpen: 0,
         realIdToTempId: {},
+        mentionHighlights: {},
       });
     },
 
     /** Records how many messages were unread when the channel opened (for the jump banner). */
     setUnreadOnOpen(count: number): void {
       patchState(store, { unreadOnOpen: count });
+    },
+
+    /**
+     * Seeds the unseen-mention highlights from the unread block — the last `unreadOnOpen`
+     * loaded messages that mention me. Call right after a channel's messages load.
+     */
+    seedMentionHighlights(): void {
+      const myId = auth.currentUser()?.id;
+      const unread = store.unreadOnOpen();
+      if (!myId || unread <= 0) return;
+      const msgs = store.messages();
+      const boundary = Math.max(0, msgs.length - unread);
+      const highlights: Record<string, true> = {};
+      for (let i = boundary; i < msgs.length; i++) {
+        if (msgs[i].mentionIds.includes(myId)) highlights[msgs[i].messageId] = true;
+      }
+      patchState(store, { mentionHighlights: highlights });
+    },
+
+    /** Whether a message should render as an unseen mention of the current user. */
+    isMentionHighlight(messageId: string): boolean {
+      return store.mentionHighlights()[messageId] === true;
     },
 
     /** Dismisses the "X new messages" jump banner. */

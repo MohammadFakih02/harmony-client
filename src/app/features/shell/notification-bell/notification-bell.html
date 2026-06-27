@@ -18,15 +18,26 @@
   >
     <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-border-subtle shrink-0">
       <span class="font-semibold text-primary text-sm">Notifications</span>
-      @if (store.unreadCount() > 0) {
-      <button
-        type="button"
-        class="text-xs font-medium text-accent hover:underline"
-        (click)="markAllRead()"
-      >
-        Mark all read
-      </button>
-      }
+      <div class="flex items-center gap-3">
+        @if (store.unreadCount() > 0) {
+        <button
+          type="button"
+          class="text-xs font-medium text-accent hover:underline"
+          (click)="markAllRead()"
+        >
+          Mark all read
+        </button>
+        }
+        @if (store.notifications().length > 0) {
+        <button
+          type="button"
+          class="text-xs font-medium text-faint hover:text-danger hover:underline"
+          (click)="clearAll()"
+        >
+          Clear all
+        </button>
+        }
+      </div>
     </div>
 
     <div class="flex-1 overflow-y-auto">

@@ -1,7 +1,7 @@
 <div class="flex flex-col h-full">
   <div class="px-4 h-12 min-h-12 flex items-center gap-2 border-b border-border-subtle shrink-0">
     <span class="text-xs font-bold uppercase tracking-wider text-faint">
-      Members — {{ members().length }}
+      Members — {{ visibleMembers().length }}
     </span>
     @if (caps()?.canBan) {
     <button
@@ -20,7 +20,7 @@
     <div class="flex justify-center pt-6">
       <i class="fas fa-yin-yang animate-spin text-faint"></i>
     </div>
-    } @else if (members().length === 0) {
+    } @else if (visibleMembers().length === 0) {
     <p class="text-xs text-faint text-center pt-6">No members found.</p>
     } @else {
     @for (row of rows(); track row.member.userId) {

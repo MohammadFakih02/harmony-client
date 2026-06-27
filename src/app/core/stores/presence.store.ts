@@ -50,6 +50,14 @@ export const PresenceStore = signalStore(
           statuses[id] = p.status;
           messages[id] = p.statusMessage;
         }
+        // The current user knows their own status better than a momentary server read: a
+        // just-connected user whose Redis status key isn't set yet comes back 'offline' and
+        // would clobber our own dot. Once initMyStatus has resolved (myStatus != 'offline'),
+        // keep our own known effective status.
+        const myId = auth.currentUser()?.id;
+        if (myId && store.myStatus() !== 'offline') {
+          statuses[myId] = effectiveOf(store.myStatus());
+        }
         patchState(store, {
           statuses: { ...store.statuses(), ...statuses },
           statusMessages: { ...store.statusMessages(), ...messages },
@@ -106,6 +114,7 @@ export const PresenceStore = signalStore(
 
     /** Loads the current user's durable preferred status + custom message on startup. */
     async initMyStatus(): Promise<void> {
+      const myId = auth.currentUser()?.id;
       try {
         const profile = await presence.getMyProfile();
         patchState(store, {
@@ -113,9 +122,17 @@ export const PresenceStore = signalStore(
           myStatusMessage: profile.statusMessage,
           myStatusExpiresAt: profile.preferredStatusExpiresAt,
           myStatusMessageExpiresAt: profile.statusMessageExpiresAt,
+          // Seed our own effective status into the dot map so the member sidebar shows us
+          // online from the start, rather than defaulting to offline until our next change.
+          ...(myId
+            ? { statuses: { ...store.statuses(), [myId]: effectiveOf(profile.preferredStatus) } }
+            : {}),
         });
       } catch {
-        patchState(store, { myStatus: 'online' });
+        patchState(store, {
+          myStatus: 'online',
+          ...(myId ? { statuses: { ...store.statuses(), [myId]: 'online' } } : {}),
+        });
       }
     },
 

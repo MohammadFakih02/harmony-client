@@ -29,6 +29,14 @@ export class MemberService {
     );
   }
 
+  /** Member ids that can ViewChannel the given channel (longs come back as strings). */
+  async getChannelViewers(guildId: string, channelId: string): Promise<string[]> {
+    const raw = await firstValueFrom(
+      this.http.get<string[]>(`${this.base}/guilds/${guildId}/channels/${channelId}/viewers`),
+    );
+    return raw.map(String);
+  }
+
   async getBans(guildId: string): Promise<GuildBan[]> {
     const raw = await firstValueFrom(
       this.http.get<GuildBan[]>(`${this.base}/guilds/${guildId}/members/bans`),

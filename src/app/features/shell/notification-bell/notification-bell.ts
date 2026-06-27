@@ -81,4 +81,8 @@ export class NotificationBell {
   markAllRead(): void {
     this.store.markAllRead();
   }
+
+  clearAll(): void {
+    this.store.clearAll();
+  }
 }

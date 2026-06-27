@@ -1,7 +1,12 @@
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { InviteService } from '../../../core/services/invite.service';
+import { MessageService } from '../../../core/services/message.service';
+import { FriendStore } from '../../../core/stores/friend.store';
+import { DmStore } from '../../../core/stores/dm.store';
 import { Invite } from '../../../core/models/invite.models';
+import { Friend } from '../../../core/models/friend.models';
+import { UiAvatar } from '../../../shared/ui';
 
 interface ExpiryOption {
   label: string;
@@ -19,11 +24,14 @@ interface MaxUsesOption {
 @Component({
   selector: 'app-invite-people-modal',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, UiAvatar],
   templateUrl: './invite-people-modal.html',
 })
 export class InvitePeopleModal implements OnInit {
   private readonly invites = inject(InviteService);
+  private readonly messages = inject(MessageService);
+  protected readonly friendStore = inject(FriendStore);
+  private readonly dmStore = inject(DmStore);
 
   readonly guildId = input.required<string>();
   readonly close = output<void>();
@@ -53,13 +61,63 @@ export class InvitePeopleModal implements OnInit {
   protected readonly expiry = signal<number | null>(604800); // default: 7 days
   protected readonly maxUses = signal<number | null>(null); // default: no limit
 
+  // --- Invite a friend (mint a personal invite + DM it as a link the recipient sees as a card) ---
+  protected readonly friendQuery = signal('');
+  protected readonly invitingFriend = signal<Friend | null>(null); // non-null → the confirm step
+  protected readonly friendExpiry = signal<number | null>(604800); // confirm default: 7 days
+  protected readonly friendMaxUses = signal<number | null>(1); // confirm default: 1 use
+  protected readonly sending = signal(false);
+  protected readonly invitedFriendIds = signal<Set<string>>(new Set()); // show "Sent" per friend
+
+  protected readonly filteredFriends = computed(() => {
+    const q = this.friendQuery().trim().toLowerCase();
+    const friends = this.friendStore.friends();
+    return q ? friends.filter((f) => f.username.toLowerCase().includes(q)) : friends;
+  });
+
   async ngOnInit(): Promise<void> {
+    this.friendStore.load(); // ensure the friend list is available (cheap; shell usually warmed it)
     try {
       this.list.set(await this.invites.listInvites(this.guildId()));
     } catch {
       this.error.set('Could not load existing invites.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /** Opens the send-side confirm step for a friend, reset to the 7-day / 1-use defaults. */
+  openFriendInvite(friend: Friend): void {
+    this.friendExpiry.set(604800);
+    this.friendMaxUses.set(1);
+    this.error.set('');
+    this.invitingFriend.set(friend);
+  }
+
+  cancelFriendInvite(): void {
+    this.invitingFriend.set(null);
+  }
+
+  /** Mints an invite with the confirmed options and DMs it to the friend as a shareable link. */
+  async sendFriendInvite(): Promise<void> {
+    const friend = this.invitingFriend();
+    if (!friend || this.sending()) return;
+    this.sending.set(true);
+    this.error.set('');
+    try {
+      const invite = await this.invites.createInvite(this.guildId(), {
+        maxUses: this.friendMaxUses() ?? undefined,
+        expiresInSeconds: this.friendExpiry() ?? undefined,
+      });
+      const dm = await this.dmStore.open(friend.id);
+      const link = `${window.location.origin}/invite/${invite.code}`;
+      await this.messages.sendMessage(null, dm.channelId, link);
+      this.invitedFriendIds.set(new Set(this.invitedFriendIds()).add(friend.id));
+      this.invitingFriend.set(null);
+    } catch {
+      this.error.set('Could not send the invite.');
+    } finally {
+      this.sending.set(false);
     }
   }
 

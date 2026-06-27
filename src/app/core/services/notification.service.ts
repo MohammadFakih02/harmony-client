@@ -40,4 +40,8 @@ export class NotificationService {
   delete(id: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`${this.base}/notifications/${id}`));
   }
+
+  clearAll(): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/notifications`));
+  }
 }

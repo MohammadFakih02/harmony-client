@@ -8,6 +8,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { MemberStore } from '../../../core/stores/member.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
@@ -40,10 +41,20 @@ export class ChannelSidebar {
   protected readonly theme = inject(ThemeService);
   protected readonly guildStore = inject(GuildStore);
   protected readonly channelStore = inject(ChannelStore);
+  protected readonly memberStore = inject(MemberStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly dmStore = inject(DmStore);
   private readonly router = inject(Router);
+
+  // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
+  // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.
+  protected readonly canManageChannels = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildStore.selectedGuildId() ?? '')?.canManageChannels,
+  );
+  protected readonly canCreateInvite = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildStore.selectedGuildId() ?? '')?.canCreateInvite,
+  );
 
   // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
   protected readonly showLoading = delayedSignal(this.channelStore.loading);
@@ -80,9 +91,12 @@ export class ChannelSidebar {
   protected readonly submitting = signal(false);
   protected readonly error = signal('');
 
-  // Status picker — rendered in a CDK overlay so it isn't clipped by the sidebar's
-  // overflow-hidden. Anchored above the user-deck avatar, aligned to its left edge.
+  // Status picker — two independent CDK overlays (so they escape the sidebar's
+  // overflow-hidden) anchored above the user-deck avatar: a status-select menu and a
+  // separate custom-status editor. Kept separate so picking a status or saving a message
+  // doesn't tear down the other concern's popup.
   protected readonly showStatusMenu = signal(false);
+  protected readonly showCustomStatus = signal(false);
   protected readonly statusOverlayPositions: ConnectionPositionPair[] = [
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
   ];
@@ -152,24 +166,31 @@ export class ChannelSidebar {
     const opening = !this.showStatusMenu();
     if (opening) {
       this.now.set(Date.now()); // fresh reference for the time-left labels
-      // Seed the editor from the current custom status; reset both expiry pickers.
-      this.customDraft.set(this.presenceStore.myStatusMessage() ?? '');
-      this.customExpiry.set(null);
-      this.selectedExpiry.set(null);
+      this.selectedExpiry.set(null); // reset the clear-after applied to the next pick
+      this.showCustomStatus.set(false); // the two popups are mutually exclusive
     }
     this.showStatusMenu.set(opening);
   }
 
-  selectStatus(status: PreferredStatus): void {
+  /** Opens the separate custom-status editor, seeded from the current message. */
+  openCustomStatus(): void {
+    this.now.set(Date.now());
+    this.customDraft.set(this.presenceStore.myStatusMessage() ?? '');
+    this.customExpiry.set(null);
     this.showStatusMenu.set(false);
+    this.showCustomStatus.set(true);
+  }
+
+  selectStatus(status: PreferredStatus): void {
     // Online is the default/revert target, so an expiry on it is meaningless.
+    // Apply without dismissing — the popup stays open so further tweaks don't reopen it.
     this.presenceStore.setMyStatus(status, status === 'online' ? null : this.selectedExpiry());
   }
 
   saveCustomStatus(): void {
     const message = this.customDraft().trim();
     this.presenceStore.setCustomStatus(message || null, message ? this.customExpiry() : null);
-    this.showStatusMenu.set(false);
+    // Keep the editor open — saving shouldn't tear the popup down.
   }
 
   clearCustomStatus(): void {
