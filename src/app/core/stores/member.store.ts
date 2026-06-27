@@ -69,6 +69,18 @@ export const MemberStore = signalStore(
       });
     },
 
+    /** Applies a member's role-assignment change (their full current role-id set). */
+    applyMemberRoleUpdated(guildId: string, userId: string, roleIds: string[]): void {
+      const list = store.byGuild()[guildId];
+      if (!list) return;
+      patchState(store, {
+        byGuild: {
+          ...store.byGuild(),
+          [guildId]: list.map((m) => (m.userId === userId ? { ...m, roleIds } : m)),
+        },
+      });
+    },
+
     // ---- moderation actions (call the API, then update local state) ----
 
     async kick(guildId: string, userId: string): Promise<void> {

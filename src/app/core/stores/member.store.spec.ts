@@ -9,6 +9,7 @@ const makeMember = (overrides: Partial<GuildMember> & { userId: string; username
   isOwner: false,
   joinedAt: 0,
   communicationDisabledUntil: null,
+  roleIds: [],
   ...overrides,
 });
 

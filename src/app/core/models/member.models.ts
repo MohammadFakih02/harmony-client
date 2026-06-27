@@ -8,6 +8,8 @@ export interface GuildMember {
   joinedAt: number;
   /** Unix-ms timeout expiry, or null. A future value means the member is currently timed out. */
   communicationDisabledUntil: number | null;
+  /** Ids of the member's explicitly-assigned roles (excludes the implicit @everyone). */
+  roleIds: string[];
 }
 
 /** The caller's guild-level capabilities (resolved server-side) — drives moderation/management UI. */
