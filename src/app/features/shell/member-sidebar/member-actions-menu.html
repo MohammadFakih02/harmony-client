@@ -28,6 +28,15 @@
     <i class="fas fa-clock w-4 text-faint"></i> Timeout
   </button>
   }
+  @if (caps().canManageRoles) {
+  <button
+    type="button"
+    class="text-left px-2 py-1.5 rounded-md text-sm text-primary hover:bg-surface-3 transition-micro"
+    (click)="view.set('roles')"
+  >
+    <i class="fas fa-user-shield w-4 text-faint"></i> Roles
+  </button>
+  }
   @if (caps().canKick) {
   <button
     type="button"
@@ -61,6 +70,29 @@
     {{ o.label }}
   </button>
   }
+  <button
+    type="button"
+    class="text-left px-2 py-1.5 rounded-md text-xs text-muted hover:bg-surface-3 transition-micro"
+    (click)="view.set('root')"
+  >
+    <i class="fas fa-arrow-left w-4"></i> Back
+  </button>
+  }
+
+  <!-- Role assignment -->
+  @case ('roles') {
+  <div class="px-2 py-1 text-2xs uppercase tracking-wider text-faint">Assign roles</div>
+  <div class="max-h-56 overflow-y-auto flex flex-col gap-0.5">
+    @for (role of assignableRoles(); track role.id) {
+    <label class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 cursor-pointer transition-micro">
+      <input type="checkbox" [checked]="hasRole(role.id)" [disabled]="busy()" (change)="toggleRole(role)" />
+      <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.background]="colorHex(role.color) ?? 'var(--color-faint, #888)'"></span>
+      <span class="text-sm text-primary truncate">{{ role.name }}</span>
+    </label>
+    } @empty {
+    <p class="px-2 py-1.5 text-xs text-faint">No assignable roles. Create one in Roles.</p>
+    }
+  </div>
   <button
     type="button"
     class="text-left px-2 py-1.5 rounded-md text-xs text-muted hover:bg-surface-3 transition-micro"

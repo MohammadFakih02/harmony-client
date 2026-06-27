@@ -39,6 +39,11 @@
         <ui-icon-button size="md" label="Invite People" (click)="showInviteModal.set(true)">
           <i class="fas fa-user-plus"></i>
         </ui-icon-button>
+        @if (canManageRoles()) {
+        <ui-icon-button size="md" label="Roles" (click)="showRolesModal.set(true)">
+          <i class="fas fa-user-shield"></i>
+        </ui-icon-button>
+        }
         <ui-icon-button
           size="md"
           [active]="showMembers()"
@@ -106,6 +111,11 @@
 <!-- Invite People (guild header) -->
 @if (showInviteModal() && activeGuildId(); as guildId) {
 <app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
+}
+
+<!-- Roles management (guild header) -->
+@if (showRolesModal() && activeGuildId(); as guildId) {
+<app-roles-modal [guildId]="guildId" (close)="showRolesModal.set(false)" />
 }
 
 <!-- Connection status banner -->

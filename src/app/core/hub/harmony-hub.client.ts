@@ -14,6 +14,7 @@ import {
   MemberRemovedPayload,
   MemberUpdatedPayload,
 } from '../models/member.models';
+import { MemberRoleUpdatedPayload, Role, RoleDeletedPayload } from '../models/role.models';
 
 export interface MessageEditedEvent {
   messageId: string;
@@ -53,6 +54,9 @@ export class HarmonyHubClient {
   private readonly _memberRemoved = new Subject<MemberRemovedPayload>();
   private readonly _kicked = new Subject<KickedPayload>();
   private readonly _memberUpdated = new Subject<MemberUpdatedPayload>();
+  private readonly _roleUpserted = new Subject<Role>();
+  private readonly _roleDeleted = new Subject<RoleDeletedPayload>();
+  private readonly _memberRoleUpdated = new Subject<MemberRoleUpdatedPayload>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -75,6 +79,11 @@ export class HarmonyHubClient {
   readonly memberRemoved$: Observable<MemberRemovedPayload> = this._memberRemoved.asObservable();
   readonly kicked$: Observable<KickedPayload> = this._kicked.asObservable();
   readonly memberUpdated$: Observable<MemberUpdatedPayload> = this._memberUpdated.asObservable();
+  // RoleCreated + RoleUpdated share one stream — both are upserts into the role list.
+  readonly roleUpserted$: Observable<Role> = this._roleUpserted.asObservable();
+  readonly roleDeleted$: Observable<RoleDeletedPayload> = this._roleDeleted.asObservable();
+  readonly memberRoleUpdated$: Observable<MemberRoleUpdatedPayload> =
+    this._memberRoleUpdated.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -193,6 +202,31 @@ export class HarmonyHubClient {
         communicationDisabledUntil:
           p.communicationDisabledUntil != null ? Number(p.communicationDisabledUntil) : null,
       }));
+
+    this.connection.on('RoleCreated', (r: Role) => this._roleUpserted.next(this.coerceRole(r)));
+    this.connection.on('RoleUpdated', (r: Role) => this._roleUpserted.next(this.coerceRole(r)));
+
+    this.connection.on('RoleDeleted', (p: { guildId: unknown; roleId: unknown }) =>
+      this._roleDeleted.next({ guildId: String(p.guildId), roleId: String(p.roleId) }));
+
+    this.connection.on('MemberRoleUpdated', (p: {
+      guildId: unknown; userId: unknown; roleIds: unknown[];
+    }) =>
+      this._memberRoleUpdated.next({
+        guildId: String(p.guildId),
+        userId: String(p.userId),
+        roleIds: (p.roleIds ?? []).map(String),
+      }));
+  }
+
+  /** Coerce a role pushed over SignalR: id/guildId as strings, permissionBits (long-as-string) to a number. */
+  private coerceRole(r: Role): Role {
+    return {
+      ...r,
+      id: String(r.id),
+      guildId: String(r.guildId),
+      permissionBits: Number(r.permissionBits),
+    };
   }
 
   /** Coerce the Snowflake id to a string (SignalR may deliver it as a number). */

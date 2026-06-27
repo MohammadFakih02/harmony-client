@@ -19,6 +19,7 @@ export class MemberService {
       joinedAt: Number(m.joinedAt),
       communicationDisabledUntil:
         m.communicationDisabledUntil == null ? null : Number(m.communicationDisabledUntil),
+      roleIds: (m.roleIds ?? []).map(String),
     }));
   }
 

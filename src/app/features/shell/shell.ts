@@ -10,6 +10,7 @@ import { MessageStore } from '../../core/stores/message.store';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { MemberStore } from '../../core/stores/member.store';
+import { RoleStore } from '../../core/stores/role.store';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
 import { NotificationStore } from '../../core/stores/notification.store';
@@ -18,6 +19,7 @@ import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
+import { RolesModal } from '../guilds/roles-modal/roles-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
@@ -32,6 +34,7 @@ import { snowflakeToDate } from '../../shared/util/snowflake';
     MemberSidebar,
     NotificationBell,
     InvitePeopleModal,
+    RolesModal,
     UiAvatar,
     UiIconButton,
     Lightbox,
@@ -56,7 +59,13 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly inDm = computed(() => this.url().includes('/dm/'));
   // Invite People modal (guild header) — keyed to the currently-selected guild.
   protected readonly showInviteModal = signal(false);
+  // Roles management modal (guild header) — gated on ManageRoles.
+  protected readonly showRolesModal = signal(false);
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
+  protected readonly canManageRoles = computed(() => {
+    const guildId = this.activeGuildId();
+    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canManageRoles;
+  });
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
   protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);
@@ -65,6 +74,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly memberStore = inject(MemberStore);
+  private readonly roleStore = inject(RoleStore);
 
   // --- Header bar context (guild channel name+topic, or DM peer identity) ---
   protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
@@ -93,6 +103,15 @@ export class ShellComponent implements OnInit, OnDestroy {
     effect(() => {
       const channelId = this.messageStore.activeChannelId();
       if (channelId) this.notificationStore.markChannelMentionsRead(channelId);
+    });
+
+    // Ensure guild-level capabilities + roles are loaded for the active guild (the header's Roles
+    // button and the role-coloring UI need these even when the member sidebar is closed).
+    effect(() => {
+      const guildId = this.activeGuildId();
+      if (!guildId) return;
+      this.memberStore.loadCapabilitiesIfNeeded(guildId);
+      this.roleStore.loadIfNeeded(guildId);
     });
   }
 
@@ -171,6 +190,14 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.add(client.memberUpdated$.subscribe((p) =>
       this.memberStore.applyMemberUpdated(p.guildId, p.userId, p.communicationDisabledUntil)));
     this.subs.add(client.kicked$.subscribe((p) => this.handleKicked(p.guildId)));
+
+    // Role events → stores. RoleCreated/Updated upsert; deletes prune; member-role changes patch
+    // the affected member's role-id set (drives role-derived UI like colors/badges).
+    this.subs.add(client.roleUpserted$.subscribe((r) => this.roleStore.applyRoleUpserted(r)));
+    this.subs.add(client.roleDeleted$.subscribe((p) =>
+      this.roleStore.applyRoleDeleted(p.guildId, p.roleId)));
+    this.subs.add(client.memberRoleUpdated$.subscribe((p) =>
+      this.memberStore.applyMemberRoleUpdated(p.guildId, p.userId, p.roleIds)));
 
     client.onReconnected(() => this.rejoinGroups());
 
