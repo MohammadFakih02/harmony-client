@@ -19,6 +19,7 @@ import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
+import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { RolesModal } from '../guilds/roles-modal/roles-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
@@ -41,6 +42,7 @@ import { ToastService } from '../../core/services/toast.service';
     UiIconButton,
     Lightbox,
     ToastContainer,
+    UserProfileModal,
   ],
   templateUrl: './shell.html',
 })

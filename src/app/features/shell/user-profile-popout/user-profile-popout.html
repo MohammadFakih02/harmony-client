@@ -51,15 +51,24 @@
     </div>
     }
 
-    <!-- Message action (not for yourself) -->
-    @if (!isSelf()) {
-    <button
-      type="button"
-      class="mt-4 w-full px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
-      (click)="message()"
-    >
-      <i class="fas fa-message mr-1.5"></i> Message
-    </button>
-    }
+    <!-- Actions -->
+    <div class="mt-4 flex flex-col gap-1.5">
+      @if (!isSelf()) {
+      <button
+        type="button"
+        class="w-full px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
+        (click)="message()"
+      >
+        <i class="fas fa-message mr-1.5"></i> Message
+      </button>
+      }
+      <button
+        type="button"
+        class="w-full px-3 py-1.5 rounded-md text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="viewFullProfile()"
+      >
+        View Full Profile
+      </button>
+    </div>
   </div>
 </div>
