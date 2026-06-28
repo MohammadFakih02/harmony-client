@@ -6,6 +6,7 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { AuthService } from '../../../core/services/auth.service';
+import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { snowflakeToDate } from '../../../shared/util/snowflake';
@@ -35,6 +36,7 @@ export class UserProfilePopout {
   private readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
   private readonly auth = inject(AuthService);
+  private readonly profileModal = inject(ProfileModalService);
   private readonly router = inject(Router);
 
   private readonly member = computed(() => {
@@ -76,5 +78,10 @@ export class UserProfilePopout {
     const dm = await this.dmStore.open(this.userId());
     this.close.emit();
     await this.router.navigate(['/app/dm', dm.channelId]);
+  }
+
+  viewFullProfile(): void {
+    this.profileModal.open(this.userId(), this.guildId());
+    this.close.emit();
   }
 }
