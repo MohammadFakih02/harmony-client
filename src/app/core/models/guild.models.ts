@@ -7,4 +7,8 @@ export interface GuildSummary {
   memberCount: number;
   isPublic: boolean;
   ownerId: string;
+  // Welcome / system-message config (roadmap E#16). welcomeChannelId null = default text channel.
+  welcomeChannelId: string | null;
+  welcomeMessage: string | null;
+  systemMessagesEnabled: boolean;
 }

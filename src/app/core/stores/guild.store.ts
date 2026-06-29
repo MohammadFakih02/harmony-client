@@ -47,5 +47,12 @@ export const GuildStore = signalStore(
       patchState(store, { guilds: [...store.guilds(), guild] });
       return guild;
     },
+
+    /** Replace a guild in local state after an update (Overview/Welcome edit). No-op if unknown. */
+    applyGuildUpdate(guild: GuildSummary): void {
+      patchState(store, {
+        guilds: store.guilds().map((g) => (g.id === guild.id ? guild : g)),
+      });
+    },
   })),
 );

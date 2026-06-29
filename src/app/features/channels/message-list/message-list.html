@@ -54,10 +54,16 @@
   [maxBufferPx]="1280"
   class="flex-1 min-h-0"
 >
-  <div
-    *cdkVirtualFor="let group of messageGroups(); trackBy: trackGroup"
-    class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro animate-message-in"
-  >
+  <div *cdkVirtualFor="let group of messageGroups(); trackBy: trackGroup" class="animate-message-in">
+    @if (group.isSystem) {
+    <div class="flex items-center gap-2 px-4 py-1 text-xs text-muted">
+      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ authorName(group) }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
+      </span>
+    </div>
+    } @else {
+    <div class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro">
     <ui-avatar
       [src]="group.avatarKey"
       [alt]="group.username"
@@ -194,6 +200,8 @@
       </div>
       }
     </div>
+    </div>
+    }
   </div>
 </cdk-virtual-scroll-viewport>
 

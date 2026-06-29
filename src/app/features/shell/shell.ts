@@ -147,6 +147,12 @@ export class ShellComponent implements OnInit, OnDestroy {
     return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   }
 
+  /** Opens the full-screen guild settings overlay for the active guild (open to every member). */
+  protected openGuildSettings(): void {
+    const guildId = this.activeGuildId();
+    if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  }
+
   async ngOnInit(): Promise<void> {
     // Load guilds and connect in parallel; guild data must be ready before joining groups
     const [client] = await Promise.all([
