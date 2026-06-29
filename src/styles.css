@@ -426,6 +426,24 @@ html.theme-forest {
   transition: none !important;
 }
 
+/* Compact message display (Appearance > Message Display). The host `.compact` class is
+   added to <app-message-list> when the setting is "compact" — tightens the row rhythm. */
+app-message-list.compact .group {
+  padding-top: 0.0625rem;
+  padding-bottom: 0.0625rem;
+}
+
+/* Accessibility — Reduced Motion (settings toggle adds `.reduce-motion` to <html>).
+   Neutralises non-essential animations/transitions app-wide. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* ============================================================
    Base
    ============================================================ */
@@ -444,7 +462,8 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  font-size: 15px;
+  /* Base size scaled by the Appearance > Font Scale setting (--app-font-scale, default 1). */
+  font-size: calc(15px * var(--app-font-scale, 1));
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

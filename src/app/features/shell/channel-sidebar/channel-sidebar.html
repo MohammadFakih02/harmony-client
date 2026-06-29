@@ -373,7 +373,7 @@
       >
         <i class="fas" [class.fa-sun]="theme.isDark()" [class.fa-moon]="!theme.isDark()"></i>
       </ui-icon-button>
-      <ui-icon-button size="md" hover="surface-3" label="User Settings">
+      <ui-icon-button size="md" hover="surface-3" label="User Settings" (click)="openSettings()">
         <i class="fas fa-gear"></i>
       </ui-icon-button>
     </div>

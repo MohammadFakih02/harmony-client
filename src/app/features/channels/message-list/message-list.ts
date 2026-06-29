@@ -13,6 +13,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
+import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { memberColor } from '../../../core/models/role.models';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
@@ -75,11 +76,17 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     OverlayModule,
     MentionAutocomplete,
   ],
-  host: { class: 'flex flex-col min-h-0 h-full relative' },
+  host: {
+    class: 'flex flex-col min-h-0 h-full relative',
+    '[class.compact]': 'isCompact()',
+  },
   templateUrl: './message-list.html',
 })
 export class MessageList {
   protected readonly messageStore = inject(MessageStore);
+  private readonly localSettings = inject(LocalSettingsStore);
+  /** Drives the compact host class — denser message rows (Appearance > Message Display). */
+  protected readonly isCompact = computed(() => this.localSettings.messageDisplay() === 'compact');
   private readonly channelStore = inject(ChannelStore);
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);

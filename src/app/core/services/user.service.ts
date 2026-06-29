@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { NotificationActor } from '../models/notification.models';
-import { MyEditableProfile, PublicUserProfile } from '../models/user.models';
+import { DmPrivacy, MyEditableProfile, PublicUserProfile } from '../models/user.models';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
@@ -27,5 +27,12 @@ export class UserService {
   /** Updates the current user's profile. Omitted fields are left unchanged; "" clears the DOB. */
   updateProfile(patch: { bio?: string; dateOfBirth?: string }): Promise<unknown> {
     return firstValueFrom(this.http.patch(`${this.base}/users/me`, patch));
+  }
+
+  /** Sets who may open a new DM with the current user. */
+  updateDmPrivacy(dmPrivacy: DmPrivacy): Promise<MyEditableProfile> {
+    return firstValueFrom(
+      this.http.patch<MyEditableProfile>(`${this.base}/users/me/dm-privacy`, { dmPrivacy }),
+    );
   }
 }
