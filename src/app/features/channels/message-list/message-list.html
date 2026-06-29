@@ -75,7 +75,7 @@
           [class.text-primary]="!authorColor(group.userId)"
           [style.color]="authorColor(group.userId)"
           (click)="openProfile(group, authorOrigin)"
-          >{{ group.username }}</span
+          >{{ authorName(group) }}</span
         >
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>

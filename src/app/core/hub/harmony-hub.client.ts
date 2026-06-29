@@ -194,11 +194,12 @@ export class HarmonyHubClient {
       this._kicked.next({ guildId: String(p.guildId), reason: p.reason ?? null, banned: p.banned }));
 
     this.connection.on('MemberUpdated', (p: {
-      guildId: unknown; userId: unknown; communicationDisabledUntil: unknown;
+      guildId: unknown; userId: unknown; nickname: unknown; communicationDisabledUntil: unknown;
     }) =>
       this._memberUpdated.next({
         guildId: String(p.guildId),
         userId: String(p.userId),
+        nickname: p.nickname != null ? String(p.nickname) : null,
         communicationDisabledUntil:
           p.communicationDisabledUntil != null ? Number(p.communicationDisabledUntil) : null,
       }));

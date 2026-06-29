@@ -78,30 +78,31 @@ export const MemberStore = signalStore(
       });
     },
 
-    /** Applies a member's timeout change (set/cleared) to local state. */
-    applyMemberUpdated(guildId: string, userId: string, until: number | null): void {
+    /** Applies a partial update to a cached member (shared by timeout/nickname/role updaters). */
+    patchMember(guildId: string, userId: string, patch: Partial<GuildMember>): void {
       const list = store.byGuild()[guildId];
       if (!list) return;
       patchState(store, {
         byGuild: {
           ...store.byGuild(),
-          [guildId]: list.map((m) =>
-            m.userId === userId ? { ...m, communicationDisabledUntil: until } : m,
-          ),
+          [guildId]: list.map((m) => (m.userId === userId ? { ...m, ...patch } : m)),
         },
       });
     },
 
+    /** Applies a member's timeout change (set/cleared) to local state. */
+    applyMemberUpdated(guildId: string, userId: string, until: number | null): void {
+      this.patchMember(guildId, userId, { communicationDisabledUntil: until });
+    },
+
+    /** Applies a member's nickname change to local state (SignalR or own optimistic update). */
+    applyMemberNickname(guildId: string, userId: string, nickname: string | null): void {
+      this.patchMember(guildId, userId, { nickname });
+    },
+
     /** Applies a member's role-assignment change (their full current role-id set). */
     applyMemberRoleUpdated(guildId: string, userId: string, roleIds: string[]): void {
-      const list = store.byGuild()[guildId];
-      if (!list) return;
-      patchState(store, {
-        byGuild: {
-          ...store.byGuild(),
-          [guildId]: list.map((m) => (m.userId === userId ? { ...m, roleIds } : m)),
-        },
-      });
+      this.patchMember(guildId, userId, { roleIds });
     },
 
     // ---- moderation actions (call the API, then update local state) ----
@@ -124,6 +125,18 @@ export const MemberStore = signalStore(
     async clearTimeout(guildId: string, userId: string): Promise<void> {
       await service.clearTimeout(guildId, userId);
       this.applyMemberUpdated(guildId, userId, null);
+    },
+
+    /** Set your own server nickname (blank clears). Optimistically patches the cached member. */
+    async setOwnNickname(guildId: string, myUserId: string, nickname: string | null): Promise<void> {
+      await service.setOwnNickname(guildId, nickname);
+      this.applyMemberNickname(guildId, myUserId, nickname);
+    },
+
+    /** Rename another member (ManageNicknames). Optimistically patches the cached member. */
+    async setNickname(guildId: string, userId: string, nickname: string | null): Promise<void> {
+      await service.setNickname(guildId, userId, nickname);
+      this.applyMemberNickname(guildId, userId, nickname);
     },
   })),
 );

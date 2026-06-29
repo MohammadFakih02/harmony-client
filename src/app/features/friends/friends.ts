@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { NicknameStore } from '../../core/stores/nickname.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import { UiAvatar } from '../../shared/ui';
@@ -21,7 +22,13 @@ export class Friends {
   protected readonly friendStore = inject(FriendStore);
   protected readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
   private readonly router = inject(Router);
+
+  /** Friend display name: the caller's private nickname ?? the friend's username. */
+  protected friendName(id: string, username: string): string {
+    return this.nicknameStore.nicknameOf(id) ?? username;
+  }
 
   protected readonly tab = signal<FriendsTab>('all');
 
