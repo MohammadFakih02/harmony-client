@@ -43,6 +43,13 @@ export const routes: Routes = [
           import('./features/channels/channel').then(m => m.Channel),
       },
       {
+        // Full-screen guild settings overlay — must precede `guilds/:guildId` so the more
+        // specific path wins.
+        path: 'guilds/:guildId/settings',
+        loadComponent: () =>
+          import('./features/guild-settings/guild-settings').then(m => m.GuildSettings),
+      },
+      {
         path: 'guilds/:guildId',
         loadComponent: () =>
           import('./features/guilds/guild').then(m => m.Guild),

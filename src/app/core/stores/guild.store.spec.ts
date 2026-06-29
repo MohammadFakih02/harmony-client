@@ -12,6 +12,9 @@ const makeGuild = (id: string, name: string): GuildSummary => ({
   memberCount: 1,
   isPublic: false,
   ownerId: '1',
+  welcomeChannelId: null,
+  welcomeMessage: null,
+  systemMessagesEnabled: true,
 });
 
 describe('GuildStore', () => {
