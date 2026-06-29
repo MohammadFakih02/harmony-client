@@ -5,6 +5,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { roleColorHex } from '../../../core/models/role.models';
@@ -35,6 +36,7 @@ export class UserProfilePopout {
   private readonly roleStore = inject(RoleStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
   private readonly auth = inject(AuthService);
   private readonly profileModal = inject(ProfileModalService);
   private readonly router = inject(Router);
@@ -45,8 +47,12 @@ export class UserProfilePopout {
   });
 
   protected readonly username = computed(() => this.member()?.username ?? this.fallbackUsername());
-  protected readonly displayName = computed(() => this.member()?.nickname ?? this.username());
-  protected readonly hasNickname = computed(() => !!this.member()?.nickname);
+  // In a guild the server nickname is the display name; in a DM the caller's private friend nickname is.
+  protected readonly displayName = computed(() => {
+    if (this.guildId()) return this.member()?.nickname ?? this.username();
+    return this.nicknameStore.nicknameOf(this.userId()) ?? this.username();
+  });
+  protected readonly hasNickname = computed(() => this.displayName() !== this.username());
   protected readonly avatarKey = computed(() => this.member()?.avatarKey ?? this.fallbackAvatarKey());
   protected readonly isOwner = computed(() => this.member()?.isOwner ?? false);
   protected readonly isSelf = computed(() => this.userId() === this.auth.currentUser()?.id);

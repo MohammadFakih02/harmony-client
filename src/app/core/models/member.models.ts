@@ -23,6 +23,7 @@ export interface GuildCapabilities {
   canBan: boolean;
   canTimeout: boolean;
   canViewAuditLog: boolean;
+  canManageNicknames: boolean;
 }
 
 /** A guild ban row, enriched with banned-user + banning-moderator identity. */
@@ -49,10 +50,12 @@ export interface KickedPayload {
   banned: boolean;
 }
 
-/** SignalR: a member's moderation state changed (timeout set/cleared). */
+/** SignalR: a member's guild-level state changed (timeout set/cleared, or server nickname changed).
+ *  Carries the member's full mutable state so applying one field never clobbers the other. */
 export interface MemberUpdatedPayload {
   guildId: string;
   userId: string;
+  nickname: string | null;
   communicationDisabledUntil: number | null;
 }
 

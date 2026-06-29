@@ -153,7 +153,7 @@
           [status]="dmAvatarStatus(dm.peerId)"
           size="sm"
         />
-        <span class="flex-1 truncate-text">{{ dm.peerUsername }}</span>
+        <span class="flex-1 truncate-text">{{ dmName(dm.peerId, dm.peerUsername) }}</span>
         @if (unread > 0) {
         <span
           class="shrink-0 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"

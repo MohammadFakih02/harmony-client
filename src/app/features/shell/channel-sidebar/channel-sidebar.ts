@@ -12,6 +12,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
 import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
@@ -45,7 +46,13 @@ export class ChannelSidebar {
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly dmStore = inject(DmStore);
+  protected readonly nicknameStore = inject(NicknameStore);
   private readonly router = inject(Router);
+
+  /** DM display name: the caller's private friend nickname ?? the peer's username. */
+  protected dmName(peerId: string, peerUsername: string): string {
+    return this.nicknameStore.nicknameOf(peerId) ?? peerUsername;
+  }
 
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
   // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.
