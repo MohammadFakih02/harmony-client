@@ -37,7 +37,11 @@ export interface MessageGroup {
   firstMessageId: string;
   timestamp: string;
   messages: MessageResponse[];
+  // System notices (e.g. member-join) render as standalone centered lines, never as a user burst.
+  isSystem: boolean;
 }
+
+const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system']);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
@@ -137,6 +141,12 @@ export class MessageList {
     return this.nicknameStore.nicknameOf(group.userId) ?? group.username;
   }
 
+  /** The optional admin greeting carried by a system (member-join) message; null when blank. */
+  protected systemGreeting(group: MessageGroup): string | null {
+    const content = group.messages[0]?.content?.trim();
+    return content ? content : null;
+  }
+
   /** Role colour for a message author's name — their highest coloured role in this guild (null in DMs). */
   protected authorColor(userId: string): string | null {
     const guildId = this.messageStore.activeGuildId();
@@ -219,12 +229,14 @@ export class MessageList {
     const groups: MessageGroup[] = [];
 
     for (const msg of msgs) {
+      const isSystem = SYSTEM_MESSAGE_TYPES.has(msg.messageType);
       const last = groups[groups.length - 1];
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg ? msg.sentAt - lastMsg.sentAt : Infinity;
-      const sameUser = last && last.userId === msg.userId && !msg.failed;
+      // A system notice is always its own group; it never merges with (or accepts) a user burst.
+      const sameUser = last && !last.isSystem && last.userId === msg.userId && !msg.failed;
 
-      if (sameUser && gap < GROUP_BREAK_MS) {
+      if (!isSystem && sameUser && gap < GROUP_BREAK_MS) {
         last.messages.push(msg);
       } else {
         groups.push({
@@ -234,6 +246,7 @@ export class MessageList {
           firstMessageId: msg.messageId,
           timestamp: formatMessageTime(msg.sentAt),
           messages: [msg],
+          isSystem,
         });
       }
     }
