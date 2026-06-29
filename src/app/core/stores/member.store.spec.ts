@@ -23,12 +23,15 @@ describe('MemberStore', () => {
     ban: ReturnType<typeof vi.fn>;
     timeout: ReturnType<typeof vi.fn>;
     clearTimeout: ReturnType<typeof vi.fn>;
+    setOwnNickname: ReturnType<typeof vi.fn>;
+    setNickname: ReturnType<typeof vi.fn>;
   };
 
   const caps = {
     canManageGuild: false, canManageChannels: false, canManageRoles: false,
     canCreateInvite: true, canManageInvites: false,
     canKick: true, canBan: true, canTimeout: true, canViewAuditLog: false,
+    canManageNicknames: false,
   };
 
   beforeEach(() => {
@@ -40,6 +43,8 @@ describe('MemberStore', () => {
       ban: vi.fn().mockResolvedValue(undefined),
       timeout: vi.fn().mockResolvedValue(undefined),
       clearTimeout: vi.fn().mockResolvedValue(undefined),
+      setOwnNickname: vi.fn().mockResolvedValue(undefined),
+      setNickname: vi.fn().mockResolvedValue(undefined),
     };
     TestBed.configureTestingModule({
       providers: [MemberStore, { provide: MemberService, useValue: service }],
@@ -164,5 +169,40 @@ describe('MemberStore', () => {
 
     expect(store.membersOf('1').find((m) => m.userId === '10')!.communicationDisabledUntil).toBeNull();
     expect(store.membersOf('1').find((m) => m.userId === '20')!.communicationDisabledUntil).toBe(12345);
+  });
+
+  it('setOwnNickname() calls the API then patches the member nickname', async () => {
+    service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
+    await store.loadIfNeeded('1');
+
+    await store.setOwnNickname('1', '10', 'Ace');
+
+    expect(service.setOwnNickname).toHaveBeenCalledWith('1', 'Ace');
+    expect(store.membersOf('1')[0].nickname).toBe('Ace');
+  });
+
+  it('setNickname() renames another member locally after the API call', async () => {
+    service.getMembers.mockResolvedValue([
+      makeMember({ userId: '10', username: 'alice' }),
+      makeMember({ userId: '20', username: 'bob' }),
+    ]);
+    await store.loadIfNeeded('1');
+
+    await store.setNickname('1', '20', 'Bobby');
+
+    expect(service.setNickname).toHaveBeenCalledWith('1', '20', 'Bobby');
+    expect(store.membersOf('1').find((m) => m.userId === '20')!.nickname).toBe('Bobby');
+    expect(store.membersOf('1').find((m) => m.userId === '10')!.nickname).toBeNull();
+  });
+
+  it('patchMember() applies nickname + timeout together without clobbering', async () => {
+    service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
+    await store.loadIfNeeded('1');
+
+    store.patchMember('1', '10', { nickname: 'Ace', communicationDisabledUntil: 999 });
+
+    const m = store.membersOf('1')[0];
+    expect(m.nickname).toBe('Ace');
+    expect(m.communicationDisabledUntil).toBe(999);
   });
 });

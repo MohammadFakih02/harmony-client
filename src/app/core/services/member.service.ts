@@ -75,4 +75,20 @@ export class MemberService {
       this.http.delete<void>(`${this.base}/guilds/${guildId}/members/${userId}/timeout`),
     );
   }
+
+  /** Set your OWN server nickname in a guild (blank clears it back to the username). */
+  setOwnNickname(guildId: string, nickname: string | null): Promise<void> {
+    return firstValueFrom(
+      this.http.patch<void>(`${this.base}/guilds/${guildId}/members/me/nickname`, { nickname }),
+    );
+  }
+
+  /** Rename another member (requires ManageNicknames; enforced server-side). */
+  setNickname(guildId: string, userId: string, nickname: string | null): Promise<void> {
+    return firstValueFrom(
+      this.http.patch<void>(`${this.base}/guilds/${guildId}/members/${userId}/nickname`, {
+        nickname,
+      }),
+    );
+  }
 }

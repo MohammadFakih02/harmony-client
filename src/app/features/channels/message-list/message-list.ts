@@ -12,6 +12,7 @@ import { ChannelStore } from '../../../core/stores/channel.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
 import { memberColor } from '../../../core/models/role.models';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
@@ -83,6 +84,7 @@ export class MessageList {
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
   private readonly messageService = inject(MessageService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
@@ -112,6 +114,20 @@ export class MessageList {
     const codes = extractInviteCodes(msg.content);
     this.inviteCodeCache.set(msg, { content: msg.content, codes });
     return codes;
+  }
+
+  /**
+   * Display name for a message author: in a guild, their server nickname ?? username; in a DM, the
+   * caller's private friend nickname ?? username. (Server and friend nicknames never overlap — a
+   * guild uses the server one, a DM uses the friend one.)
+   */
+  protected authorName(group: MessageGroup): string {
+    const guildId = this.messageStore.activeGuildId();
+    if (guildId) {
+      const member = this.memberStore.membersOf(guildId).find((m) => m.userId === group.userId);
+      return member?.nickname ?? group.username;
+    }
+    return this.nicknameStore.nicknameOf(group.userId) ?? group.username;
   }
 
   /** Role colour for a message author's name — their highest coloured role in this guild (null in DMs). */

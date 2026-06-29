@@ -13,6 +13,7 @@ import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { NicknameStore } from '../../core/stores/nickname.store';
 import { NotificationStore } from '../../core/stores/notification.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
@@ -101,8 +102,14 @@ export class ShellComponent implements OnInit, OnDestroy {
     const peer = this.dmPeer();
     return peer ? this.presenceStore.statusMessageOf(peer.peerId) : null;
   });
+  // DM display name: the caller's private friend nickname ?? the peer's username.
+  protected readonly dmPeerName = computed(() => {
+    const peer = this.dmPeer();
+    return peer ? (this.nicknameStore.nicknameOf(peer.peerId) ?? peer.peerUsername) : null;
+  });
   private readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
   private readonly notificationStore = inject(NotificationStore);
   private readonly idle = inject(IdleService);
 
@@ -150,6 +157,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.presenceStore.initMyStatus();
     this.friendStore.load();
     this.dmStore.load();
+    this.nicknameStore.load();
     this.notificationStore.load();
 
     if (!client) return;
@@ -214,8 +222,13 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Kicked reaches only the affected user, so any emission means *we* were removed.
     this.subs.add(client.memberRemoved$.subscribe((p) =>
       this.memberStore.removeMember(p.guildId, p.userId)));
+    // The payload carries the member's full mutable state — apply both fields so neither clobbers
+    // the other (a nickname change and a timeout change share this one event).
     this.subs.add(client.memberUpdated$.subscribe((p) =>
-      this.memberStore.applyMemberUpdated(p.guildId, p.userId, p.communicationDisabledUntil)));
+      this.memberStore.patchMember(p.guildId, p.userId, {
+        nickname: p.nickname,
+        communicationDisabledUntil: p.communicationDisabledUntil,
+      })));
     this.subs.add(client.kicked$.subscribe((p) => this.handleKicked(p.guildId)));
 
     // Role events → stores. RoleCreated/Updated upsert; deletes prune; member-role changes patch

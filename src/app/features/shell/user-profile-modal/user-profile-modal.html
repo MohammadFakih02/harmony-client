@@ -89,6 +89,97 @@
           <p class="text-sm text-muted">{{ since }}</p>
         </div>
         }
+
+        <!-- Server nickname (guild-scoped: self, or a mod with ManageNicknames) -->
+        @if (canEditServerNick()) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Server Nickname</p>
+          @if (editingServerNick()) {
+          <div class="flex gap-1.5 mt-1">
+            <input
+              type="text"
+              maxlength="32"
+              placeholder="Nickname"
+              class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="serverNickDraft()"
+              (ngModelChange)="serverNickDraft.set($event)"
+            />
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+              [disabled]="savingServerNick()"
+              (click)="saveServerNick()"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="editingServerNick.set(false)"
+            >
+              Cancel
+            </button>
+          </div>
+          } @else {
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-muted truncate">{{ serverNickname() ?? 'None' }}</p>
+            <button
+              type="button"
+              class="ml-auto text-xs text-accent hover:underline shrink-0"
+              (click)="startServerNickEdit()"
+            >
+              <i class="fas fa-pen mr-1"></i>Edit
+            </button>
+          </div>
+          }
+        </div>
+        }
+
+        <!-- Friend nickname (private, only you see it; for anyone but yourself) -->
+        @if (!isSelf()) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Nickname</p>
+          @if (editingFriendNick()) {
+          <div class="flex gap-1.5 mt-1">
+            <input
+              type="text"
+              maxlength="32"
+              placeholder="Add a nickname"
+              class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="friendNickDraft()"
+              (ngModelChange)="friendNickDraft.set($event)"
+            />
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+              [disabled]="savingFriendNick()"
+              (click)="saveFriendNick()"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="editingFriendNick.set(false)"
+            >
+              Cancel
+            </button>
+          </div>
+          } @else {
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-muted truncate">{{ friendNickname() ?? 'None' }}</p>
+            <button
+              type="button"
+              class="ml-auto text-xs text-accent hover:underline shrink-0"
+              (click)="startFriendNickEdit()"
+            >
+              <i class="fas fa-pen mr-1"></i>Edit
+            </button>
+          </div>
+          }
+          <p class="text-2xs text-faint mt-1">Only you can see this nickname.</p>
+        </div>
+        }
       </div>
 
       <div class="mt-4 flex gap-2">
