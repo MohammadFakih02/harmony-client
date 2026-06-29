@@ -213,6 +213,10 @@ export class ChannelSidebar {
     this.theme.toggle();
   }
 
+  openSettings(): void {
+    void this.router.navigate(['/app/settings']);
+  }
+
   openCreateChannel(): void {
     this.channelName.set('');
     this.channelType.set('text');

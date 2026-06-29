@@ -31,6 +31,12 @@ export const routes: Routes = [
           import('./features/friends/friends').then(m => m.Friends),
       },
       {
+        // Full-screen settings overlay — covers the window via a fixed-inset panel.
+        path: 'settings',
+        loadComponent: () =>
+          import('./features/settings/settings').then(m => m.Settings),
+      },
+      {
         // Direct messages reuse the Channel view with no parent guildId (DM mode).
         path: 'dm/:channelId',
         loadComponent: () =>
