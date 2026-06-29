@@ -1,0 +1,51 @@
+<div class="fixed inset-0 z-50 flex bg-bg select-none">
+  <!-- Nav rail -->
+  <nav class="flex w-60 min-w-60 flex-col overflow-y-auto bg-surface-2 py-12 pl-6 pr-2">
+    @for (group of groups; track group.title) {
+    <p class="px-2 mb-1 text-2xs font-bold uppercase tracking-wider text-faint">{{ group.title }}</p>
+    <div class="mb-5 space-y-0.5">
+      @for (item of group.items; track item.id) {
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm font-medium transition-colors"
+        [class.bg-surface-3]="activeTab() === item.id"
+        [class.text-primary]="activeTab() === item.id"
+        [class.text-muted]="activeTab() !== item.id"
+        [class.hover:bg-surface-3]="activeTab() !== item.id"
+        [class.hover:text-primary]="activeTab() !== item.id"
+        (click)="activeTab.set(item.id)"
+      >
+        <i class="fas {{ item.icon }} w-4 text-center"></i>
+        <span class="truncate">{{ item.label }}</span>
+      </button>
+      }
+    </div>
+    }
+  </nav>
+
+  <!-- Content pane -->
+  <div class="relative flex-1 overflow-y-auto">
+    <div class="mx-auto max-w-2xl px-10 py-12">
+      @switch (activeTab()) {
+        @case ('account') { <app-account-settings /> }
+        @case ('privacy') { <app-privacy-settings /> }
+        @case ('notifications') { <app-notification-settings /> }
+        @case ('appearance') { <app-appearance-settings /> }
+        @case ('accessibility') { <app-accessibility-settings /> }
+      }
+    </div>
+
+    <!-- Close -->
+    <button
+      type="button"
+      class="absolute top-12 right-10 flex flex-col items-center text-muted hover:text-primary transition-colors"
+      (click)="close()"
+      aria-label="Close settings"
+    >
+      <span class="flex h-9 w-9 items-center justify-center rounded-full border-2 border-current">
+        <i class="fas fa-xmark"></i>
+      </span>
+      <span class="mt-1 text-2xs font-semibold">ESC</span>
+    </button>
+  </div>
+</div>

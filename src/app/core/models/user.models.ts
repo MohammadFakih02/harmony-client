@@ -10,6 +10,9 @@ export interface PublicUserProfile {
   age: number | null;
 }
 
+/** Who may open a new DM with the user. */
+export type DmPrivacy = 'everyone' | 'friends_only';
+
 /** The current user's editable profile bits (GET /api/users/me) — includes the raw DOB. */
 export interface MyEditableProfile {
   id: string;
@@ -19,6 +22,7 @@ export interface MyEditableProfile {
   bio: string | null;
   statusMessage: string | null;
   dateOfBirth: string | null; // ISO yyyy-MM-dd
+  dmPrivacy: DmPrivacy;
 }
 
 /** Whole years from an ISO `yyyy-MM-dd` date of birth, or null when unset/invalid. */
