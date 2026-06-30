@@ -26,6 +26,17 @@ export interface ChannelMessagesResponse {
   degraded: boolean;
 }
 
+/**
+ * The message currently being replied to. A slim projection (not the full MessageResponse) — it
+ * only needs to render the composer's "Replying to …" banner and supply replyToId on send. The
+ * author name is resolved (nickname-aware) by the message list at the moment Reply is clicked.
+ */
+export interface ReplyTarget {
+  messageId: string;
+  authorName: string;
+  content: string;
+}
+
 export interface SendMessageResponse {
   messageId: string;
   channelId: string;

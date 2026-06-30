@@ -146,6 +146,13 @@ export class MessageInput {
       const guildId = this.messageStore.activeGuildId();
       if (guildId) this.memberStore.loadIfNeeded(guildId);
     });
+
+    // Focus the composer when the user starts a reply (Reply clicked in the message list).
+    effect(() => {
+      if (this.messageStore.replyTarget()) {
+        queueMicrotask(() => this.draftInput()?.nativeElement.focus());
+      }
+    });
   }
 
   onDraftInput(value: string): void {
@@ -190,6 +197,11 @@ export class MessageInput {
     )
       return;
 
+    // Snapshot + clear the reply target before the await so the banner disappears immediately;
+    // the id rides along on the optimistic message (and survives a retry).
+    const replyToId = this.messageStore.replyTarget()?.messageId ?? null;
+    this.messageStore.clearReplyTarget();
+
     this.sending.set(true);
     this.draft.set('');
     this.closeMentionAutocomplete();
@@ -200,7 +212,7 @@ export class MessageInput {
     this.attachError.set(null);
 
     try {
-      await this.messageStore.sendMessage(content, fileIds);
+      await this.messageStore.sendMessage(content, fileIds, replyToId);
     } finally {
       this.sending.set(false);
       toRevoke.forEach((s) => URL.revokeObjectURL(s.previewUrl));

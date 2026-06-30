@@ -314,4 +314,73 @@ describe('MessageStore', () => {
       expect(store.isMentionHighlight('21')).toBe(false);
     });
   });
+
+  describe('reply target', () => {
+    beforeEach(async () => {
+      service.getMessages.mockResolvedValue({ messages: [], degraded: false });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+    });
+
+    it('sets and clears the reply target', () => {
+      expect(store.replyTarget()).toBeNull();
+
+      store.setReplyTarget({ messageId: '42', authorName: 'bob', content: 'hi' });
+      expect(store.replyTarget()?.messageId).toBe('42');
+
+      store.clearReplyTarget();
+      expect(store.replyTarget()).toBeNull();
+    });
+
+    it('forwards replyToId to the service and sets it on the optimistic message', async () => {
+      service.sendMessage.mockResolvedValue({ messageId: '700', channelId: '1', guildId: '1' });
+
+      const sendPromise = TestBed.runInInjectionContext(() =>
+        store.sendMessage('a reply', [], '42'),
+      );
+
+      const optimistic = store.messages().find((m) => m.pending);
+      expect(optimistic?.replyToId).toBe('42');
+
+      await sendPromise;
+
+      expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'a reply', {
+        attachmentIds: undefined,
+        replyToId: '42',
+      });
+    });
+
+    it('sends replyToId=undefined when not replying', async () => {
+      service.sendMessage.mockResolvedValue({ messageId: '701', channelId: '1', guildId: '1' });
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('plain'));
+
+      expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'plain', {
+        attachmentIds: undefined,
+        replyToId: undefined,
+      });
+    });
+
+    it('preserves replyToId across a retry', async () => {
+      service.sendMessage
+        .mockRejectedValueOnce(new Error('fails'))
+        .mockResolvedValueOnce({ messageId: '702', channelId: '1', guildId: '1' });
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('reply that fails', [], '42'));
+      const failed = store.messages().find((m) => m.failed)!;
+      expect(failed.replyToId).toBe('42');
+
+      await TestBed.runInInjectionContext(() => store.retryMessage(failed.tempId!));
+
+      expect(service.sendMessage).toHaveBeenLastCalledWith('1', '1', 'reply that fails', {
+        attachmentIds: undefined,
+        replyToId: '42',
+      });
+    });
+
+    it('clearMessages resets the reply target', () => {
+      store.setReplyTarget({ messageId: '42', authorName: 'bob', content: 'hi' });
+      store.clearMessages();
+      expect(store.replyTarget()).toBeNull();
+    });
+  });
 });
