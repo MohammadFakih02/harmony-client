@@ -47,7 +47,14 @@
     <div
       class="relative w-20 h-20 rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 group/att"
     >
+      @if (file.kind === 'image') {
       <img [src]="file.previewUrl" [alt]="file.name" class="w-full h-full object-cover" />
+      } @else {
+      <div class="w-full h-full flex flex-col items-center justify-center gap-1 px-1 text-center">
+        <i class="fas {{ file.icon }} text-xl text-muted"></i>
+        <span class="text-2xs text-faint leading-tight line-clamp-2 break-all">{{ file.name }}</span>
+      </div>
+      }
 
       <!-- Uploading overlay -->
       @if (file.status === 'uploading') {
@@ -86,14 +93,14 @@
         #fileInput
         type="file"
         class="hidden"
-        accept="image/png,image/jpeg,image/gif,image/webp"
+        accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,audio/webm,application/pdf,text/plain,text/csv,text/markdown,application/zip"
         multiple
         (change)="onFilesSelected($event)"
       />
       <button
         type="button"
-        title="Attach images"
-        aria-label="Attach images"
+        title="Attach files"
+        aria-label="Attach files"
         class="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl text-faint hover:text-primary transition-micro"
         (click)="fileInput.click()"
       >

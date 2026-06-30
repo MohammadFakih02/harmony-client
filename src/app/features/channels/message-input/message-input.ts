@@ -16,8 +16,8 @@ import {
   applyMention,
   detectMentionTrigger,
 } from '../../../shared/util/mention-trigger';
+import { FileKind, fileIcon, fileKind, isAllowedType } from '../../../shared/util/file-kind';
 
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024; // mirrors backend MaxFileSizeBytes
 const MAX_FILES = 10; // mirrors backend MessageService.MaxAttachments
 
@@ -26,7 +26,9 @@ let _localIdCounter = 0;
 interface StagedFile {
   localId: number;
   name: string;
-  previewUrl: string; // object URL for the thumbnail
+  kind: FileKind;
+  icon: string; // FA class for the non-image tile
+  previewUrl: string; // object URL for the image thumbnail ('' for non-images)
   progress: number; // 0-100 (PUT progress)
   status: 'uploading' | 'done' | 'error';
   fileId?: string; // server id, once confirmed
@@ -274,8 +276,8 @@ export class MessageInput {
         this.attachError.set(`You can attach up to ${MAX_FILES} files.`);
         break;
       }
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        this.attachError.set('Only PNG, JPEG, GIF, or WebP images are allowed.');
+      if (!isAllowedType(file.type)) {
+        this.attachError.set("This file type isn't supported.");
         continue;
       }
       if (file.size > MAX_SIZE_BYTES) {
@@ -288,10 +290,14 @@ export class MessageInput {
 
   private async startUpload(file: File): Promise<void> {
     const localId = ++_localIdCounter;
+    const kind = fileKind(file.type);
     const entry: StagedFile = {
       localId,
       name: file.name,
-      previewUrl: URL.createObjectURL(file),
+      kind,
+      icon: fileIcon(file.type),
+      // Only images get a thumbnail object URL; other kinds show an icon tile.
+      previewUrl: kind === 'image' ? URL.createObjectURL(file) : '',
       progress: 0,
       status: 'uploading',
     };
