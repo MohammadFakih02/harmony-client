@@ -17,16 +17,17 @@ import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { memberColor } from '../../../core/models/role.models';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { MessageResponse } from '../../../core/models/message.models';
 import { MentionCandidate } from '../../../core/models/member.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
-import { MentionToken, tokenizeMentions } from '../../../shared/util/mention-tokens';
 import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
 import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
 import { extractInviteCodes } from '../../../shared/util/invite-links';
 import { MessageAttachments } from '../message-attachments/message-attachments';
+import { MessageContent } from '../message-content/message-content';
 import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
 import { UserProfilePopout } from '../../shell/user-profile-popout/user-profile-popout';
 
@@ -75,6 +76,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     NgClass,
     AutofocusEnd,
     MessageAttachments,
+    MessageContent,
     InviteEmbed,
     UserProfilePopout,
     OverlayModule,
@@ -97,11 +99,13 @@ export class MessageList {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly messageService = inject(MessageService);
+  private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
 
   // Candidate usernames for mention-chip rendering — guild members, or the DM peer.
-  private readonly knownUsernamesLower = computed<Set<string>>(() => {
+  // Consumed by <app-message-content> to decide which @tokens become chips.
+  protected readonly knownUsernamesLower = computed<Set<string>>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (guildId) {
       return new Set(this.memberStore.membersOf(guildId).map((m) => m.username.toLowerCase()));
@@ -110,10 +114,6 @@ export class MessageList {
     const dm = channelId ? this.dmStore.peerOf(channelId) : undefined;
     return dm ? new Set([dm.peerUsername.toLowerCase()]) : new Set<string>();
   });
-
-  protected tokensOf(msg: MessageResponse): MentionToken[] {
-    return tokenizeMentions(msg.content, this.knownUsernamesLower());
-  }
 
   // Invite codes from any full invite links in the message → inline embed cards. Memoized per
   // message (keyed on content so an edit re-scans) to keep the regex off the change-detection path.
@@ -127,18 +127,52 @@ export class MessageList {
     return codes;
   }
 
+  // O(1) lookup of a loaded message by id — rebuilt only when the message list changes. Backs the
+  // reply-preview resolver so it doesn't scan the whole array per rendered message.
+  private readonly messageIndex = computed<Map<string, MessageResponse>>(() => {
+    const map = new Map<string, MessageResponse>();
+    for (const m of this.messageStore.messages()) map.set(m.messageId, m);
+    return map;
+  });
+
+  /**
+   * The compact preview of the message a given message replies to. Resolved from the loaded set;
+   * `found: false` when the referenced message isn't loaded (scrolled past / never fetched) or was
+   * deleted — the preview then renders a muted "original message unavailable" line.
+   */
+  protected referencedPreview(
+    msg: MessageResponse,
+  ): { found: boolean; messageId: string; authorName: string; content: string } | null {
+    if (!msg.replyToId || msg.isDeleted) return null;
+    const ref = this.messageIndex().get(msg.replyToId);
+    if (!ref || ref.isDeleted) {
+      return { found: false, messageId: msg.replyToId, authorName: '', content: '' };
+    }
+    return {
+      found: true,
+      messageId: ref.messageId,
+      authorName: this.resolveDisplayName(ref.userId, ref.username),
+      content: ref.content,
+    };
+  }
+
   /**
    * Display name for a message author: in a guild, their server nickname ?? username; in a DM, the
    * caller's private friend nickname ?? username. (Server and friend nicknames never overlap — a
    * guild uses the server one, a DM uses the friend one.)
    */
   protected authorName(group: MessageGroup): string {
+    return this.resolveDisplayName(group.userId, group.username);
+  }
+
+  /** Nickname-aware display name for any author (guild server-nickname, else DM friend-nickname). */
+  private resolveDisplayName(userId: string, fallbackUsername: string): string {
     const guildId = this.messageStore.activeGuildId();
     if (guildId) {
-      const member = this.memberStore.membersOf(guildId).find((m) => m.userId === group.userId);
-      return member?.nickname ?? group.username;
+      const member = this.memberStore.membersOf(guildId).find((m) => m.userId === userId);
+      return member?.nickname ?? fallbackUsername;
     }
-    return this.nicknameStore.nicknameOf(group.userId) ?? group.username;
+    return this.nicknameStore.nicknameOf(userId) ?? fallbackUsername;
   }
 
   /** The optional admin greeting carried by a system (member-join) message; null when blank. */
@@ -317,6 +351,67 @@ export class MessageList {
       (this.isMine(msg) || this.canManageMessages()) &&
       !msg.isDeleted && !msg.pending && !msg.failed
     );
+  }
+
+  // Reply/copy are available for any settled message (yours or others') — a confirmed,
+  // non-deleted message. Copy additionally needs text content.
+  protected canReply(msg: MessageResponse): boolean {
+    return !msg.isDeleted && !msg.pending && !msg.failed;
+  }
+
+  protected canCopy(msg: MessageResponse): boolean {
+    return this.canReply(msg) && msg.content.trim().length > 0;
+  }
+
+  /** Whether a message exposes any hover action (drives the hover toolbar's visibility). */
+  protected hasActions(msg: MessageResponse): boolean {
+    return this.canReply(msg) || this.canCopy(msg) || this.canEdit(msg) || this.canDelete(msg);
+  }
+
+  /** Begin replying to a message — shared with the composer via the store. */
+  protected replyTo(msg: MessageResponse): void {
+    this.messageStore.setReplyTarget({
+      messageId: msg.messageId,
+      authorName: this.resolveDisplayName(msg.userId, msg.username),
+      content: msg.content,
+    });
+  }
+
+  protected async copyText(msg: MessageResponse): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      this.toast.info('Copied to clipboard');
+    } catch {
+      this.toast.info('Copy failed', 'fa-triangle-exclamation');
+    }
+  }
+
+  // --- jump-to-referenced highlight (clicking a reply preview) ---
+  // Transient: the target message flashes for a moment, then the highlight clears.
+  protected readonly jumpHighlightId = signal<string | null>(null);
+  private jumpTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Scrolls to the referenced message (if loaded) and briefly flashes it. */
+  protected jumpToMessage(messageId: string): void {
+    const gi = this.messageGroups().findIndex((g) =>
+      g.messages.some((m) => m.messageId === messageId),
+    );
+    if (gi < 0) return; // not loaded — nothing to jump to
+    this.viewport()?.scrollToIndex(gi, 'smooth');
+    if (this.jumpTimer) clearTimeout(this.jumpTimer);
+    this.jumpHighlightId.set(messageId);
+    this.jumpTimer = setTimeout(() => this.jumpHighlightId.set(null), 2000);
+  }
+
+  /** Highlight class for a message row — unseen-mention bar takes precedence over a transient jump flash. */
+  protected highlightClass(msg: MessageResponse): string {
+    if (this.messageStore.isMentionHighlight(msg.messageId)) {
+      return 'border-l-2 border-warning bg-warning/10 -ml-3 pl-3 rounded-r';
+    }
+    if (this.jumpHighlightId() === msg.messageId) {
+      return 'border-l-2 border-accent bg-accent/10 -ml-3 pl-3 rounded-r';
+    }
+    return '';
   }
 
   protected startEdit(msg: MessageResponse): void {

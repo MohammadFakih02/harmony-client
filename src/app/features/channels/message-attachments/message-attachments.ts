@@ -70,6 +70,6 @@ export class MessageAttachments {
   }
 
   protected open(meta: FileDownloadResponse): void {
-    this.lightbox.open(meta.url, meta.filename);
+    this.lightbox.open(meta.url, meta.filename, meta.filename);
   }
 }

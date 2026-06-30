@@ -11,6 +11,27 @@
 </div>
 } @else {
 <div class="w-full mx-auto px-4 py-3 shrink-0 flex flex-col gap-2">
+  <!-- Replying-to banner -->
+  @if (messageStore.replyTarget(); as reply) {
+  <div
+    class="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-surface-2 ring-1 ring-border-subtle text-xs text-muted -mb-1"
+  >
+    <i class="fas fa-reply fa-flip-vertical text-faint shrink-0"></i>
+    <span class="min-w-0 truncate">
+      Replying to <span class="font-semibold text-primary">{{ reply.authorName }}</span>
+    </span>
+    <button
+      type="button"
+      class="ml-auto shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-faint hover:text-primary hover:bg-surface-3 transition-micro"
+      title="Cancel reply"
+      aria-label="Cancel reply"
+      (click)="messageStore.clearReplyTarget()"
+    >
+      <i class="fas fa-xmark text-2xs"></i>
+    </button>
+  </div>
+  }
+
   <!-- Upload error -->
   @if (attachError()) {
   <div class="flex items-center gap-2 text-xs text-danger">

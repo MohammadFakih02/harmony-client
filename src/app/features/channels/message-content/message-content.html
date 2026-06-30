@@ -1,0 +1,16 @@
+<ng-template #render let-nodes>
+  @for (node of nodes; track $index) {
+    @switch (node.type) {
+      @case ('text') {<span class="whitespace-pre-wrap">{{ node.text }}</span>}
+      @case ('mention') {<span class="bg-accent/20 text-accent rounded px-1 font-medium">{{ node.text }}</span>}
+      @case ('code') {<code class="bg-surface-3 text-primary rounded px-1.5 py-0.5 text-[0.85em] font-mono">{{ node.text }}</code>}
+      @case ('codeblock') {<pre class="bg-surface-3 rounded-md px-3 py-2 my-1 max-w-full overflow-x-auto text-[0.85em] font-mono text-primary whitespace-pre-wrap wrap-break-words">@if (node.lang) {<span class="block text-2xs text-faint mb-1 select-none">{{ node.lang }}</span>}<code>{{ node.text }}</code></pre>}
+      @case ('bold') {<strong class="font-semibold"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></strong>}
+      @case ('italic') {<em><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></em>}
+      @case ('underline') {<span class="underline"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
+      @case ('strike') {<span class="line-through"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
+      @case ('spoiler') {<span appSpoiler><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
+    }
+  }
+</ng-template>
+<ng-container *ngTemplateOutlet="render; context: { $implicit: nodes() }" />

@@ -51,6 +51,11 @@ export class ToastService {
     }
   }
 
+  /** A transient, non-routed confirmation toast (e.g. "Copied to clipboard"). */
+  info(title: string, icon = 'fa-check'): void {
+    this.push({ icon, title, body: null, route: null });
+  }
+
   private push(toast: Omit<Toast, 'id'>): number {
     const id = ++this.nextId;
     this.toasts.update((t) => [...t, { ...toast, id }]);
