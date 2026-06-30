@@ -37,6 +37,12 @@ export const MemberStore = signalStore(
       }
     },
 
+    /** Forces a refresh of a guild's members (used to reconcile after a socket reconnect). */
+    async reload(guildId: string): Promise<void> {
+      const members = await service.getMembers(guildId);
+      patchState(store, { byGuild: { ...store.byGuild(), [guildId]: members } });
+    },
+
     /**
      * The member ids that can view a channel, or null if not loaded yet. Null means
      * "don't filter" (show everyone) — the sidebar only restricts once the set is known.
