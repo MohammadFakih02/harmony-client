@@ -1,0 +1,82 @@
+<div
+  class="w-80 max-w-[90vw] flex flex-col bg-surface-1 rounded-xl ring-1 ring-border-subtle shadow-modal overflow-hidden"
+>
+  <!-- Search -->
+  <div class="p-2 shrink-0">
+    <div class="flex items-center gap-2 px-3 h-9 rounded-lg bg-surface-3 ring-1 ring-border-subtle">
+      <i class="fas fa-magnifying-glass text-faint text-xs shrink-0"></i>
+      <input
+        type="text"
+        class="flex-1 bg-transparent border-0 outline-none text-sm text-primary placeholder:text-faint"
+        placeholder="Search emoji"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
+      @if (isSearching()) {
+      <button
+        type="button"
+        class="shrink-0 text-faint hover:text-primary transition-micro"
+        title="Clear"
+        (click)="search.set('')"
+      >
+        <i class="fas fa-xmark text-xs"></i>
+      </button>
+      }
+    </div>
+  </div>
+
+  <!-- Category tabs -->
+  <div class="flex items-center gap-0.5 px-2 pb-1.5 shrink-0 border-b border-border-subtle">
+    @if (hasRecents()) {
+    <button
+      type="button"
+      class="w-8 h-8 flex items-center justify-center rounded-md transition-micro"
+      [class.text-primary]="!isSearching() && activeCategoryId() === 'recents'"
+      [class.bg-surface-3]="!isSearching() && activeCategoryId() === 'recents'"
+      [class.text-faint]="isSearching() || activeCategoryId() !== 'recents'"
+      [class.hover:text-primary]="isSearching() || activeCategoryId() !== 'recents'"
+      title="Frequently Used"
+      (click)="setCategory('recents')"
+    >
+      <i class="fas fa-clock-rotate-left text-sm"></i>
+    </button>
+    }
+    @for (cat of categories; track cat.id) {
+    <button
+      type="button"
+      class="w-8 h-8 flex items-center justify-center rounded-md transition-micro"
+      [class.text-primary]="!isSearching() && activeCategoryId() === cat.id"
+      [class.bg-surface-3]="!isSearching() && activeCategoryId() === cat.id"
+      [class.text-faint]="isSearching() || activeCategoryId() !== cat.id"
+      [class.hover:text-primary]="isSearching() || activeCategoryId() !== cat.id"
+      [title]="cat.name"
+      (click)="setCategory(cat.id)"
+    >
+      <i class="fas {{ cat.icon }} text-sm"></i>
+    </button>
+    }
+  </div>
+
+  <!-- Grid -->
+  <div class="flex-1 overflow-y-auto p-2 min-h-0" style="max-height: 280px">
+    <p class="px-1 pb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted">
+      {{ heading() }}
+    </p>
+    @if (displayed().length) {
+    <div class="grid grid-cols-8 gap-0.5">
+      @for (emoji of displayed(); track emoji.char) {
+      <button
+        type="button"
+        class="w-9 h-9 flex items-center justify-center rounded-md text-xl hover:bg-surface-3 transition-micro"
+        [title]="emoji.name"
+        (click)="pick(emoji.char)"
+      >
+        {{ emoji.char }}
+      </button>
+      }
+    </div>
+    } @else {
+    <p class="py-6 text-center text-sm text-faint">No emoji found.</p>
+    }
+  </div>
+</div>
