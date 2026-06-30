@@ -48,13 +48,15 @@ export class Guild implements OnInit, OnDestroy {
         }
       }
 
-      if (prev) this.signalR.client?.leaveGuild(prev).catch(() => {});
-      this.signalR.client?.joinGuild(newGuildId).catch(() => {});
+      // Route through the service so the join survives the connection handshake race on a deep-link
+      // refresh (and is re-applied automatically on reconnect) instead of being silently dropped.
+      if (prev) void this.signalR.leaveGuild(prev);
+      void this.signalR.joinGuild(newGuildId);
     });
   }
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
-    this.signalR.client?.leaveGuild(this.guildId).catch(() => {});
+    void this.signalR.leaveGuild(this.guildId);
   }
 }

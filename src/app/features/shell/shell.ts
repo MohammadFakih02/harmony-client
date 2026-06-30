@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith, Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
+import { HarmonyHubClient } from '../../core/hub/harmony-hub.client';
 import { IdleService } from '../../core/services/idle.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { ChannelStore } from '../../core/stores/channel.store';
@@ -132,6 +133,20 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.memberStore.loadIfNeeded(guildId); // also needed for chat author role colours when the sidebar is closed
       this.roleStore.loadIfNeeded(guildId);
     });
+
+    // Reconcile the active workspace whenever the socket RECOVERS from a drop (reconnecting/
+    // disconnected → connected) — real-time events sent during the gap would otherwise be lost.
+    // Skips the very first connect (initial load already fetches everything).
+    let wasDown = false;
+    effect(() => {
+      const state = this.signalR.connectionState();
+      if (state === 'reconnecting' || state === 'disconnected') {
+        wasDown = true;
+      } else if (state === 'connected' && wasDown) {
+        wasDown = false;
+        void this.reconcileActiveWorkspace();
+      }
+    });
   }
 
   /** Best-effort `#channel` / DM name for a mention toast — null if that guild isn't loaded. */
@@ -154,9 +169,16 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    // Load guilds and connect in parallel; guild data must be ready before joining groups
-    const [client] = await Promise.all([
-      this.signalR.connect().catch(() => null),
+    // Get the hub client synchronously and wire all server→store subscriptions BEFORE the socket
+    // starts. The client's event Subjects persist across reconnects, so subscribing up-front means a
+    // failed or slow initial connect can never leave the session deaf — the old `if (!client) return`
+    // skipped every subscription for the whole session whenever the first connect lost its race.
+    const client = this.signalR.getOrCreateClient();
+    this.wireEvents(client);
+
+    // Start the socket (self-retrying inside the service) and load guilds in parallel.
+    await Promise.all([
+      this.signalR.connect().catch(() => {}),
       this.guildStore.loadGuilds(),
     ]);
     this.unreadStore.loadAll();
@@ -166,9 +188,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.nicknameStore.load();
     this.notificationStore.load();
 
-    if (!client) return;
+    // Start reporting inactivity (auto-away). The idle service tolerates a not-yet-live client.
+    this.idle.start(client);
 
-    // Wire all server → store events
+    // Record desired membership in every guild so channel CRUD events arrive for all servers; the
+    // service joins them now if connected and re-flushes them automatically on each reconnect.
+    await this.joinAllGuilds();
+  }
+
+  /** Wires every server→store event stream. Independent of connection success — see ngOnInit. */
+  private wireEvents(client: HarmonyHubClient): void {
     this.subs.add(client.messageReceived$.subscribe((msg) => {
       this.messageStore.appendMessage(msg);
       // A message arriving in the channel you're currently viewing is already "read" —
@@ -244,14 +273,6 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.roleStore.applyRoleDeleted(p.guildId, p.roleId)));
     this.subs.add(client.memberRoleUpdated$.subscribe((p) =>
       this.memberStore.applyMemberRoleUpdated(p.guildId, p.userId, p.roleIds)));
-
-    client.onReconnected(() => this.rejoinGroups());
-
-    // Start reporting inactivity (auto-away) now that we have a live connection.
-    this.idle.start(client);
-
-    // Join all guilds immediately so channel CRUD events arrive for all servers
-    await this.joinAllGuilds(client);
   }
 
   ngOnDestroy(): void {
@@ -263,27 +284,36 @@ export class ShellComponent implements OnInit, OnDestroy {
   /** We were kicked or banned from a guild: drop it locally, leave its group, and navigate out if open. */
   private async handleKicked(guildId: string): Promise<void> {
     const wasViewing = this.router.url.includes(`/guilds/${guildId}`);
-    await this.signalR.client?.leaveGuild(guildId).catch(() => {});
+    await this.signalR.leaveGuild(guildId);
     this.guildStore.removeGuild(guildId);
     if (wasViewing) this.router.navigate(['/friends']);
   }
 
-  private async joinAllGuilds(client = this.signalR.client): Promise<void> {
-    if (!client) return;
+  private async joinAllGuilds(): Promise<void> {
     for (const guild of this.guildStore.guilds()) {
-      await client.joinGuild(guild.id).catch(() => {});
+      await this.signalR.joinGuild(guild.id);
     }
   }
 
-  private async rejoinGroups(): Promise<void> {
-    const client = this.signalR.client;
-    if (!client) return;
+  /**
+   * After the socket recovers from a drop, re-pull the active workspace's live-changing collections —
+   * group re-joins alone (handled by the service) don't recover events missed while offline.
+   */
+  private async reconcileActiveWorkspace(): Promise<void> {
+    this.unreadStore.loadAll();
 
-    // Rejoin all guilds (not just the selected one) to keep receiving channel CRUD events
-    await this.joinAllGuilds(client);
+    const guildId = this.activeGuildId();
+    if (guildId) {
+      this.memberStore.reload(guildId).catch(() => {});
+      this.roleStore.reload(guildId).catch(() => {});
+    }
 
-    // Rejoin the channel the user currently has open
-    const channelId = this.channelStore.selectedChannelId();
-    if (channelId) await client.joinChannel(channelId).catch(() => {});
+    // Re-fetch the open channel's messages so anything sent during the gap appears without a refresh.
+    const channelId = this.messageStore.activeChannelId();
+    if (channelId) {
+      this.messageStore
+        .loadMessages(this.messageStore.activeGuildId(), channelId)
+        .catch(() => {});
+    }
   }
 }
