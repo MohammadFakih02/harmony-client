@@ -62,14 +62,17 @@ export class Channel implements OnInit, OnDestroy {
         this.unreadStore.markRead(newGuildId, newChannelId, newest.messageId).catch(() => {});
       }
 
-      if (prev) this.signalR.client?.leaveChannel(prev).catch(() => {});
-      this.signalR.client?.joinChannel(newChannelId).catch(() => {});
+      // Route through the service so the join is recorded as "desired" and applied once the socket
+      // is live — a deep-link refresh activates this before the connection handshake completes, and
+      // a blind client?.joinChannel() would be silently dropped (no live messages until you switch).
+      if (prev) void this.signalR.leaveChannel(prev);
+      void this.signalR.joinChannel(newChannelId);
     });
   }
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
-    this.signalR.client?.leaveChannel(this.channelId).catch(() => {});
+    void this.signalR.leaveChannel(this.channelId);
     this.messageStore.clearMessages();
   }
 }
