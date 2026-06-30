@@ -7,7 +7,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { FileService } from '../../../core/services/file.service';
 import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
-import { MentionAutocomplete } from '../../../shared/ui';
+import { MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
 import { MentionCandidate } from '../../../core/models/member.models';
 import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
@@ -35,7 +35,7 @@ interface StagedFile {
 @Component({
   selector: 'app-message-input',
   standalone: true,
-  imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete],
+  imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete, EmojiPicker],
   templateUrl: './message-input.html',
 })
 export class MessageInput {
@@ -91,6 +91,15 @@ export class MessageInput {
     // Fuzzy match so "owner" finds "seed_owner" and a small typo still resolves.
     return fuzzyFilter(pool, trigger.query, (c) => c.username).slice(0, 10);
   });
+
+  // --- emoji picker ---
+
+  protected readonly emojiOpen = signal(false);
+
+  // Anchored above the composer, aligned to its right edge (where the emoji button sits).
+  protected readonly emojiOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
+  ];
 
   protected readonly channelName = computed(
     () => this.channelStore.selectedChannel()?.name ?? 'channel',
@@ -159,7 +168,9 @@ export class MessageInput {
     this.draft.set(value);
     const el = this.draftInput()?.nativeElement;
     const caret = el?.selectionStart ?? value.length;
-    this.mentionTrigger.set(detectMentionTrigger(value, caret));
+    const trigger = detectMentionTrigger(value, caret);
+    if (trigger) this.closeEmoji(); // don't stack the emoji picker over the mention popup
+    this.mentionTrigger.set(trigger);
     this.mentionHighlightedIndex.set(0);
   }
 
@@ -181,6 +192,39 @@ export class MessageInput {
 
   closeMentionAutocomplete(): void {
     this.mentionTrigger.set(null);
+  }
+
+  toggleEmoji(): void {
+    const opening = !this.emojiOpen();
+    if (opening) this.closeMentionAutocomplete(); // the two overlays share the composer origin
+    this.emojiOpen.set(opening);
+  }
+
+  closeEmoji(): void {
+    this.emojiOpen.set(false);
+  }
+
+  /** Inserts the chosen emoji at the caret and keeps the picker open (Discord-style). */
+  onEmojiSelect(char: string): void {
+    this.insertAtCaret(char);
+  }
+
+  /** Splices `text` into the draft at the current caret (or the end), then restores the caret after it. */
+  private insertAtCaret(text: string): void {
+    const el = this.draftInput()?.nativeElement;
+    const value = this.draft();
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const next = value.slice(0, start) + text + value.slice(end);
+    this.draft.set(next);
+
+    queueMicrotask(() => {
+      const input = this.draftInput()?.nativeElement;
+      if (!input) return;
+      const caret = start + text.length;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
   }
 
   async send(): Promise<void> {
