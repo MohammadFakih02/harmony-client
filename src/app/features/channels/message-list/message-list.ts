@@ -28,6 +28,7 @@ import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../sha
 import { extractInviteCodes } from '../../../shared/util/invite-links';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 import { MessageContent } from '../message-content/message-content';
+import { ForwardModal } from '../forward-modal/forward-modal';
 import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
 import { UserProfilePopout } from '../../shell/user-profile-popout/user-profile-popout';
 
@@ -77,6 +78,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     AutofocusEnd,
     MessageAttachments,
     MessageContent,
+    ForwardModal,
     InviteEmbed,
     UserProfilePopout,
     OverlayModule,
@@ -363,9 +365,31 @@ export class MessageList {
     return this.canReply(msg) && msg.content.trim().length > 0;
   }
 
+  // Forward is available for any settled message that carries something to re-send (text or images).
+  protected canForward(msg: MessageResponse): boolean {
+    return this.canReply(msg) && (msg.content.trim().length > 0 || msg.attachmentIds.length > 0);
+  }
+
   /** Whether a message exposes any hover action (drives the hover toolbar's visibility). */
   protected hasActions(msg: MessageResponse): boolean {
-    return this.canReply(msg) || this.canCopy(msg) || this.canEdit(msg) || this.canDelete(msg);
+    return (
+      this.canReply(msg) ||
+      this.canCopy(msg) ||
+      this.canForward(msg) ||
+      this.canEdit(msg) ||
+      this.canDelete(msg)
+    );
+  }
+
+  // --- forward modal (opened from the hover toolbar) ---
+  protected readonly forwardTarget = signal<MessageResponse | null>(null);
+
+  protected openForward(msg: MessageResponse): void {
+    this.forwardTarget.set(msg);
+  }
+
+  protected closeForward(): void {
+    this.forwardTarget.set(null);
   }
 
   /** Begin replying to a message — shared with the composer via the store. */
