@@ -28,7 +28,16 @@ export class RegisterComponent {
     private router: Router
   ) {
     this.form = this.fb.group({
-      username: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(32)]],
+      username: [
+        '',
+        [
+          Validators.required,
+          Validators.minLength(2),
+          Validators.maxLength(32),
+          // Mirror ASP.NET Identity's default allowed username characters.
+          Validators.pattern(/^[A-Za-z0-9._@+-]+$/),
+        ],
+      ],
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(8)]],
       confirmPassword: ['', Validators.required],
@@ -62,9 +71,11 @@ export class RegisterComponent {
   get passwordMismatch() { return this.form.hasError('passwordMismatch') && this.confirmPassword.touched; }
 
   get usernameError(): string | null {
-    return this.username.invalid && this.username.touched
-      ? 'Username must be between 2 and 32 characters.'
-      : null;
+    if (!(this.username.invalid && this.username.touched)) return null;
+    if (this.username.hasError('pattern')) {
+      return 'Username can only use letters, numbers, and . _ - @ +';
+    }
+    return 'Username must be between 2 and 32 characters.';
   }
   get emailError(): string | null {
     return this.email.invalid && this.email.touched ? 'Enter a valid email address.' : null;
