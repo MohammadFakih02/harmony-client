@@ -52,7 +52,7 @@
   [itemSize]="64"
   [minBufferPx]="640"
   [maxBufferPx]="1280"
-  class="flex-1 min-h-0"
+  class="flex-1 min-h-0 select-text"
 >
   <div *cdkVirtualFor="let group of messageGroups(); trackBy: trackGroup" class="animate-message-in">
     @if (group.isSystem) {
@@ -86,12 +86,7 @@
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>
       @for (msg of group.messages; track msg.messageId) {
-      <div
-        class="relative group/msg"
-        [ngClass]="messageStore.isMentionHighlight(msg.messageId)
-          ? 'border-l-2 border-warning bg-warning/10 -ml-3 pl-3 rounded-r'
-          : ''"
-      >
+      <div class="relative group/msg" [ngClass]="highlightClass(msg)">
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <textarea
@@ -124,7 +119,26 @@
           · enter to <button class="underline hover:no-underline" (click)="saveEdit(msg)">save</button>
         </div>
         } @else {
-        <p
+        <!-- Reply preview (compact, clickable → jump to the referenced message) -->
+        @if (referencedPreview(msg); as ref) {
+        <button
+          type="button"
+          class="flex items-center gap-1.5 max-w-full mb-0.5 text-xs text-faint hover:text-muted transition-micro"
+          [class.cursor-pointer]="ref.found"
+          [class.cursor-default]="!ref.found"
+          [disabled]="!ref.found"
+          (click)="jumpToMessage(ref.messageId)"
+        >
+          <i class="fas fa-reply fa-flip-vertical text-2xs shrink-0"></i>
+          @if (ref.found) {
+          <span class="font-semibold shrink-0">{{ ref.authorName }}</span>
+          <span class="truncate opacity-80">{{ ref.content }}</span>
+          } @else {
+          <span class="italic opacity-80">Original message unavailable</span>
+          }
+        </button>
+        }
+        <div
           class="text-sm leading-relaxed wrap-break-words"
           [class.text-muted]="!msg.pending && !msg.failed"
           [class.text-primary]="!msg.pending && !msg.failed"
@@ -134,14 +148,8 @@
           @if (msg.isDeleted) {
             <span class="italic text-faint">Message deleted</span>
           } @else {
-            <!-- whitespace-pre-wrap is scoped to the content span only, so template
-                 indentation around the interpolation can't leak in as a leading space -->
-            <span class="whitespace-pre-wrap"
-              >@for (tok of tokensOf(msg); track $index) {@if (tok.isMention) {<span
-                  class="bg-accent/20 text-accent rounded px-1 font-medium"
-                  >{{ tok.text }}</span
-                >} @else {{{ tok.text }}}}</span
-            >
+            <!-- Markdown-rendered content (interpolation only — XSS-safe; @-mentions become chips) -->
+            <app-message-content [content]="msg.content" [knownUsernames]="knownUsernamesLower()" />
             @if (msg.isEdited) {
               <span class="text-xs text-faint ml-1">(edited)</span>
             }
@@ -155,7 +163,7 @@
               </span>
             }
           }
-        </p>
+        </div>
 
         <!-- Image attachments (resolved lazily; space reserved from stored dimensions) -->
         @if (!msg.isDeleted && msg.attachmentIds.length) {
@@ -171,11 +179,29 @@
         <app-invite-embed [code]="code" />
         }
 
-        <!-- Hover actions (own message → edit + delete; others → delete with ManageMessages) -->
-        @if (canEdit(msg) || canDelete(msg)) {
+        <!-- Hover actions (reply/copy for any message; edit for own; delete for own or ManageMessages) -->
+        @if (hasActions(msg)) {
         <div
           class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
         >
+          @if (canReply(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Reply"
+            (click)="replyTo(msg)"
+          >
+            <i class="fas fa-reply text-xs"></i>
+          </button>
+          }
+          @if (canCopy(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Copy text"
+            (click)="copyText(msg)"
+          >
+            <i class="fas fa-copy text-xs"></i>
+          </button>
+          }
           @if (canEdit(msg)) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"

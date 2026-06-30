@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
-import { MessageFailedPayload, MessageResponse } from '../models/message.models';
+import { MessageFailedPayload, MessageResponse, ReplyTarget } from '../models/message.models';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../services/message.service';
 
@@ -23,6 +23,9 @@ interface MessageState {
   // the unread block on open, extended by live mentions, and reset when the channel changes
   // (leave/rejoin). Deliberately NOT cleared by a later message arriving.
   mentionHighlights: Record<string, true>;
+  // The message being replied to, shared between the message list (where Reply is clicked) and
+  // the composer (which shows the banner + sends replyToId). Cleared on send and channel change.
+  replyTarget: ReplyTarget | null;
 }
 
 export const MessageStore = signalStore(
@@ -37,6 +40,7 @@ export const MessageStore = signalStore(
     unreadOnOpen: 0,
     realIdToTempId: {},
     mentionHighlights: {},
+    replyTarget: null,
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
     /**
@@ -112,7 +116,11 @@ export const MessageStore = signalStore(
       }
     },
 
-    async sendMessage(content: string, attachmentIds: string[] = []): Promise<void> {
+    async sendMessage(
+      content: string,
+      attachmentIds: string[] = [],
+      replyToId: string | null = null,
+    ): Promise<void> {
       const channelId = store.activeChannelId();
       const guildId = store.activeGuildId(); // null for a DM
       const user = auth.currentUser();
@@ -135,7 +143,7 @@ export const MessageStore = signalStore(
         messageType: 'Default',
         attachmentIds,
         mentionIds: [],
-        replyToId: null,
+        replyToId,
         pending: true,
       };
 
@@ -144,6 +152,7 @@ export const MessageStore = signalStore(
       try {
         const response = await service.sendMessage(guildId, channelId, content, {
           attachmentIds: attachmentIds.length ? attachmentIds : undefined,
+          replyToId: replyToId ?? undefined,
         });
         confirmSent(tempId, response.messageId);
       } catch {
@@ -210,6 +219,7 @@ export const MessageStore = signalStore(
       try {
         const response = await service.sendMessage(guildId, channelId, msg.content, {
           attachmentIds: msg.attachmentIds.length ? msg.attachmentIds : undefined,
+          replyToId: msg.replyToId ?? undefined,
         });
         confirmSent(newTempId, response.messageId);
       } catch {
@@ -247,7 +257,18 @@ export const MessageStore = signalStore(
         unreadOnOpen: 0,
         realIdToTempId: {},
         mentionHighlights: {},
+        replyTarget: null,
       });
+    },
+
+    /** Sets the message the composer is replying to (banner + replyToId on next send). */
+    setReplyTarget(target: ReplyTarget): void {
+      patchState(store, { replyTarget: target });
+    },
+
+    /** Clears the active reply target (✕ on the banner, after send, or on channel change). */
+    clearReplyTarget(): void {
+      patchState(store, { replyTarget: null });
     },
 
     /** Records how many messages were unread when the channel opened (for the jump banner). */
