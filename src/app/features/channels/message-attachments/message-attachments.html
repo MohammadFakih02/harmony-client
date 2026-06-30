@@ -1,27 +1,77 @@
 <div class="flex flex-wrap gap-2 mt-1">
   @for (att of rendered(); track att.id) {
     @if (att.meta) {
-      <button
-        type="button"
-        class="block rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 cursor-zoom-in hover:ring-accent transition-micro"
-        [style.width.px]="att.width"
-        [style.height.px]="att.height"
-        title="Click to expand"
-        (click)="open(att.meta)"
-      >
-        <img
-          [src]="att.meta.url"
-          [alt]="att.meta.filename"
-          loading="lazy"
-          class="w-full h-full object-cover"
-        />
-      </button>
+      @switch (att.kind) {
+        @case ('image') {
+          <button
+            type="button"
+            class="block rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 cursor-zoom-in hover:ring-accent transition-micro"
+            [style.width.px]="att.width"
+            [style.height.px]="att.height"
+            title="Click to expand"
+            (click)="open(att.meta)"
+          >
+            <img
+              [src]="att.meta.url"
+              [alt]="att.meta.filename"
+              loading="lazy"
+              class="w-full h-full object-cover"
+            />
+          </button>
+        }
+        @case ('video') {
+          <video
+            controls
+            preload="metadata"
+            [src]="att.meta.url"
+            class="rounded-lg ring-1 ring-border-subtle bg-black max-w-full"
+            [style.width.px]="att.width"
+          ></video>
+        }
+        @case ('audio') {
+          <div
+            class="flex flex-col gap-1.5 p-2 rounded-lg ring-1 ring-border-subtle bg-surface-2 w-72 max-w-full"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <i class="fas fa-music text-faint shrink-0"></i>
+              <span class="text-xs text-muted truncate">{{ att.meta.filename }}</span>
+            </div>
+            <audio controls preload="metadata" [src]="att.meta.url" class="w-full"></audio>
+          </div>
+        }
+        @default {
+          <!-- pdf / zip / text and any other non-media → download card -->
+          <div
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg ring-1 ring-border-subtle bg-surface-2 w-72 max-w-full"
+          >
+            <i class="fas {{ att.icon }} text-2xl text-faint shrink-0"></i>
+            <div class="flex flex-col min-w-0 flex-1">
+              <span class="text-sm text-primary truncate">{{ att.meta.filename }}</span>
+              <span class="text-2xs text-faint">{{ att.sizeLabel }}</span>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-3 transition-micro disabled:opacity-50"
+              title="Download"
+              [disabled]="isDownloading(att.id)"
+              (click)="download(att.meta)"
+            >
+              <i
+                class="fas"
+                [class.fa-download]="!isDownloading(att.id)"
+                [class.fa-yin-yang]="isDownloading(att.id)"
+                [class.animate-spin]="isDownloading(att.id)"
+              ></i>
+            </button>
+          </div>
+        }
+      }
     } @else if (att.failed) {
       <div
         class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 ring-1 ring-border-subtle text-xs text-faint"
       >
-        <i class="fas fa-image-slash"></i>
-        <span>Image unavailable</span>
+        <i class="fas fa-file-circle-xmark"></i>
+        <span>Attachment unavailable</span>
       </div>
     } @else {
       <!-- Resolving — neutral skeleton occupying the reserved box -->
