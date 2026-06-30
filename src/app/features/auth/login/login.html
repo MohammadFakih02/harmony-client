@@ -25,13 +25,12 @@
     <!-- Form -->
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-4">
       <ui-input
-        formControlName="email"
-        label="Email"
-        inputType="email"
-        placeholder="you@example.com"
-        autocomplete="email"
-        inputId="email"
-        [error]="emailError"
+        formControlName="identifier"
+        label="Email or Username"
+        placeholder="you@example.com or username"
+        autocomplete="username"
+        inputId="identifier"
+        [error]="identifierError"
       />
       <ui-input
         formControlName="password"

@@ -53,12 +53,13 @@ export class AuthService {
     this.setSession(response);
   }
 
-  async login(email: string, password: string): Promise<void> {
+  // identifier is the user's email OR username — the backend resolves either.
+  async login(identifier: string, password: string): Promise<void> {
     const response = await firstValueFrom(
       this.http.post<AuthResponse>(
         `${environment.apiUrl}/auth/login`,
         {
-          email,
+          identifier,
           password,
         },
         { withCredentials: true },

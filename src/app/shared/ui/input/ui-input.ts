@@ -24,6 +24,16 @@ export class UiInput implements ControlValueAccessor {
 
   protected value      = signal('');
   protected isDisabled = signal(false);
+  protected revealed   = signal(false);
+
+  // Only password fields get the reveal toggle.
+  protected isPassword = computed(() => this.inputType() === 'password');
+  // The type actually rendered: a revealed password becomes a plain text field.
+  protected effectiveType = computed(() =>
+    this.isPassword() && this.revealed() ? 'text' : this.inputType()
+  );
+
+  protected toggleReveal(): void { this.revealed.update((v) => !v); }
 
   private onChange: (v: string) => void = () => {};
   private onTouched: () => void = () => {};

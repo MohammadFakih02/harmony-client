@@ -23,8 +23,9 @@ export class LoginComponent {
     private route: ActivatedRoute
   ) {
     this.form = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(8)]],
+      // Email or username — no email-shape validator, since a username is also valid.
+      identifier: ['', [Validators.required]],
+      password: ['', [Validators.required]],
     });
   }
 
@@ -36,7 +37,7 @@ export class LoginComponent {
 
     try {
       await this.authService.login(
-        this.form.value.email,
+        this.form.value.identifier,
         this.form.value.password
       );
       // Honor a returnUrl (e.g. a shared /invite/:code link the guest was sent from).
@@ -49,13 +50,13 @@ export class LoginComponent {
     }
   }
 
-  get email() { return this.form.get('email')!; }
+  get identifier() { return this.form.get('identifier')!; }
   get password() { return this.form.get('password')!; }
 
-  get emailError(): string | null {
-    return this.email.invalid && this.email.touched ? 'Enter a valid email address.' : null;
+  get identifierError(): string | null {
+    return this.identifier.invalid && this.identifier.touched ? 'Enter your email or username.' : null;
   }
   get passwordError(): string | null {
-    return this.password.invalid && this.password.touched ? 'Password must be at least 8 characters.' : null;
+    return this.password.invalid && this.password.touched ? 'Enter your password.' : null;
   }
 }
