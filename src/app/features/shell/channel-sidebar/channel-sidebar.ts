@@ -14,7 +14,14 @@ import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
+import {
+  DirectMessageChannel,
+  DmParticipant,
+  dmLabel,
+  dmPeer,
+} from '../../../core/models/direct-message.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
+import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 
 interface StatusOption {
@@ -32,7 +39,15 @@ interface ExpiryOption {
 @Component({
   selector: 'app-channel-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, UiAvatar, UiIconButton, FormsModule, OverlayModule],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    UiAvatar,
+    UiIconButton,
+    FormsModule,
+    OverlayModule,
+    GroupDmModal,
+  ],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
   styleUrl: './channel-sidebar.scss',
@@ -49,9 +64,18 @@ export class ChannelSidebar {
   protected readonly nicknameStore = inject(NicknameStore);
   private readonly router = inject(Router);
 
-  /** DM display name: the caller's private friend nickname ?? the peer's username. */
-  protected dmName(peerId: string, peerUsername: string): string {
-    return this.nicknameStore.nicknameOf(peerId) ?? peerUsername;
+  /** DM display name: group name (or joined member names) / the 1:1 peer's friend-nickname ?? username. */
+  protected dmDisplayName(dm: DirectMessageChannel): string {
+    return dmLabel(dm, (p) => this.dmMemberName(p));
+  }
+
+  private dmMemberName(p: DmParticipant): string {
+    return this.nicknameStore.nicknameOf(p.userId) ?? p.username;
+  }
+
+  /** The 1:1 peer of a DM (undefined for a group) — drives the row's avatar + status dot. */
+  protected dmOneToOnePeer(dm: DirectMessageChannel): DmParticipant | undefined {
+    return dmPeer(dm);
   }
 
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
@@ -85,11 +109,24 @@ export class ChannelSidebar {
     return toAvatarStatus(this.presenceStore.statusOf(userId));
   }
 
-  hideDm(channelId: string, event: Event): void {
+  // The hover ✕ hides a 1:1 (it reappears on a new message) but *leaves* a group (permanent).
+  removeDm(dm: DirectMessageChannel, event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    this.dmStore.hide(channelId);
-    if (this.activeDmChannelId() === channelId) this.router.navigate(['/app/friends']);
+    if (dm.isGroup) this.dmStore.leave(dm.channelId);
+    else this.dmStore.hide(dm.channelId);
+    if (this.activeDmChannelId() === dm.channelId) this.router.navigate(['/app/friends']);
+  }
+
+  // New-group creation modal (from the DM header +).
+  protected readonly showGroupModal = signal(false);
+
+  openGroupModal(): void {
+    this.showGroupModal.set(true);
+  }
+
+  onGroupCreated(dm: DirectMessageChannel): void {
+    this.router.navigate(['/app/dm', dm.channelId]);
   }
 
   protected readonly showCreateModal = signal(false);

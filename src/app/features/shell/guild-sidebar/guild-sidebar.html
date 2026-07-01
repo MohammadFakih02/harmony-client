@@ -15,17 +15,19 @@
     @for (dm of unreadDms(); track dm.channelId) {
     <button
       class="guild-icon bg-surface-2 text-muted hover:text-primary transition-micro relative"
-      [title]="dm.peerUsername"
+      [title]="dmLabelOf(dm)"
       (click)="openDm(dm.channelId)"
     >
-      @if (dm.peerAvatarKey) {
+      @if (dm.isGroup) {
+        <span class="text-sm select-none"><i class="fas fa-user-group"></i></span>
+      } @else if (dmAvatarOf(dm); as avatar) {
         <img
-          [src]="dm.peerAvatarKey"
-          [alt]="dm.peerUsername"
+          [src]="avatar"
+          [alt]="dmLabelOf(dm)"
           class="w-full h-full object-cover rounded-[inherit]"
         />
       } @else {
-        <span class="text-sm font-semibold select-none">{{ dmInitials(dm.peerUsername) }}</span>
+        <span class="text-sm font-semibold select-none">{{ dmInitials(dmLabelOf(dm)) }}</span>
       }
       <span
         class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface-1"

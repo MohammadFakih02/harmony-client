@@ -6,6 +6,7 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
+import { dmLabel, dmPeer } from '../../../core/models/direct-message.models';
 import { MessageResponse } from '../../../core/models/message.models';
 import { UiAvatar } from '../../../shared/ui';
 
@@ -77,13 +78,16 @@ export class ForwardModal implements OnInit {
 
     const dmRows: TargetRow[] = this.dmStore
       .dms()
-      .map((dm) => ({
-        channelId: dm.channelId,
-        guildId: null,
-        label: this.nicknameStore.nicknameOf(dm.peerId) ?? dm.peerUsername,
-        avatarKey: dm.peerAvatarKey,
-        isDm: true,
-      }))
+      .map((dm) => {
+        const peer = dmPeer(dm);
+        return {
+          channelId: dm.channelId,
+          guildId: null,
+          label: dmLabel(dm, (p) => this.nicknameStore.nicknameOf(p.userId) ?? p.username),
+          avatarKey: peer?.avatarKey ?? null,
+          isDm: true,
+        };
+      })
       .filter((r) => match(r.label));
     if (dmRows.length) groups.push({ title: 'Direct Messages', rows: dmRows });
 

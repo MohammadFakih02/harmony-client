@@ -82,8 +82,8 @@ export class MessageInput {
   private readonly dmCandidates = computed<MentionCandidate[]>(() => {
     const channelId = this.messageStore.activeChannelId();
     if (!channelId) return [];
-    const dm = this.dmStore.peerOf(channelId);
-    return dm ? [{ userId: dm.peerId, username: dm.peerUsername, avatarKey: dm.peerAvatarKey }] : [];
+    // Every other participant is mentionable (a single peer for a 1:1, all members for a group).
+    return this.dmStore.find(channelId)?.participants ?? [];
   });
 
   protected readonly mentionCandidates = computed<MentionCandidate[]>(() => {
