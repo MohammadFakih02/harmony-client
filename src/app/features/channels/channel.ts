@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { MessageResponse } from '../../core/models/message.models';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
+import { PinStore } from '../../core/stores/pin.store';
 import { SignalRService } from '../../core/services/signalr.service';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { MessageList } from './message-list/message-list';
@@ -23,6 +24,7 @@ export class Channel implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
+  private readonly pinStore = inject(PinStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly signalR = inject(SignalRService);
 
@@ -51,6 +53,8 @@ export class Channel implements OnInit, OnDestroy {
         this.channelStore.rememberChannel(newGuildId, newChannelId);
         this.channelStore.loadCapabilities(newGuildId, newChannelId);
       }
+      // Load this channel's pins (drives the 📌 indicator + Pin/Unpin toggle + the pins panel).
+      void this.pinStore.load(newGuildId, newChannelId);
       await this.messageStore.loadMessages(newGuildId, newChannelId);
       this.messageStore.setUnreadOnOpen(unreadOnOpen);
       // Highlight the unread mentions of me in this view (clears on leave/rejoin).
@@ -74,5 +78,6 @@ export class Channel implements OnInit, OnDestroy {
     this.paramSub?.unsubscribe();
     void this.signalR.leaveChannel(this.channelId);
     this.messageStore.clearMessages();
+    this.pinStore.clear();
   }
 }

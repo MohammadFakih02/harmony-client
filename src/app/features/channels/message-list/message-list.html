@@ -48,19 +48,22 @@
 </div>
 }
 
-<cdk-virtual-scroll-viewport
-  [itemSize]="64"
-  [minBufferPx]="640"
-  [maxBufferPx]="1280"
-  class="flex-1 min-h-0 select-text"
->
-  <div *cdkVirtualFor="let group of messageGroups(); trackBy: trackGroup" class="animate-message-in">
+<div #scroller (scroll)="onScroll()" class="flex-1 min-h-0 overflow-y-auto select-text">
+  @for (group of messageGroups(); track group.firstMessageId) {
+  <div class="animate-message-in" [attr.data-group]="group.firstMessageId">
     @if (group.isSystem) {
-    <div class="flex items-center gap-2 px-4 py-1 text-xs text-muted">
+    <div class="gap-1 px-4 py-2 text-xs text-muted flex">
+      @if (systemMessageType(group) === 'pin') {
+      <i class="fas fa-thumbtack text-faint shrink-0"></i>
+      <span class="min-w-0 flex items-center">
+        <span class="font-semibold text-primary mr-1">{{ authorName(group) }}</span> pinned a message to this channel.
+      </span>
+      } @else {
       <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
       <span class="min-w-0">
         <span class="font-semibold text-primary">{{ authorName(group) }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
       </span>
+      }
     </div>
     } @else {
     <div class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro">
@@ -153,6 +156,9 @@
             @if (msg.isEdited) {
               <span class="text-xs text-faint ml-1">(edited)</span>
             }
+            @if (isPinned(msg)) {
+              <i class="fas fa-thumbtack text-2xs text-faint ml-1" title="Pinned"></i>
+            }
             @if (msg.failed) {
               <span class="text-xs ml-1 inline-flex items-center gap-1.5">
                 <i class="fas fa-circle-exclamation"></i> Failed to send
@@ -211,6 +217,18 @@
             <i class="fas fa-share text-xs"></i>
           </button>
           }
+          @if (canPin(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-surface-2 transition-micro"
+            [class.text-accent]="isPinned(msg)"
+            [class.text-faint]="!isPinned(msg)"
+            [class.hover:text-primary]="!isPinned(msg)"
+            [title]="isPinned(msg) ? 'Unpin' : 'Pin'"
+            (click)="togglePin(msg)"
+          >
+            <i class="fas fa-thumbtack text-xs"></i>
+          </button>
+          }
           @if (canEdit(msg)) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
@@ -238,7 +256,8 @@
     </div>
     }
   </div>
-</cdk-virtual-scroll-viewport>
+  }
+</div>
 
 }
 

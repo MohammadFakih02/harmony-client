@@ -15,7 +15,7 @@ import { Component, computed, input } from '@angular/core';
   selector: 'ui-icon-button',
   standalone: true,
   templateUrl: './ui-icon-button.html',
-  host: { style: 'display: contents' },
+  host: { style: '' },
 })
 export class UiIconButton {
   size = input<'xs' | 'sm' | 'md'>('md');

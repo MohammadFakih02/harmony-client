@@ -26,5 +26,6 @@ export interface ChannelCapabilities {
   canAttach: boolean;
   canManageMessages: boolean;
   canManageChannels: boolean;
+  canPin: boolean;
   timedOut: boolean;
 }

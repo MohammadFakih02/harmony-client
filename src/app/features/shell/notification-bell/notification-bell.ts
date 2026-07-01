@@ -1,5 +1,6 @@
 import { Component, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { AppNotification, NotificationActor } from '../../../core/models/notification.models';
 import { NotificationStore } from '../../../core/stores/notification.store';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
@@ -7,7 +8,7 @@ import { UiAvatar, UiIconButton } from '../../../shared/ui';
 @Component({
   selector: 'app-notification-bell',
   standalone: true,
-  imports: [UiAvatar, UiIconButton],
+  imports: [UiAvatar, UiIconButton, OverlayModule],
   templateUrl: './notification-bell.html',
 })
 export class NotificationBell {
@@ -15,6 +16,16 @@ export class NotificationBell {
   private readonly router = inject(Router);
 
   protected readonly showPanel = signal(false);
+
+  protected readonly overlayPositions: ConnectionPositionPair[] = [
+    {
+      originX: 'end',
+      originY: 'bottom',
+      overlayX: 'end',
+      overlayY: 'top',
+      offsetY: 8,
+    },
+  ];
 
   constructor() {
     // Lazily resolve actor identity (username/avatar) for any notification we haven't seen yet.
