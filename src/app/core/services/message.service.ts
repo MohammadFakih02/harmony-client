@@ -28,10 +28,14 @@ export class MessageService {
   getMessages(
     guildId: string | null,
     channelId: string,
-    options: { before?: string; limit?: number } = {},
+    options: { before?: string; around?: string; after?: string; limit?: number } = {},
   ): Promise<ChannelMessagesResponse> {
     const params: Record<string, string> = { limit: String(options.limit ?? 50) };
+    // Mutually exclusive cursors: before = older page, after = newer page, around = window centred
+    // on a jump target (search result / reply reference).
     if (options.before != null) params['before'] = options.before;
+    if (options.after != null) params['after'] = options.after;
+    if (options.around != null) params['around'] = options.around;
     return firstValueFrom(
       this.http.get<ChannelMessagesResponse>(
         `${this.channelBase(guildId, channelId)}/messages`,

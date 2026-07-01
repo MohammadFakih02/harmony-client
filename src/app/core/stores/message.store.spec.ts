@@ -417,4 +417,94 @@ describe('MessageStore', () => {
       expect(store.replyTarget()).toBeNull();
     });
   });
+
+  describe('anchored history mode (jump to old message)', () => {
+    it('jumpToMessage loads the around window, enters anchored mode, and requests a jump', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '105' }), makeMsg({ messageId: '100' }), makeMsg({ messageId: '95' })],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
+
+      expect(service.getMessages).toHaveBeenCalledWith('1', '1', { around: '100' });
+      // reversed to oldest-first for display
+      expect(store.messages().map((m) => m.messageId)).toEqual(['95', '100', '105']);
+      expect(store.anchored()).toBe(true);
+      expect(store.jumpRequest()?.messageId).toBe('100');
+    });
+
+    it('suppresses live appends while anchored (no viewport yank)', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '100' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
+
+      store.appendMessage(makeMsg({ messageId: '999', userId: '55' }));
+
+      expect(store.messages().map((m) => m.messageId)).toEqual(['100']);
+    });
+
+    it('loadNewer appends and stays anchored on a full page', async () => {
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: '100' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
+
+      const fullPage = Array.from({ length: 50 }, (_, i) => makeMsg({ messageId: String(200 + i) }));
+      service.getMessages.mockResolvedValueOnce({ messages: fullPage, degraded: false });
+
+      await TestBed.runInInjectionContext(() => store.loadNewer());
+
+      expect(service.getMessages).toHaveBeenLastCalledWith('1', '1', { after: '100' });
+      expect(store.messages().length).toBe(51);
+      expect(store.anchored()).toBe(true);
+    });
+
+    it('loadNewer clears anchored mode when it reaches the tail (short page)', async () => {
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: '100' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
+
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: '101' }), makeMsg({ messageId: '102' })],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.loadNewer());
+
+      expect(store.anchored()).toBe(false);
+    });
+
+    it('jumpToPresent reloads the latest page and leaves anchored mode', async () => {
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: '100' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
+      expect(store.anchored()).toBe(true);
+
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: '500' }), makeMsg({ messageId: '499' })],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.jumpToPresent());
+
+      expect(store.anchored()).toBe(false);
+      expect(store.messages().map((m) => m.messageId)).toEqual(['499', '500']);
+    });
+
+    it('consumePendingJump returns and clears a matching parked jump; null otherwise', () => {
+      store.requestChannelJump('7', '42', '900');
+      expect(store.consumePendingJump('99')).toBeNull(); // different channel
+      const consumed = store.consumePendingJump('42');
+      expect(consumed).toEqual({ guildId: '7', channelId: '42', messageId: '900' });
+      expect(store.consumePendingJump('42')).toBeNull(); // already consumed
+    });
+  });
 });

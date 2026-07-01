@@ -34,6 +34,14 @@ interface MessageState {
   // A request to scroll to + highlight a message (e.g. from the pins panel's Jump). The nonce
   // makes repeated jumps to the same id re-trigger the message-list effect. Null = no pending jump.
   jumpRequest: { messageId: string; nonce: number } | null;
+  // True while viewing a historical window (jumped to an old message via search/reply) rather than
+  // the live tail. While anchored: live SignalR appends are suppressed (no viewport yank), a
+  // "Jump to Present" pill shows, and scrolling to the bottom loads newer messages until the true
+  // tail is reached — which clears this back to normal live behaviour.
+  anchored: boolean;
+  // A cross-channel jump target parked while the router navigates to another channel; the channel
+  // component consumes it after the route settles and loads the around-window instead of the latest.
+  pendingJump: { guildId: string | null; channelId: string; messageId: string } | null;
 }
 
 let _jumpNonce = 0;
@@ -52,6 +60,8 @@ export const MessageStore = signalStore(
     mentionHighlights: {},
     replyTarget: null,
     jumpRequest: null,
+    anchored: false,
+    pendingJump: null,
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
     /**
@@ -84,23 +94,117 @@ export const MessageStore = signalStore(
       }
     };
 
+    /**
+     * Loads the latest page into the active channel and drops any anchored (history) state — the
+     * shared core of a fresh channel open and "Jump to Present". Assumes activeChannel/Guild are set.
+     */
+    const fetchLatestInto = async (guildId: string | null, channelId: string): Promise<void> => {
+      const response = await service.getMessages(guildId, channelId);
+      patchState(store, {
+        messages: [...response.messages].reverse(),
+        hasMore: response.messages.length === 50,
+        degraded: response.degraded,
+        anchored: false,
+        realIdToTempId: {},
+      });
+    };
+
     return {
     async loadMessages(guildId: string | null, channelId: string): Promise<void> {
       patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
       try {
-        const response = await service.getMessages(guildId, channelId);
-        const messages = [...response.messages].reverse();
+        await fetchLatestInto(guildId, channelId);
         patchState(store, {
-          messages,
-          hasMore: response.messages.length === 50,
-          degraded: response.degraded,
           isLoading: false,
-          realIdToTempId: {},
           mentionHighlights: {}, // new channel view → clear any prior highlights
         });
       } catch {
         patchState(store, { isLoading: false });
       }
+    },
+
+    /**
+     * Loads a window centred on `messageId` (a search result / reply reference) and enters anchored
+     * mode: the target is scrolled to + flashed, live appends pause, and a "Jump to Present" pill
+     * shows until the user scrolls back to the live tail. Also sets the active channel, so it works
+     * whether jumping within the open channel or after navigating to another.
+     */
+    async jumpToMessage(guildId: string | null, channelId: string, messageId: string): Promise<void> {
+      patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
+      try {
+        const response = await service.getMessages(guildId, channelId, { around: messageId });
+        patchState(store, {
+          messages: [...response.messages].reverse(),
+          // We loaded a centred window: older history is (almost always) re-loadable on scroll-up,
+          // and there are newer messages we haven't loaded → stay anchored until the tail is reached.
+          hasMore: true,
+          anchored: true,
+          degraded: response.degraded,
+          isLoading: false,
+          realIdToTempId: {},
+          mentionHighlights: {},
+          jumpRequest: { messageId, nonce: ++_jumpNonce },
+        });
+      } catch {
+        patchState(store, { isLoading: false });
+      }
+    },
+
+    /**
+     * Scroll-down "load newer" while anchored: appends the page after the newest loaded message.
+     * A short page means we've reached the true tail → leave anchored mode (back to live).
+     */
+    async loadNewer(): Promise<void> {
+      const channelId = store.activeChannelId();
+      const guildId = store.activeGuildId();
+      if (!channelId || !store.anchored() || store.isLoading()) return;
+
+      const newest = [...store.messages()].reverse().find((m) => !m.tempId);
+      if (!newest) return;
+
+      patchState(store, { isLoading: true });
+      try {
+        const response = await service.getMessages(guildId, channelId, { after: newest.messageId });
+        const newer = [...response.messages].reverse();
+        const reachedTail = response.messages.length < 50;
+        patchState(store, {
+          messages: [...store.messages(), ...newer],
+          degraded: response.degraded,
+          isLoading: false,
+          anchored: !reachedTail,
+        });
+      } catch {
+        patchState(store, { isLoading: false });
+      }
+    },
+
+    /** Returns to the live tail from anchored history mode (the "Jump to Present" pill). */
+    async jumpToPresent(): Promise<void> {
+      const channelId = store.activeChannelId();
+      const guildId = store.activeGuildId();
+      if (!channelId) return;
+      patchState(store, { isLoading: true });
+      try {
+        await fetchLatestInto(guildId, channelId);
+        patchState(store, { isLoading: false });
+      } catch {
+        patchState(store, { isLoading: false });
+      }
+    },
+
+    /** Parks a cross-channel jump target; the channel component consumes it once the route settles. */
+    requestChannelJump(guildId: string | null, channelId: string, messageId: string): void {
+      patchState(store, { pendingJump: { guildId, channelId, messageId } });
+    },
+
+    /** Returns and clears a parked jump if it targets the given channel; else null. */
+    consumePendingJump(
+      channelId: string,
+    ): { guildId: string | null; channelId: string; messageId: string } | null {
+      const pending = store.pendingJump();
+      if (!pending || pending.channelId !== channelId) return null;
+      patchState(store, { pendingJump: null });
+      return pending;
     },
 
     async loadOlder(): Promise<void> {
@@ -136,6 +240,12 @@ export const MessageStore = signalStore(
       const guildId = store.activeGuildId(); // null for a DM
       const user = auth.currentUser();
       if (!channelId || !user) return;
+
+      // Sending from a historical view snaps back to the live tail first, so the new message lands
+      // (and stays visible) at the bottom rather than being appended into an old window.
+      if (store.anchored()) {
+        await fetchLatestInto(guildId, channelId).catch(() => {});
+      }
 
       const tempId = nextTempId();
       const optimistic: MessageResponse = {
@@ -176,6 +286,11 @@ export const MessageStore = signalStore(
     },
 
     appendMessage(msg: MessageResponse): void {
+      // While anchored to a historical window, don't append live messages — that would yank the
+      // reader. They surface (with everything else) when they hit "Jump to Present". The unread
+      // badge still updates via UnreadStore, and edits/deletes below still apply to loaded messages.
+      if (store.anchored()) return;
+
       const realIdToTempId = store.realIdToTempId();
       const tempId = realIdToTempId[msg.messageId];
 
@@ -270,6 +385,8 @@ export const MessageStore = signalStore(
         mentionHighlights: {},
         replyTarget: null,
         jumpRequest: null,
+        anchored: false,
+        pendingJump: null,
       });
     },
 

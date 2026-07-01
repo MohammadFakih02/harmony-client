@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Channel } from '../../../core/models/channel.models';
 import { GuildStore } from '../../../core/stores/guild.store';
@@ -72,7 +72,7 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
     </div>
   `,
 })
-export class GuildWelcome {
+export class GuildWelcome implements OnInit {
   readonly guildId = input.required<string>();
   readonly textChannels = input.required<Channel[]>();
 
@@ -98,7 +98,9 @@ export class GuildWelcome {
     );
   });
 
-  constructor() {
+  // Seed from the guild in ngOnInit, not the constructor: the required `guildId` input
+  // isn't bound yet at construction, so reading it there throws NG0950 and blanks the tab.
+  ngOnInit(): void {
     this.reset();
   }
 

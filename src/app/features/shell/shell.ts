@@ -11,6 +11,7 @@ import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { MessageStore } from '../../core/stores/message.store';
 import { PinStore } from '../../core/stores/pin.store';
 import { PinsPanel } from '../channels/pins-panel/pins-panel';
+import { SearchPanel } from './search-panel/search-panel';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { MemberStore } from '../../core/stores/member.store';
@@ -57,6 +58,7 @@ import { ToastService } from '../../core/services/toast.service';
     UserProfileModal,
     OverlayModule,
     PinsPanel,
+    SearchPanel,
   ],
   templateUrl: './shell.html',
 })
@@ -83,6 +85,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   // Pinned-messages panel (header, guild + DM) — anchored under the pin button.
   protected readonly showPins = signal(false);
   protected readonly pinsPanelPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+  ];
+  // Server message search panel (guild header) — anchored under the search button.
+  protected readonly showSearch = signal(false);
+  protected readonly searchPanelPositions: ConnectionPositionPair[] = [
     { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
   ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());

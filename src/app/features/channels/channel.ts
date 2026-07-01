@@ -55,15 +55,24 @@ export class Channel implements OnInit, OnDestroy {
       }
       // Load this channel's pins (drives the 📌 indicator + Pin/Unpin toggle + the pins panel).
       void this.pinStore.load(newGuildId, newChannelId);
-      await this.messageStore.loadMessages(newGuildId, newChannelId);
-      this.messageStore.setUnreadOnOpen(unreadOnOpen);
-      // Highlight the unread mentions of me in this view (clears on leave/rejoin).
-      this.messageStore.seedMentionHighlights();
 
-      const messages = this.messageStore.messages();
-      const newest = [...messages].reverse().find((m: MessageResponse) => !m.tempId);
-      if (newest) {
-        this.unreadStore.markRead(newGuildId, newChannelId, newest.messageId).catch(() => {});
+      // A parked cross-channel jump (from a search result in another channel) loads a window
+      // centred on the target instead of the latest page, and skips the catch-up bookkeeping
+      // (mark-read / unread banner / mention highlights) — you're viewing history, not catching up.
+      const pendingJump = this.messageStore.consumePendingJump(newChannelId);
+      if (pendingJump) {
+        await this.messageStore.jumpToMessage(newGuildId, newChannelId, pendingJump.messageId);
+      } else {
+        await this.messageStore.loadMessages(newGuildId, newChannelId);
+        this.messageStore.setUnreadOnOpen(unreadOnOpen);
+        // Highlight the unread mentions of me in this view (clears on leave/rejoin).
+        this.messageStore.seedMentionHighlights();
+
+        const messages = this.messageStore.messages();
+        const newest = [...messages].reverse().find((m: MessageResponse) => !m.tempId);
+        if (newest) {
+          this.unreadStore.markRead(newGuildId, newChannelId, newest.messageId).catch(() => {});
+        }
       }
 
       // Route through the service so the join is recorded as "desired" and applied once the socket
