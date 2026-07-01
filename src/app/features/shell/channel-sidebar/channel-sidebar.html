@@ -133,13 +133,24 @@
       <span class="flex-1">Friends</span>
     </a>
 
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 mb-1">Direct Messages</p>
+    <div class="flex items-center justify-between px-2 mb-1">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint">Direct Messages</p>
+      <button
+        type="button"
+        class="text-faint hover:text-primary transition-micro"
+        title="Create Group DM"
+        (click)="openGroupModal()"
+      >
+        <i class="fas fa-plus text-xs"></i>
+      </button>
+    </div>
     @if (dmStore.dms().length === 0) {
     <p class="text-xs text-faint px-2 py-2">No conversations yet.</p>
     } @else {
     <div class="flex flex-col gap-0.5">
       @for (dm of dmStore.dms(); track dm.channelId) {
       @let unread = activeDmChannelId() === dm.channelId ? 0 : (unreadStore.counts()[dm.channelId] || 0);
+      @let peer = dmOneToOnePeer(dm);
       <a
         [routerLink]="['/app/dm', dm.channelId]"
         routerLinkActive="bg-surface-3 text-primary"
@@ -147,13 +158,21 @@
         [class.font-semibold]="unread > 0"
         [class.text-primary]="unread > 0"
       >
+        @if (dm.isGroup) {
+        <span
+          class="w-8 h-8 shrink-0 rounded-full bg-surface-3 flex items-center justify-center text-muted"
+        >
+          <i class="fas fa-user-group text-xs"></i>
+        </span>
+        } @else if (peer) {
         <ui-avatar
-          [src]="dm.peerAvatarKey"
-          [alt]="dm.peerUsername"
-          [status]="dmAvatarStatus(dm.peerId)"
+          [src]="peer.avatarKey"
+          [alt]="peer.username"
+          [status]="dmAvatarStatus(peer.userId)"
           size="sm"
         />
-        <span class="flex-1 truncate-text">{{ dmName(dm.peerId, dm.peerUsername) }}</span>
+        }
+        <span class="flex-1 truncate-text">{{ dmDisplayName(dm) }}</span>
         @if (unread > 0) {
         <span
           class="shrink-0 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"
@@ -164,8 +183,8 @@
         <button
           type="button"
           class="opacity-0 group-hover:opacity-100 text-faint hover:text-primary transition-micro"
-          title="Close DM"
-          (click)="hideDm(dm.channelId, $event)"
+          [title]="dm.isGroup ? 'Leave Group' : 'Close DM'"
+          (click)="removeDm(dm, $event)"
         >
           <i class="fas fa-xmark text-xs"></i>
         </button>
@@ -379,6 +398,14 @@
     </div>
   </div>
 </aside>
+
+<!-- New Group DM Modal -->
+@if (showGroupModal()) {
+<app-group-dm-modal
+  (created)="onGroupCreated($event)"
+  (close)="showGroupModal.set(false)"
+/>
+}
 
 <!-- Create Channel Modal -->
 @if (showCreateModal()) {

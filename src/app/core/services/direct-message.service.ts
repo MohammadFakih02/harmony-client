@@ -16,6 +16,25 @@ export class DirectMessageService {
     );
   }
 
+  /** Creates a group DM with two or more other users (name optional). */
+  createGroup(name: string | null, userIds: string[]): Promise<DirectMessageChannel> {
+    return firstValueFrom(
+      this.http.post<DirectMessageChannel>(`${this.base}/dm/group`, { name, userIds }),
+    );
+  }
+
+  /** Adds a user to an existing group DM. */
+  addParticipant(channelId: string, userId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>(`${this.base}/dm/${channelId}/participants`, { userId }),
+    );
+  }
+
+  /** Leaves a group DM. */
+  leave(channelId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/dm/${channelId}/participants/me`));
+  }
+
   getMyDms(): Promise<DirectMessageChannel[]> {
     return firstValueFrom(this.http.get<DirectMessageChannel[]>(`${this.base}/dm`));
   }
