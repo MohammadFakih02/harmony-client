@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { GuildService } from '../../../core/services/guild.service';
@@ -53,7 +53,7 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
     </div>
   `,
 })
-export class GuildOverview {
+export class GuildOverview implements OnInit {
   readonly guildId = input.required<string>();
 
   private readonly guildStore = inject(GuildStore);
@@ -78,7 +78,9 @@ export class GuildOverview {
     );
   });
 
-  constructor() {
+  // Seed from the guild in ngOnInit, not the constructor: the required `guildId` input
+  // isn't bound yet at construction, so reading it there throws NG0950 and blanks the tab.
+  ngOnInit(): void {
     this.reset();
   }
 
