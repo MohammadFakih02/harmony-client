@@ -199,6 +199,40 @@ describe('MessageStore', () => {
     });
   });
 
+  describe('trimToWindow()', () => {
+    it('is a no-op at or under the cap', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: Array.from({ length: 50 }, (_, i) => makeMsg({ messageId: String(i) })),
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+
+      store.trimToWindow();
+
+      expect(store.messages()).toHaveLength(50);
+    });
+
+    it('keeps the most recent 200 and flags hasMore when over the cap', async () => {
+      // 250 loaded (e.g. after scroll-back), oldest-first. loadMessages sets hasMore=false (<50 rule),
+      // so this also proves the trim re-opens older-history loading.
+      service.getMessages.mockResolvedValue({
+        messages: Array.from({ length: 250 }, (_, i) => makeMsg({ messageId: String(i) })).reverse(),
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+      expect(store.messages()).toHaveLength(250);
+
+      store.trimToWindow();
+
+      const msgs = store.messages();
+      expect(msgs).toHaveLength(200);
+      // Oldest 50 dropped; the newest message is retained.
+      expect(msgs[0].messageId).toBe('50');
+      expect(msgs[msgs.length - 1].messageId).toBe('249');
+      expect(store.hasMore()).toBe(true);
+    });
+  });
+
   describe('handleFailed()', () => {
     it('marks the message as failed by messageId', async () => {
       service.getMessages.mockResolvedValue({ messages: [], degraded: false });

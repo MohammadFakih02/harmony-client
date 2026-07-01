@@ -22,6 +22,11 @@ export interface MessageEditedEvent {
   editedAt: number;
 }
 
+export interface MessagePinEvent {
+  messageId: string;
+  channelId: string;
+}
+
 export interface TypingStartedEvent {
   userId: string;
   username: string;
@@ -37,6 +42,8 @@ export class HarmonyHubClient {
   private readonly _messageReceived = new Subject<MessageResponse>();
   private readonly _messageEdited = new Subject<MessageEditedEvent>();
   private readonly _messageDeleted = new Subject<string>();
+  private readonly _messagePinned = new Subject<MessagePinEvent>();
+  private readonly _messageUnpinned = new Subject<MessagePinEvent>();
   private readonly _messageFailed = new Subject<MessageFailedPayload>();
   private readonly _unreadCountUpdated = new Subject<UnreadCountPayload>();
   private readonly _channelCreated = new Subject<Channel>();
@@ -62,6 +69,8 @@ export class HarmonyHubClient {
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
   readonly messageDeleted$: Observable<string> = this._messageDeleted.asObservable();
+  readonly messagePinned$: Observable<MessagePinEvent> = this._messagePinned.asObservable();
+  readonly messageUnpinned$: Observable<MessagePinEvent> = this._messageUnpinned.asObservable();
   readonly messageFailed$: Observable<MessageFailedPayload> = this._messageFailed.asObservable();
   readonly unreadCountUpdated$: Observable<UnreadCountPayload> = this._unreadCountUpdated.asObservable();
   readonly channelCreated$: Observable<Channel> = this._channelCreated.asObservable();
@@ -131,6 +140,12 @@ export class HarmonyHubClient {
     // so the id must be read off the payload — not treated as a scalar.
     this.connection.on('MessageDeleted', (payload: { messageId: unknown }) =>
       this._messageDeleted.next(String(payload.messageId)));
+
+    this.connection.on('MessagePinned', (p: { messageId: unknown; channelId: unknown }) =>
+      this._messagePinned.next({ messageId: String(p.messageId), channelId: String(p.channelId) }));
+
+    this.connection.on('MessageUnpinned', (p: { messageId: unknown; channelId: unknown }) =>
+      this._messageUnpinned.next({ messageId: String(p.messageId), channelId: String(p.channelId) }));
 
     this.connection.on('MessageFailed', (payload: MessageFailedPayload) =>
       this._messageFailed.next(payload));

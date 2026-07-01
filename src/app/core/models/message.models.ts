@@ -27,6 +27,17 @@ export interface ChannelMessagesResponse {
 }
 
 /**
+ * A pinned message: the full message (rendered exactly like any message) plus who pinned it.
+ * `pinnedBy`/`pinnedAt` are Snowflake ids kept as strings (pinnedAt equals the message id —
+ * the pin's clustering key — so it exceeds 2^53 and must never be coerced to a JS number).
+ */
+export interface PinnedMessageResponse {
+  message: MessageResponse;
+  pinnedBy: string;
+  pinnedAt: string;
+}
+
+/**
  * The message currently being replied to. A slim projection (not the full MessageResponse) — it
  * only needs to render the composer's "Replying to …" banner and supply replyToId on send. The
  * author name is resolved (nickname-aware) by the message list at the moment Reply is clicked.

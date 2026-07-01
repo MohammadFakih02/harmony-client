@@ -3,11 +3,10 @@ import {
 } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
-import { Subscription } from 'rxjs';
 import { UiAvatar, MentionAutocomplete } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
+import { PinStore } from '../../../core/stores/pin.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
@@ -43,7 +42,7 @@ export interface MessageGroup {
   isSystem: boolean;
 }
 
-const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system']);
+const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin']);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
@@ -72,7 +71,6 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
   standalone: true,
   imports: [
     UiAvatar,
-    ScrollingModule,
     FormsModule,
     NgClass,
     AutofocusEnd,
@@ -92,6 +90,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 })
 export class MessageList {
   protected readonly messageStore = inject(MessageStore);
+  protected readonly pinStore = inject(PinStore);
   private readonly localSettings = inject(LocalSettingsStore);
   /** Drives the compact host class — denser message rows (Appearance > Message Display). */
   protected readonly isCompact = computed(() => this.localSettings.messageDisplay() === 'compact');
@@ -245,15 +244,28 @@ export class MessageList {
     () => this.channelStore.currentCapabilities()?.canManageMessages ?? false,
   );
 
+  /**
+   * Whether the caller may pin/unpin in the open channel. In a guild this is the resolved
+   * PinMessages capability; in a DM/group (no guild) any participant may pin — and the viewer
+   * is always a participant of a DM they're reading.
+   */
+  protected readonly canPinMessages = computed(() =>
+    this.messageStore.activeGuildId()
+      ? (this.channelStore.currentCapabilities()?.canPin ?? false)
+      : true,
+  );
+
   // Only surface the initial-load spinner if the fetch takes longer than ~200ms,
   // so fast channel switches don't flash it.
   protected readonly showInitialLoading = delayedSignal(
     computed(() => this.messageStore.isLoading() && this.messageStore.messages().length === 0),
   );
 
-  private readonly viewport = viewChild(CdkVirtualScrollViewport);
+  // Plain scrollable container (no CDK virtual scroll — fixed-size virtualization can't size the
+  // variable-height message groups, which caused gaps + jitter). The loaded window is bounded by the
+  // MessageStore window cap, so natural-flow rendering stays cheap and scrollHeight is always exact.
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
 
-  private scrollSub = new Subscription();
   private prevCount = 0;
   private prevTailSignature = '';
   private isInitialLoad = true;
@@ -289,10 +301,6 @@ export class MessageList {
     return groups;
   });
 
-  protected trackGroup(_: number, g: MessageGroup): string {
-    return g.firstMessageId;
-  }
-
   // -------------------------------------------------------------------------
   // "X new messages" jump banner — driven by the unread count captured when the
   // channel opened (messageStore.unreadOnOpen). The boundary message id isn't on
@@ -320,11 +328,25 @@ export class MessageList {
   protected jumpToUnread(): void {
     const banner = this.unreadBanner();
     if (!banner) return;
-    const gi = this.messageGroups().findIndex((g) =>
-      g.messages.some((m) => m.messageId === banner.firstUnreadId),
-    );
-    if (gi >= 0) this.viewport()?.scrollToIndex(gi, 'smooth');
+    this.scrollMessageIntoView(banner.firstUnreadId, 'start');
     this.messageStore.dismissUnreadBanner();
+  }
+
+  /**
+   * Scrolls the group containing a message into view (natural-flow container → scrollIntoView on the
+   * group element). No-op if the message isn't in the loaded window. Returns whether it scrolled.
+   */
+  private scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition): boolean {
+    const group = this.messageGroups().find((g) =>
+      g.messages.some((m) => m.messageId === messageId),
+    );
+    if (!group) return false;
+    const el = this.scroller()?.nativeElement?.querySelector<HTMLElement>(
+      `[data-group="${group.firstMessageId}"]`,
+    );
+    if (!el) return false;
+    el.scrollIntoView({ behavior: 'smooth', block });
+    return true;
   }
 
   protected dismissUnreadBanner(): void {
@@ -369,12 +391,37 @@ export class MessageList {
     return this.canReply(msg) && (msg.content.trim().length > 0 || msg.attachmentIds.length > 0);
   }
 
+  // Pin is available for any settled message when the caller may pin in this channel.
+  protected canPin(msg: MessageResponse): boolean {
+    return this.canReply(msg) && this.canPinMessages();
+  }
+
+  /** Whether a message is currently pinned (drives the toggle label + the persistent marker). */
+  protected isPinned(msg: MessageResponse): boolean {
+    return this.pinStore.pinnedIds().has(msg.messageId);
+  }
+
+  /** Pin or unpin the message (the authoritative change also arrives via the pin broadcast). */
+  protected togglePin(msg: MessageResponse): void {
+    if (this.isPinned(msg)) {
+      void this.pinStore.unpin(msg.guildId, msg.channelId, msg.messageId);
+    } else {
+      void this.pinStore.pin(msg.guildId, msg.channelId, msg);
+    }
+  }
+
+  /** The system message's type (e.g. 'pin' vs 'member_join'), for branching the notice render. */
+  protected systemMessageType(group: MessageGroup): string {
+    return group.messages[0]?.messageType ?? 'system';
+  }
+
   /** Whether a message exposes any hover action (drives the hover toolbar's visibility). */
   protected hasActions(msg: MessageResponse): boolean {
     return (
       this.canReply(msg) ||
       this.canCopy(msg) ||
       this.canForward(msg) ||
+      this.canPin(msg) ||
       this.canEdit(msg) ||
       this.canDelete(msg)
     );
@@ -416,11 +463,7 @@ export class MessageList {
 
   /** Scrolls to the referenced message (if loaded) and briefly flashes it. */
   protected jumpToMessage(messageId: string): void {
-    const gi = this.messageGroups().findIndex((g) =>
-      g.messages.some((m) => m.messageId === messageId),
-    );
-    if (gi < 0) return; // not loaded — nothing to jump to
-    this.viewport()?.scrollToIndex(gi, 'smooth');
+    if (!this.scrollMessageIntoView(messageId, 'center')) return; // not loaded — nothing to jump to
     if (this.jumpTimer) clearTimeout(this.jumpTimer);
     this.jumpHighlightId.set(messageId);
     this.jumpTimer = setTimeout(() => this.jumpHighlightId.set(null), 2000);
@@ -541,31 +584,9 @@ export class MessageList {
   }
 
   constructor() {
-    // Wire scroll listener whenever the viewport enters/leaves the DOM
+    // Pin to the bottom once the scroll container first mounts (channel open).
     effect(() => {
-      const vp = this.viewport();
-      this.scrollSub.unsubscribe();
-      this.scrollSub = new Subscription();
-      if (!vp) return;
-
-      this.scrollSub.add(
-        vp.elementScrolled().subscribe(() => {
-          const el = vp.elementRef.nativeElement as HTMLElement;
-          this.atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-
-          if (
-            el.scrollTop < LOAD_OLDER_THRESHOLD_PX &&
-            this.messageStore.hasMore() &&
-            !this.messageStore.isLoading()
-          ) {
-            this.messageStore.loadOlder();
-          }
-        }),
-      );
-
-      // Initial scroll once the viewport exists
-      vp.checkViewportSize();
-      this.scrollToBottom();
+      if (this.scroller()) this.scrollToBottom();
     });
 
     // React to message list changes
@@ -599,21 +620,64 @@ export class MessageList {
       },
       { injector: this.injector },
     );
+
+    // React to an external jump request (e.g. the pins panel's Jump). The nonce makes repeated
+    // jumps to the same message re-fire; the jump is best-effort — it no-ops if the target isn't
+    // in the loaded window (no ?around loading yet).
+    effect(
+      () => {
+        const req = this.messageStore.jumpRequest();
+        if (!req) return;
+        queueMicrotask(() => this.jumpToMessage(req.messageId));
+      },
+      { injector: this.injector },
+    );
   }
 
   private scrollToBottom(): void {
-    const vp = this.viewport();
-    if (!vp) return;
-    const el = vp.elementRef.nativeElement as HTMLElement;
-    // Two rAFs: first lets Angular render the *cdkVirtualFor items, the second
-    // lets CDK apply its content-wrapper transform + total-size spacer. Only
-    // then does el.scrollHeight reflect the real bottom. Native scrollTop is
-    // used (not scrollToIndex) because itemSize is an estimate and our message
-    // groups have variable height — index math can't reach the true bottom.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      }),
-    );
+    // Natural document flow → scrollHeight is exact. One rAF lets Angular commit the @for
+    // render before we read scrollHeight; images reserve space from stored dims (§5.10), so
+    // height is stable at this point and no second frame is needed.
+    requestAnimationFrame(() => {
+      const el = this.scroller()?.nativeElement;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  /** Container scroll handler: tracks bottom-anchoring and triggers older-history loads near the top. */
+  protected onScroll(): void {
+    const el = this.scroller()?.nativeElement;
+    if (!el) return;
+    this.atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+
+    // Bound the loaded window while pinned to the bottom (this fires after each programmatic
+    // scroll-to-bottom too). Dropping the oldest, off-screen messages keeps the view put — the
+    // browser clamps scrollTop to the shrunken content, leaving us at the bottom.
+    if (this.atBottom) this.messageStore.trimToWindow();
+
+    if (
+      el.scrollTop < LOAD_OLDER_THRESHOLD_PX &&
+      this.messageStore.hasMore() &&
+      !this.messageStore.isLoading()
+    ) {
+      void this.loadOlderPreservingPosition();
+    }
+  }
+
+  /**
+   * Loads older history and preserves the visual position. In a natural-flow container, prepending
+   * messages shifts everything down by the added height; we counter it by re-anchoring scrollTop by
+   * the exact scrollHeight delta so the message under the viewport stays put.
+   */
+  private async loadOlderPreservingPosition(): Promise<void> {
+    const el = this.scroller()?.nativeElement;
+    if (!el) return;
+    const prevHeight = el.scrollHeight;
+    const prevTop = el.scrollTop;
+    await this.messageStore.loadOlder();
+    requestAnimationFrame(() => {
+      const el2 = this.scroller()?.nativeElement;
+      if (el2) el2.scrollTop = el2.scrollHeight - prevHeight + prevTop;
+    });
   }
 }
