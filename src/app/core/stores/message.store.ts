@@ -7,6 +7,11 @@ import { MessageService } from '../services/message.service';
 let _tempIdCounter = -1;
 const nextTempId = (): number => _tempIdCounter--;
 
+// The message list renders in a plain scroll container (no virtualization), so the loaded window
+// is bounded to keep the DOM cheap: while pinned to the bottom, older off-screen messages beyond
+// this many are trimmed (re-fetchable on scroll-up). Sized well above a screen's worth of history.
+const MESSAGE_WINDOW_CAP = 200;
+
 interface MessageState {
   messages: MessageResponse[];
   isLoading: boolean;
@@ -26,7 +31,12 @@ interface MessageState {
   // The message being replied to, shared between the message list (where Reply is clicked) and
   // the composer (which shows the banner + sends replyToId). Cleared on send and channel change.
   replyTarget: ReplyTarget | null;
+  // A request to scroll to + highlight a message (e.g. from the pins panel's Jump). The nonce
+  // makes repeated jumps to the same id re-trigger the message-list effect. Null = no pending jump.
+  jumpRequest: { messageId: string; nonce: number } | null;
 }
+
+let _jumpNonce = 0;
 
 export const MessageStore = signalStore(
   { providedIn: 'root' },
@@ -41,6 +51,7 @@ export const MessageStore = signalStore(
     realIdToTempId: {},
     mentionHighlights: {},
     replyTarget: null,
+    jumpRequest: null,
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
     /**
@@ -258,7 +269,16 @@ export const MessageStore = signalStore(
         realIdToTempId: {},
         mentionHighlights: {},
         replyTarget: null,
+        jumpRequest: null,
       });
+    },
+
+    /**
+     * Requests a scroll-to + highlight of a message (from the pins panel Jump). The nonce bump
+     * makes the message-list effect fire even for repeated jumps to the same message.
+     */
+    requestJump(messageId: string): void {
+      patchState(store, { jumpRequest: { messageId, nonce: ++_jumpNonce } });
     },
 
     /** Sets the message the composer is replying to (banner + replyToId on next send). */
@@ -274,6 +294,21 @@ export const MessageStore = signalStore(
     /** Records how many messages were unread when the channel opened (for the jump banner). */
     setUnreadOnOpen(count: number): void {
       patchState(store, { unreadOnOpen: count });
+    },
+
+    /**
+     * Trims the loaded window to the most recent MESSAGE_WINDOW_CAP messages. Only safe to call
+     * while the view is pinned to the bottom (the message list gates it on that) — dropping the
+     * oldest, off-screen messages then shifts nothing visible. Marks hasMore so the trimmed
+     * history can be re-fetched on scroll-up. No-op under the cap.
+     */
+    trimToWindow(): void {
+      const msgs = store.messages();
+      if (msgs.length <= MESSAGE_WINDOW_CAP) return;
+      patchState(store, {
+        messages: msgs.slice(msgs.length - MESSAGE_WINDOW_CAP),
+        hasMore: true,
+      });
     },
 
     /**

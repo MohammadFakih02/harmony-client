@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   ChannelMessagesResponse,
+  PinnedMessageResponse,
   SendMessageResponse,
   UnreadCountResponse,
 } from '../models/message.models';
@@ -72,6 +73,24 @@ export class MessageService {
       this.http.delete<void>(
         `${this.channelBase(guildId, channelId)}/messages/${messageId}`,
       ),
+    );
+  }
+
+  getPins(guildId: string | null, channelId: string): Promise<PinnedMessageResponse[]> {
+    return firstValueFrom(
+      this.http.get<PinnedMessageResponse[]>(`${this.channelBase(guildId, channelId)}/pins`),
+    );
+  }
+
+  pinMessage(guildId: string | null, channelId: string, messageId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.put<void>(`${this.channelBase(guildId, channelId)}/pins/${messageId}`, {}),
+    );
+  }
+
+  unpinMessage(guildId: string | null, channelId: string, messageId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.channelBase(guildId, channelId)}/pins/${messageId}`),
     );
   }
 

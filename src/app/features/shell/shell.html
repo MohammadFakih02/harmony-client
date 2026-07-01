@@ -43,6 +43,29 @@
 
         <div class="flex-1 min-w-0"></div>
 
+        <ui-icon-button
+          cdkOverlayOrigin
+          #pinsOrigin="cdkOverlayOrigin"
+          size="md"
+          [active]="showPins()"
+          label="Pinned Messages"
+          (click)="showPins.set(!showPins())"
+        >
+          <i class="fas fa-thumbtack"></i>
+        </ui-icon-button>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayOrigin]="pinsOrigin"
+          [cdkConnectedOverlayOpen]="showPins()"
+          [cdkConnectedOverlayPositions]="pinsPanelPositions"
+          [cdkConnectedOverlayHasBackdrop]="true"
+          cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+          (backdropClick)="showPins.set(false)"
+          (detach)="showPins.set(false)"
+        >
+          <app-pins-panel (close)="showPins.set(false)" />
+        </ng-template>
+
         <app-notification-bell />
         @if (inGuild()) {
         @if (canCreateInvite()) {

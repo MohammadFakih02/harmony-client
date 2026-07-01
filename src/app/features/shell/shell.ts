@@ -7,7 +7,10 @@ import { HarmonyHubClient } from '../../core/hub/harmony-hub.client';
 import { IdleService } from '../../core/services/idle.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { ChannelStore } from '../../core/stores/channel.store';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { MessageStore } from '../../core/stores/message.store';
+import { PinStore } from '../../core/stores/pin.store';
+import { PinsPanel } from '../channels/pins-panel/pins-panel';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { MemberStore } from '../../core/stores/member.store';
@@ -52,6 +55,8 @@ import { ToastService } from '../../core/services/toast.service';
     Lightbox,
     ToastContainer,
     UserProfileModal,
+    OverlayModule,
+    PinsPanel,
   ],
   templateUrl: './shell.html',
 })
@@ -75,6 +80,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly showInviteModal = signal(false);
   // Roles management modal (guild header) — gated on ManageRoles.
   protected readonly showRolesModal = signal(false);
+  // Pinned-messages panel (header, guild + DM) — anchored under the pin button.
+  protected readonly showPins = signal(false);
+  protected readonly pinsPanelPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+  ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
   protected readonly canManageRoles = computed(() => {
     const guildId = this.activeGuildId();
@@ -90,6 +100,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
+  private readonly pinStore = inject(PinStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly memberStore = inject(MemberStore);
@@ -248,8 +259,15 @@ export class ShellComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(client.messageEdited$.subscribe(({ messageId, content, editedAt }) =>
       this.messageStore.editMessage(messageId, content, editedAt)));
-    this.subs.add(client.messageDeleted$.subscribe((id) => this.messageStore.deleteMessage(id)));
+    this.subs.add(client.messageDeleted$.subscribe((id) => {
+      this.messageStore.deleteMessage(id);
+      this.pinStore.applyMessageDeleted(id);
+    }));
     this.subs.add(client.messageFailed$.subscribe((p) => this.messageStore.handleFailed(p)));
+    this.subs.add(client.messagePinned$.subscribe((p) =>
+      this.pinStore.applyPinned(p.channelId, p.messageId)));
+    this.subs.add(client.messageUnpinned$.subscribe((p) =>
+      this.pinStore.applyUnpinned(p.channelId, p.messageId)));
     this.subs.add(client.unreadCountUpdated$.subscribe((p) => {
       // Ignore increments for the channel you're viewing — you're reading it, not accruing unreads.
       if (p.channelId === this.messageStore.activeChannelId()) return;
