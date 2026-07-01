@@ -46,6 +46,8 @@ const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin']);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
+// While anchored (viewing history), scrolling this close to the bottom loads the next newer page.
+const LOAD_NEWER_THRESHOLD_PX = 120;
 
 function formatMessageTime(sentAt: number): string {
   const d = new Date(sentAt);
@@ -461,12 +463,23 @@ export class MessageList {
   protected readonly jumpHighlightId = signal<string | null>(null);
   private jumpTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** Scrolls to the referenced message (if loaded) and briefly flashes it. */
-  protected jumpToMessage(messageId: string): void {
-    if (!this.scrollMessageIntoView(messageId, 'center')) return; // not loaded — nothing to jump to
-    if (this.jumpTimer) clearTimeout(this.jumpTimer);
-    this.jumpHighlightId.set(messageId);
-    this.jumpTimer = setTimeout(() => this.jumpHighlightId.set(null), 2000);
+  /**
+   * Scrolls to a message and briefly flashes it. When jumping into a freshly-loaded window (a search
+   * result), the target's DOM may not be committed yet — retry across a few frames before giving up.
+   */
+  protected jumpToMessage(messageId: string, attempt = 0): void {
+    if (this.scrollMessageIntoView(messageId, 'center')) {
+      if (this.jumpTimer) clearTimeout(this.jumpTimer);
+      this.jumpHighlightId.set(messageId);
+      this.jumpTimer = setTimeout(() => this.jumpHighlightId.set(null), 2000);
+      return;
+    }
+    if (attempt < 5) requestAnimationFrame(() => this.jumpToMessage(messageId, attempt + 1));
+  }
+
+  /** Returns to the live tail from a historical (anchored) view — the "Jump to Present" pill. */
+  protected jumpToPresent(): void {
+    void this.messageStore.jumpToPresent();
   }
 
   /** Highlight class for a message row — unseen-mention bar takes precedence over a transient jump flash. */
@@ -584,9 +597,10 @@ export class MessageList {
   }
 
   constructor() {
-    // Pin to the bottom once the scroll container first mounts (channel open).
+    // Pin to the bottom once the scroll container mounts (channel open) and whenever we return to
+    // the live tail. Never while anchored — the jump effect centres on the target instead.
     effect(() => {
-      if (this.scroller()) this.scrollToBottom();
+      if (this.scroller() && !this.messageStore.anchored()) this.scrollToBottom();
     });
 
     // React to message list changes
@@ -612,8 +626,12 @@ export class MessageList {
         const isMine = last.userId === myId || last.pending === true || last.failed === true;
 
         // Initial load OR my own message OR a new message while already at the bottom
-        // → pin to bottom. (Loading older history scrolls from the top, must NOT yank.)
-        if (this.isInitialLoad || isMine || (grew && this.atBottom)) {
+        // → pin to bottom. (Loading older history scrolls from the top, must NOT yank; and while
+        // anchored to a historical window the jump effect owns scrolling, so never auto-bottom.)
+        if (
+          (this.isInitialLoad || isMine || (grew && this.atBottom)) &&
+          !this.messageStore.anchored()
+        ) {
           this.isInitialLoad = false;
           this.scrollToBottom();
         }
@@ -649,11 +667,13 @@ export class MessageList {
     const el = this.scroller()?.nativeElement;
     if (!el) return;
     this.atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const anchored = this.messageStore.anchored();
 
-    // Bound the loaded window while pinned to the bottom (this fires after each programmatic
+    // Bound the loaded window while pinned to the live bottom (this fires after each programmatic
     // scroll-to-bottom too). Dropping the oldest, off-screen messages keeps the view put — the
-    // browser clamps scrollTop to the shrunken content, leaving us at the bottom.
-    if (this.atBottom) this.messageStore.trimToWindow();
+    // browser clamps scrollTop to the shrunken content, leaving us at the bottom. Never trim while
+    // anchored: the "newest loaded" there is the window's newest, not the channel's true tail.
+    if (this.atBottom && !anchored) this.messageStore.trimToWindow();
 
     if (
       el.scrollTop < LOAD_OLDER_THRESHOLD_PX &&
@@ -661,6 +681,16 @@ export class MessageList {
       !this.messageStore.isLoading()
     ) {
       void this.loadOlderPreservingPosition();
+    }
+
+    // While anchored (viewing history), scrolling near the bottom loads newer messages; reaching
+    // the true tail clears anchored mode (back to live) inside the store.
+    if (
+      anchored &&
+      el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_NEWER_THRESHOLD_PX &&
+      !this.messageStore.isLoading()
+    ) {
+      void this.messageStore.loadNewer();
     }
   }
 

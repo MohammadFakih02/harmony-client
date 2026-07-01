@@ -18,6 +18,17 @@
 </button>
 }
 
+<!-- "Jump to Present" pill — shown while viewing a historical window (jumped from search/reply) -->
+@if (messageStore.anchored()) {
+<button
+  type="button"
+  class="absolute bottom-3 right-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-white text-xs font-semibold shadow-lg hover:brightness-110 transition-micro"
+  (click)="jumpToPresent()"
+>
+  Jump to Present <i class="fas fa-arrow-down text-2xs"></i>
+</button>
+}
+
 <!-- Degraded banner -->
 @if (messageStore.degraded()) {
 <div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs shrink-0">
