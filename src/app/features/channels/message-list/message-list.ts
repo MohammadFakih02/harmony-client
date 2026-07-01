@@ -113,8 +113,10 @@ export class MessageList {
       return new Set(this.memberStore.membersOf(guildId).map((m) => m.username.toLowerCase()));
     }
     const channelId = this.messageStore.activeChannelId();
-    const dm = channelId ? this.dmStore.peerOf(channelId) : undefined;
-    return dm ? new Set([dm.peerUsername.toLowerCase()]) : new Set<string>();
+    const dm = channelId ? this.dmStore.find(channelId) : undefined;
+    return dm
+      ? new Set(dm.participants.map((p) => p.username.toLowerCase()))
+      : new Set<string>();
   });
 
   // Invite codes from any full invite links in the message → inline embed cards. Memoized per
@@ -231,10 +233,7 @@ export class MessageList {
       return [...EVERYONE_MENTION_CANDIDATES, ...members];
     }
     const channelId = this.messageStore.activeChannelId();
-    const dm = channelId ? this.dmStore.peerOf(channelId) : undefined;
-    return dm
-      ? [{ userId: dm.peerId, username: dm.peerUsername, avatarKey: dm.peerAvatarKey }]
-      : [];
+    return channelId ? (this.dmStore.find(channelId)?.participants ?? []) : [];
   });
   protected readonly editMentionCandidates = computed<MentionCandidate[]>(() => {
     const trigger = this.editMentionTrigger();

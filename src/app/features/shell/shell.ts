@@ -24,8 +24,14 @@ import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { RolesModal } from '../guilds/roles-modal/roles-modal';
+import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
+import {
+  DmParticipant,
+  dmLabel,
+  dmPeer as oneToOnePeer,
+} from '../../core/models/direct-message.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
 
@@ -40,6 +46,7 @@ import { ToastService } from '../../core/services/toast.service';
     NotificationBell,
     InvitePeopleModal,
     RolesModal,
+    GroupDmModal,
     UiAvatar,
     UiIconButton,
     Lightbox,
@@ -89,25 +96,31 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly roleStore = inject(RoleStore);
   private readonly toast = inject(ToastService);
 
-  // --- Header bar context (guild channel name+topic, or DM peer identity) ---
+  // --- Header bar context (guild channel name+topic, or DM peer/group identity) ---
   protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
-  protected readonly dmPeer = computed(() => {
+  // The active DM/group channel (undefined outside a DM).
+  protected readonly dmChannel = computed(() => {
     const channelId = this.messageStore.activeChannelId();
-    return this.inDm() && channelId ? this.dmStore.peerOf(channelId) : undefined;
+    return this.inDm() && channelId ? this.dmStore.find(channelId) : undefined;
   });
+  protected readonly dmIsGroup = computed(() => this.dmChannel()?.isGroup ?? false);
+  // The single peer of a 1:1 DM (undefined for a group — drives status dot + profile panel).
+  protected readonly dmPeer = computed(() => oneToOnePeer(this.dmChannel()));
   protected readonly dmPeerStatus = computed(() => {
     const peer = this.dmPeer();
-    return peer ? toAvatarStatus(this.presenceStore.statusOf(peer.peerId)) : null;
+    return peer ? toAvatarStatus(this.presenceStore.statusOf(peer.userId)) : null;
   });
   protected readonly dmPeerMessage = computed(() => {
     const peer = this.dmPeer();
-    return peer ? this.presenceStore.statusMessageOf(peer.peerId) : null;
+    return peer ? this.presenceStore.statusMessageOf(peer.userId) : null;
   });
-  // DM display name: the caller's private friend nickname ?? the peer's username.
-  protected readonly dmPeerName = computed(() => {
-    const peer = this.dmPeer();
-    return peer ? (this.nicknameStore.nicknameOf(peer.peerId) ?? peer.peerUsername) : null;
+  // Header label: the group name (or joined member names) / the 1:1 peer's display name.
+  protected readonly dmHeaderName = computed(() => {
+    const dm = this.dmChannel();
+    return dm ? dmLabel(dm, (p) => this.dmMemberName(p)) : null;
   });
+  // Group members for the profile panel (each with nickname precedence applied at render).
+  protected readonly dmMembers = computed(() => this.dmChannel()?.participants ?? []);
   private readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
@@ -149,9 +162,17 @@ export class ShellComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** A DM member's display name: the caller's private friend nickname ?? their username. */
+  protected dmMemberName(p: DmParticipant): string {
+    return this.nicknameStore.nicknameOf(p.userId) ?? p.username;
+  }
+
   /** Best-effort `#channel` / DM name for a mention toast — null if that guild isn't loaded. */
   private resolveChannelName(guildId: string | null, channelId: string): string | null {
-    if (!guildId) return this.dmStore.peerOf(channelId)?.peerUsername ?? null;
+    if (!guildId) {
+      const dm = this.dmStore.find(channelId);
+      return dm ? dmLabel(dm, (p) => this.dmMemberName(p)) : null;
+    }
     const channel = this.channelStore.channelsByGuild()[guildId]?.find((c) => c.id === channelId);
     return channel ? `#${channel.name}` : null;
   }
@@ -166,6 +187,23 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected openGuildSettings(): void {
     const guildId = this.activeGuildId();
     if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  }
+
+  // Add-people modal for the active group DM (opened from the profile panel).
+  protected readonly showAddPeople = signal(false);
+  // Ids already in the group — passed to the modal so they're filtered from the pick list.
+  protected readonly dmMemberIds = computed(() => this.dmMembers().map((p) => p.userId));
+
+  protected openAddPeople(): void {
+    this.showAddPeople.set(true);
+  }
+
+  /** Leaves the active group DM and returns to the friends screen. */
+  protected leaveGroup(): void {
+    const dm = this.dmChannel();
+    if (!dm?.isGroup) return;
+    this.dmStore.leave(dm.channelId);
+    void this.router.navigate(['/app/friends']);
   }
 
   async ngOnInit(): Promise<void> {
@@ -273,6 +311,14 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.roleStore.applyRoleDeleted(p.guildId, p.roleId)));
     this.subs.add(client.memberRoleUpdated$.subscribe((p) =>
       this.memberStore.applyMemberRoleUpdated(p.guildId, p.userId, p.roleIds)));
+
+    // A DM/group membership change (group created, participant added, someone left) → resync the
+    // DM list. If it's the channel we're viewing, (re)join its group so a just-added member starts
+    // receiving live messages.
+    this.subs.add(client.dmChannelUpdated$.subscribe((channelId) => {
+      this.dmStore.resync();
+      if (channelId === this.messageStore.activeChannelId()) this.signalR.joinChannel(channelId);
+    }));
   }
 
   ngOnDestroy(): void {

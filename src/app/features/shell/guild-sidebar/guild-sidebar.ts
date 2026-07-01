@@ -6,6 +6,11 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import {
+  DirectMessageChannel,
+  dmLabel,
+  dmPeer,
+} from '../../../core/models/direct-message.models';
 import { JoinServerModal } from '../../guilds/join-server-modal/join-server-modal';
 
 @Component({
@@ -41,6 +46,16 @@ export class GuildSidebar {
       .join('')
       .slice(0, 2)
       .toUpperCase();
+  }
+
+  /** Rail-pill label for a DM: group name (or joined members) / the 1:1 peer's username. */
+  dmLabelOf(dm: DirectMessageChannel): string {
+    return dmLabel(dm, (p) => p.username);
+  }
+
+  /** The 1:1 peer's avatar (null for a group — the pill shows a group icon instead). */
+  dmAvatarOf(dm: DirectMessageChannel): string | null {
+    return dmPeer(dm)?.avatarKey ?? null;
   }
 
   openDm(channelId: string): void {

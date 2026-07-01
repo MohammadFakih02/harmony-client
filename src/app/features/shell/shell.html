@@ -23,12 +23,21 @@
         <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
         <span class="text-xs text-muted truncate min-w-0">{{ ch.topic }}</span>
         }
-        } @else if (inDm() && dmPeer(); as peer) {
-        <ui-avatar [src]="peer.peerAvatarKey" [alt]="peer.peerUsername" size="sm" [status]="dmPeerStatus()" />
-        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmPeerName() }}</span>
+        } @else if (inDm() && dmChannel()) {
+        @if (dmIsGroup()) {
+        <span class="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center text-muted shrink-0">
+          <i class="fas fa-user-group text-2xs"></i>
+        </span>
+        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
+        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
+        <span class="text-xs text-muted truncate min-w-0">{{ dmMembers().length + 1 }} Members</span>
+        } @else if (dmPeer(); as peer) {
+        <ui-avatar [src]="peer.avatarKey" [alt]="peer.username" size="sm" [status]="dmPeerStatus()" />
+        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
         @if (dmPeerMessage(); as msg) {
         <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
         <span class="text-xs text-muted truncate min-w-0" [title]="msg">{{ msg }}</span>
+        }
         }
         }
 
@@ -58,14 +67,14 @@
           <i class="fas fa-users"></i>
         </ui-icon-button>
         }
-        @if (inDm() && dmPeer()) {
+        @if (inDm() && dmChannel()) {
         <ui-icon-button
           size="md"
           [active]="showDmProfile()"
-          label="Toggle Profile"
+          [label]="dmIsGroup() ? 'Toggle Members' : 'Toggle Profile'"
           (click)="showDmProfile.set(!showDmProfile())"
         >
-          <i class="fas fa-user"></i>
+          <i class="fas" [class.fa-user]="!dmIsGroup()" [class.fa-users]="dmIsGroup()"></i>
         </ui-icon-button>
         }
       </header>
@@ -80,31 +89,74 @@
     </div>
     }
 
-    <!-- DM profile panel (togglable) — direct messages only -->
-    @if (inDm() && showDmProfile() && dmPeer(); as peer) {
+    <!-- DM profile / group members panel (togglable) — direct messages only -->
+    @if (inDm() && showDmProfile() && dmChannel(); as dm) {
     <div class="w-80 min-w-80 h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0">
       <!-- Banner -->
       <div class="h-24 bg-accent/30"></div>
+      @if (dmIsGroup()) {
+      <!-- Group: name, member list, add/leave -->
+      <div class="px-4 -mt-10">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-surface-3 ring-[6px] ring-surface-2 text-muted">
+          <i class="fas fa-user-group text-2xl"></i>
+        </div>
+        <div class="mt-3 rounded-lg bg-surface p-3">
+          <p class="text-lg font-bold text-primary leading-tight wrap-break-word">{{ dmHeaderName() }}</p>
+          <p class="text-xs text-muted mt-0.5">{{ dmMembers().length + 1 }} Members</p>
+        </div>
+
+        <p class="text-2xs font-bold uppercase tracking-wider text-faint mt-4 mb-1 px-1">Members</p>
+        <div class="flex flex-col gap-0.5">
+          @for (m of dmMembers(); track m.userId) {
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-2 transition-micro">
+            <ui-avatar [src]="m.avatarKey" [alt]="m.username" size="sm" />
+            <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ dmMemberName(m) }}</span>
+          </div>
+          }
+        </div>
+
+        <div class="flex flex-col gap-2 mt-4">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-surface hover:bg-surface-3 text-primary transition-micro"
+            (click)="openAddPeople()"
+          >
+            <i class="fas fa-user-plus text-xs"></i>
+            <span>Add People</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-micro"
+            (click)="leaveGroup()"
+          >
+            <i class="fas fa-arrow-right-from-bracket text-xs"></i>
+            <span>Leave Group</span>
+          </button>
+        </div>
+      </div>
+      } @else if (dmPeer(); as peer) {
+      <!-- 1:1: peer profile -->
       <div class="px-4 -mt-10">
         <div class="inline-block rounded-full ring-[6px] ring-surface-2">
           <ui-avatar
-            [src]="peer.peerAvatarKey"
-            [alt]="peer.peerUsername"
+            [src]="peer.avatarKey"
+            [alt]="peer.username"
             size="xl"
             [status]="dmPeerStatus()"
             ringClass="border-surface-2"
           />
         </div>
         <div class="mt-3 rounded-lg bg-surface p-3">
-          <p class="text-lg font-bold text-primary leading-tight">{{ dmPeerName() }}</p>
+          <p class="text-lg font-bold text-primary leading-tight">{{ dmHeaderName() }}</p>
           @if (dmPeerMessage(); as msg) {
           <p class="text-sm text-muted mt-2 whitespace-pre-wrap wrap-break-word">{{ msg }}</p>
           }
           <div class="h-px bg-border-subtle my-3"></div>
           <p class="text-2xs font-bold uppercase tracking-wider text-faint">Member Since</p>
-          <p class="text-sm text-muted mt-0.5">{{ memberSince(peer.peerId) }}</p>
+          <p class="text-sm text-muted mt-0.5">{{ memberSince(peer.userId) }}</p>
         </div>
       </div>
+      }
     </div>
     }
   </main>
@@ -121,6 +173,15 @@
 <!-- Roles management (guild header) -->
 @if (showRolesModal() && activeGuildId(); as guildId) {
 <app-roles-modal [guildId]="guildId" (close)="showRolesModal.set(false)" />
+}
+
+<!-- Add people to the active group DM (from the members panel) -->
+@if (showAddPeople() && dmChannel(); as dm) {
+<app-group-dm-modal
+  [channelId]="dm.channelId"
+  [excludeIds]="dmMemberIds()"
+  (close)="showAddPeople.set(false)"
+/>
 }
 
 <!-- Connection status banner -->

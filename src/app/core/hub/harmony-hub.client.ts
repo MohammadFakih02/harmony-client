@@ -57,6 +57,7 @@ export class HarmonyHubClient {
   private readonly _roleUpserted = new Subject<Role>();
   private readonly _roleDeleted = new Subject<RoleDeletedPayload>();
   private readonly _memberRoleUpdated = new Subject<MemberRoleUpdatedPayload>();
+  private readonly _dmChannelUpdated = new Subject<string>();
 
   readonly messageReceived$: Observable<MessageResponse> = this._messageReceived.asObservable();
   readonly messageEdited$: Observable<MessageEditedEvent> = this._messageEdited.asObservable();
@@ -84,6 +85,9 @@ export class HarmonyHubClient {
   readonly roleDeleted$: Observable<RoleDeletedPayload> = this._roleDeleted.asObservable();
   readonly memberRoleUpdated$: Observable<MemberRoleUpdatedPayload> =
     this._memberRoleUpdated.asObservable();
+  // A DM/group channel's membership changed (group created, participant added, someone left)
+  // → emits the channel id so the listener resyncs the DM list.
+  readonly dmChannelUpdated$: Observable<string> = this._dmChannelUpdated.asObservable();
 
   constructor(private readonly connection: HubConnection) {
     this.registerHandlers();
@@ -218,6 +222,9 @@ export class HarmonyHubClient {
         userId: String(p.userId),
         roleIds: (p.roleIds ?? []).map(String),
       }));
+
+    this.connection.on('DmChannelUpdated', (p: { channelId: unknown }) =>
+      this._dmChannelUpdated.next(String(p.channelId)));
   }
 
   /** Coerce a role pushed over SignalR: id/guildId as strings, permissionBits (long-as-string) to a number. */
