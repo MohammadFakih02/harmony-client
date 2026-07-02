@@ -3,6 +3,8 @@ import { Router } from '@angular/router';
 import { InviteService } from '../../../core/services/invite.service';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { InvitePreview } from '../../../core/models/invite.models';
+import { ToastService } from '../../../core/services/toast.service';
+import { extractApiError } from '../../../shared/util/api-error';
 
 /**
  * Inline card rendered for an invite link found in a message (see {@link extractInviteCodes}).
@@ -21,6 +23,7 @@ export class InviteEmbed implements OnInit {
   private readonly invites = inject(InviteService);
   private readonly guildStore = inject(GuildStore);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
   protected readonly loading = signal(true);
   protected readonly preview = signal<InvitePreview | null>(null);
@@ -71,6 +74,11 @@ export class InviteEmbed implements OnInit {
       // Already a member — the link was followed by someone who'd joined elsewhere meanwhile.
       if ((e as { status?: number })?.status === 409) {
         await this.router.navigate(['/app/guilds', p.guildId]);
+        return;
+      }
+      // Banned (403) — tell them why rather than the misleading "unavailable" card.
+      if ((e as { status?: number })?.status === 403) {
+        this.toast.info(extractApiError(e), 'fa-ban');
         return;
       }
       // Anything else (expired between preview and click, etc.) → mark the card unavailable.
