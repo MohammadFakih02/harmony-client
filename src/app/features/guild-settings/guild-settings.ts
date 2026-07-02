@@ -9,19 +9,23 @@ import { GuildNotificationSettingsStore } from '../../core/stores/guild-notifica
 import { GuildNotifications } from './pages/guild-notifications';
 import { GuildOverview } from './pages/guild-overview';
 import { GuildWelcome } from './pages/guild-welcome';
+import { GuildRoles } from './pages/guild-roles';
+import { GuildBans } from './pages/guild-bans';
+import { GuildAuditLog } from './pages/guild-audit-log';
 
-type Tab = 'notifications' | 'overview' | 'welcome';
+type Tab = 'notifications' | 'overview' | 'welcome' | 'roles' | 'bans' | 'audit';
 
 /**
  * Full-screen guild settings overlay (route `guilds/:guildId/settings`), mirroring the user-settings
- * shell. The Notifications pane is a personal preference open to every member; Overview + Welcome are
- * admin-only (ManageGuild) and hidden otherwise. Esc / ✕ returns to the previous screen.
+ * shell. Notifications is a personal preference open to every member; Overview/Welcome need ManageGuild,
+ * Roles needs ManageRoles, Bans needs BanMembers, Audit Log needs ViewAuditLog — each hidden otherwise.
+ * Esc / ✕ returns to the previous screen. (The admin panes here consolidate the old header modals.)
  */
 @Component({
   selector: 'app-guild-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [GuildNotifications, GuildOverview, GuildWelcome],
+  imports: [GuildNotifications, GuildOverview, GuildWelcome, GuildRoles, GuildBans, GuildAuditLog],
   templateUrl: './guild-settings.html',
 })
 export class GuildSettings implements OnInit {
@@ -42,6 +46,15 @@ export class GuildSettings implements OnInit {
   );
   protected readonly canManageGuild = computed(
     () => !!this.memberStore.capabilitiesOf(this.guildId)?.canManageGuild,
+  );
+  protected readonly canManageRoles = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildId)?.canManageRoles,
+  );
+  protected readonly canBan = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildId)?.canBan,
+  );
+  protected readonly canViewAuditLog = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildId)?.canViewAuditLog,
   );
 
   async ngOnInit(): Promise<void> {

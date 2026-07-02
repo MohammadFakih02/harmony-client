@@ -163,7 +163,7 @@
             <span class="italic text-faint">Message deleted</span>
           } @else {
             <!-- Markdown-rendered content (interpolation only — XSS-safe; @-mentions become chips) -->
-            <app-message-content [content]="msg.content" [knownUsernames]="knownUsernamesLower()" />
+            <app-message-content [content]="msg.content" [mentionContext]="mentionContext()" />
             @if (msg.isEdited) {
               <span class="text-xs text-faint ml-1">(edited)</span>
             }

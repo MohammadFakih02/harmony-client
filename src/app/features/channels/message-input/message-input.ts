@@ -4,12 +4,13 @@ import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MessageStore } from '../../../core/stores/message.store';
 import { MemberStore } from '../../../core/stores/member.store';
+import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { FileService } from '../../../core/services/file.service';
 import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
 import { MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
 import { MentionCandidate } from '../../../core/models/member.models';
-import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
+import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
 import {
   MentionTrigger,
@@ -44,6 +45,7 @@ export class MessageInput {
   protected readonly channelStore = inject(ChannelStore);
   protected readonly messageStore = inject(MessageStore);
   private readonly memberStore = inject(MemberStore);
+  private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
   private readonly fileService = inject(FileService);
 
@@ -72,11 +74,10 @@ export class MessageInput {
   private readonly guildCandidates = computed<MentionCandidate[]>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (!guildId) return [];
-    const members = this.memberStore
-      .membersOf(guildId)
-      .map((m) => ({ userId: m.userId, username: m.username, avatarKey: m.avatarKey }));
-    // @everyone / @here lead the pool (guild channels only).
-    return [...EVERYONE_MENTION_CANDIDATES, ...members];
+    return buildGuildMentionCandidates(
+      this.memberStore.membersOf(guildId),
+      this.roleStore.rolesOf(guildId),
+    );
   });
 
   private readonly dmCandidates = computed<MentionCandidate[]>(() => {

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RoleStore } from '../../../core/stores/role.store';
 import { Role, roleColorHex } from '../../../core/models/role.models';
@@ -12,19 +12,18 @@ import {
  * Role management for a guild (ManageRoles): a role list on the left (create + reorder), an editor on
  * the right (name, color, hoist/mentionable, the permission grid). Save is explicit. The backend
  * re-validates hierarchy + the grant rule, so a forbidden change surfaces as an inline error.
- * Lives in a header modal for now; migrates into the guild-settings page later (§5.24 E#16).
+ * A pane of the guild-settings page (§5.24 admin-tools consolidation).
  */
 @Component({
-  selector: 'app-roles-modal',
+  selector: 'app-guild-roles',
   standalone: true,
   imports: [FormsModule],
-  templateUrl: './roles-modal.html',
+  templateUrl: './guild-roles.html',
 })
-export class RolesModal implements OnInit {
+export class GuildRoles implements OnInit {
   private readonly roleStore = inject(RoleStore);
 
   readonly guildId = input.required<string>();
-  readonly close = output<void>();
 
   protected readonly groups = PERMISSION_GROUPS;
   protected readonly colorPresets = ROLE_COLOR_PRESETS;
