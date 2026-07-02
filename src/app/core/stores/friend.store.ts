@@ -1,7 +1,9 @@
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { Friend, FriendRemovedPayload, FriendUserPayload, PendingFriend } from '../models/friend.models';
 import { FriendService } from '../services/friend.service';
+import { GatewayEvents } from '../hub/gateway-events';
 import { NotificationStore } from './notification.store';
 
 interface FriendState {
@@ -85,5 +87,23 @@ export const FriendStore = signalStore(
         });
       },
     };
+  }),
+  withHooks({
+    // Own friend-graph events off the gateway stream (incoming requests, accepts, removals/blocks).
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'FriendRequest':
+            store.applyFriendRequest(e.payload);
+            break;
+          case 'FriendAccepted':
+            store.applyFriendAccepted(e.payload);
+            break;
+          case 'FriendRemoved':
+            store.applyFriendRemoved(e.payload);
+            break;
+        }
+      });
+    },
   }),
 );

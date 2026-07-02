@@ -1,6 +1,8 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { AppNotification, NotificationActor, NotificationPayload } from '../models/notification.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { NotificationService } from '../services/notification.service';
 import { UserService } from '../services/user.service';
 
@@ -125,5 +127,14 @@ export const NotificationStore = signalStore(
         }
       },
     };
+  }),
+  withHooks({
+    // Persist incoming notifications off the gateway stream. The location-aware follow-up (suppress
+    // + mark-read a mention for the channel you're viewing, else raise the toast) stays in the shell.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        if (e.type === 'NotificationReceived') store.applyNotificationReceived(e.payload);
+      });
+    },
   }),
 );

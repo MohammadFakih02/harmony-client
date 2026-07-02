@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { environment } from '../../../environments/environment';
 import { HarmonyHubClient } from '../hub/harmony-hub.client';
+import { GatewayEvents } from '../hub/gateway-events';
 import { AuthService } from './auth.service';
 
 export type ConnectionState = 'idle' | 'connected' | 'reconnecting' | 'disconnected';
@@ -15,6 +16,7 @@ const RECONNECT_RETRY_MS = 5_000;
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
   private readonly auth = inject(AuthService);
+  private readonly gateway = inject(GatewayEvents);
   private _client: HarmonyHubClient | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,7 +56,9 @@ export class SignalRService {
       .configureLogging(LogLevel.Warning)
       .build();
 
-    this._client = new HarmonyHubClient(connection);
+    // Every coerced server→client event flows into the shared gateway stream (a root singleton that
+    // outlives this connection), which stores subscribe to. The client itself exposes no Observables.
+    this._client = new HarmonyHubClient(connection, (e) => this.gateway.emit(e));
 
     this._client.onReconnecting(() => this.connectionState.set('reconnecting'));
     this._client.onReconnected(() => this.onConnected());
@@ -157,6 +161,15 @@ export class SignalRService {
   async leaveChannel(channelId: string): Promise<void> {
     if (this.desiredChannelId === channelId) this.desiredChannelId = null;
     if (this.isConnected) await this._client!.leaveChannel(channelId).catch(() => {});
+  }
+
+  /** Fire-and-forget typing signals — ephemeral, so simply skipped when the socket isn't live. */
+  startTyping(channelId: string): void {
+    if (this.isConnected) void this._client!.startTyping(channelId).catch(() => {});
+  }
+
+  stopTyping(channelId: string): void {
+    if (this.isConnected) void this._client!.stopTyping(channelId).catch(() => {});
   }
 
   async disconnect(): Promise<void> {

@@ -1,6 +1,8 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { DirectMessageChannel } from '../models/direct-message.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { DirectMessageService } from '../services/direct-message.service';
 
 interface DmState {
@@ -79,5 +81,27 @@ export const DmStore = signalStore(
         await refetch();
       },
     };
+  }),
+  withHooks({
+    // Own DM-list resync off the gateway stream. The rejoin-the-channel-group side effect of a
+    // DmChannelUpdated (needs SignalRService + the active channel) stays in the shell.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'DmChannelUpdated':
+            void store.resync();
+            break;
+          case 'MessageReceived':
+            // A DM message can resurface a conversation the recipient had hidden.
+            if (e.message.guildId == null) void store.ensureVisible(e.message.channelId);
+            break;
+          case 'UnreadCountUpdated':
+            // A DM unread is the reliable signal a conversation exists for us even when we're not
+            // joined to its channel group — surface it if it's new.
+            if (e.payload.guildId == null) void store.ensureVisible(e.payload.channelId);
+            break;
+        }
+      });
+    },
   }),
 );

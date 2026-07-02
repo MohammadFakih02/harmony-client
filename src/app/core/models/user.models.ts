@@ -8,6 +8,9 @@ export interface PublicUserProfile {
   bio: string | null;
   statusMessage: string | null;
   age: number | null;
+  /** Who may open a DM with this user — lets the UI hide the Message action for a stranger when
+   *  `friends_only`. The server still enforces on send regardless of what the client shows. */
+  dmPrivacy: DmPrivacy;
 }
 
 /** Who may open a new DM with the user. */

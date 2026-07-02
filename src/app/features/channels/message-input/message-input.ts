@@ -1,4 +1,14 @@
-import { Component, ElementRef, computed, effect, inject, output, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  computed,
+  effect,
+  inject,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { ChannelStore } from '../../../core/stores/channel.store';
@@ -7,6 +17,8 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { FileService } from '../../../core/services/file.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { SignalRService } from '../../../core/services/signalr.service';
 import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
 import { MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
 import { MentionCandidate } from '../../../core/models/member.models';
@@ -41,13 +53,18 @@ interface StagedFile {
   imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete, EmojiPicker],
   templateUrl: './message-input.html',
 })
-export class MessageInput {
+export class MessageInput implements OnDestroy {
   protected readonly channelStore = inject(ChannelStore);
   protected readonly messageStore = inject(MessageStore);
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
   private readonly fileService = inject(FileService);
+  private readonly auth = inject(AuthService);
+  private readonly signalR = inject(SignalRService);
+
+  // Throttle outgoing "started typing" pings — at most one per this window while actively typing.
+  private lastTypingAt = 0;
 
   protected readonly draftInput = viewChild<ElementRef<HTMLTextAreaElement>>('draftInput');
 
@@ -108,11 +125,45 @@ export class MessageInput {
     () => this.channelStore.selectedChannel()?.name ?? 'channel',
   );
 
-  // Whether the caller may send here at all (permission + not timed-out). Defaults to
-  // true while capabilities are still loading so normal users aren't briefly blocked;
-  // the server enforces regardless.
+  // Wall-clock signal so the composer re-enables itself the moment a timeout lapses. A timeout emits
+  // MemberUpdated only when set / manually cleared — never on natural expiry — so we re-evaluate
+  // against the clock. Gated on an active self-timeout so it idles once the timeout is gone.
+  private readonly now = signal(Date.now());
+  private readonly ticker = setInterval(() => {
+    const until = this.myTimeoutUntil();
+    if (until != null && until > this.now()) this.now.set(Date.now());
+  }, 5000);
+
+  // The caller's own member record in the active guild (null in a DM, or before members load).
+  // `communicationDisabledUntil` here tracks live via the MemberUpdated gateway event, so a timeout
+  // applied/cleared mid-session is reflected without a channel switch.
+  private readonly myTimeoutUntil = computed<number | null>(() => {
+    const guildId = this.messageStore.activeGuildId();
+    const myId = this.auth.currentUser()?.id;
+    if (!guildId || !myId) return null;
+    return this.memberStore.membersOf(guildId).find((m) => m.userId === myId)
+      ?.communicationDisabledUntil ?? null;
+  });
+
+  /** Live timeout state — derived from my member record + the wall clock (not the load-time cap). */
+  protected readonly timedOut = computed(() => {
+    const until = this.myTimeoutUntil();
+    return until != null && until > this.now();
+  });
+
+  // Whether the caller has permission to send here, independent of any timeout. The capability's
+  // `canSend` is timeout-aware at load time, so recover the pure-permission bit as `canSend OR
+  // timedOut` (defaults true while caps load). The one imperfect corner — lacking SendMessage *and*
+  // being timed out — resolves on the next channel switch, and the server enforces regardless.
+  private readonly canSendPermission = computed(() => {
+    const caps = this.channelStore.currentCapabilities();
+    if (!caps) return true;
+    return caps.canSend || caps.timedOut;
+  });
+
+  // Whether the caller may send here right now: has permission AND isn't currently timed out (live).
   protected readonly canSendInChannel = computed(
-    () => this.channelStore.currentCapabilities()?.canSend ?? true,
+    () => this.canSendPermission() && !this.timedOut(),
   );
 
   // A DM (no active guild) has no capability endpoint — attaching is always allowed there.
@@ -126,11 +177,10 @@ export class MessageInput {
     () => this.isDm() || (this.channelStore.currentCapabilities()?.canAttach ?? false),
   );
 
-  // Explains a disabled input — timeout vs missing permission.
+  // Explains a disabled input — live timeout vs missing permission.
   protected readonly disabledReason = computed(() => {
-    const caps = this.channelStore.currentCapabilities();
-    if (!caps || caps.canSend) return null;
-    return caps.timedOut
+    if (this.canSendInChannel()) return null;
+    return this.timedOut()
       ? "You're timed out and can't send messages."
       : 'You do not have permission to send messages in this channel.';
   });
@@ -167,6 +217,10 @@ export class MessageInput {
     });
   }
 
+  ngOnDestroy(): void {
+    clearInterval(this.ticker);
+  }
+
   onDraftInput(value: string): void {
     this.draft.set(value);
     const el = this.draftInput()?.nativeElement;
@@ -175,6 +229,28 @@ export class MessageInput {
     if (trigger) this.closeEmoji(); // don't stack the emoji picker over the mention popup
     this.mentionTrigger.set(trigger);
     this.mentionHighlightedIndex.set(0);
+    this.signalTyping(value);
+  }
+
+  /** Sends a throttled "started typing" ping (or an immediate "stopped" once the composer empties). */
+  private signalTyping(value: string): void {
+    const channelId = this.messageStore.activeChannelId();
+    if (!channelId) return;
+    if (!value.trim()) {
+      this.stopTypingSignal();
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastTypingAt > 3000) {
+      this.signalR.startTyping(channelId);
+      this.lastTypingAt = now;
+    }
+  }
+
+  private stopTypingSignal(): void {
+    const channelId = this.messageStore.activeChannelId();
+    this.lastTypingAt = 0;
+    if (channelId) this.signalR.stopTyping(channelId);
   }
 
   selectMention(candidate: MentionCandidate): void {
@@ -251,6 +327,7 @@ export class MessageInput {
 
     this.sending.set(true);
     this.draft.set('');
+    this.stopTypingSignal(); // the message is on its way — clear our typing indicator for others
     this.closeMentionAutocomplete();
     // Clear staging up front; the optimistic message carries the ids and can be retried
     // (the ids are already confirmed, so retryMessage re-sends the same ones).

@@ -3,6 +3,7 @@ import { ChannelStore } from './channel.store';
 import { GuildStore } from './guild.store';
 import { ChannelService } from '../services/channel.service';
 import { Channel } from '../models/channel.models';
+import { GatewayEvents } from '../hub/gateway-events';
 
 const makeChannel = (overrides: Partial<Channel> & { id: string; name: string }): Channel => ({
   guildId: '1',
@@ -104,5 +105,21 @@ describe('ChannelStore', () => {
     store.removeChannel('10');
 
     expect(store.channelsByGuild()['1']?.map((c) => c.id)).toEqual(['11']);
+  });
+
+  it('reacts to a ChannelCreated gateway event (self-subscribed in onInit)', () => {
+    TestBed.inject(GatewayEvents).emit({
+      type: 'ChannelCreated',
+      channel: makeChannel({ id: '99', name: 'new', guildId: '1' }),
+    });
+
+    expect(store.channelsByGuild()['1']?.map((c) => c.id)).toEqual(['99']);
+  });
+
+  it('addChannel() is idempotent (creator optimistic add + ChannelCreated broadcast → no dupe)', () => {
+    const ch = makeChannel({ id: '99', name: 'new', guildId: '1' });
+    store.addChannel(ch);
+    store.addChannel(ch); // e.g. the broadcast echo of our own create
+    expect(store.channelsByGuild()['1']?.map((c) => c.id)).toEqual(['99']);
   });
 });

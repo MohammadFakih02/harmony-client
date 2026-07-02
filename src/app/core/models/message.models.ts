@@ -18,6 +18,7 @@ export interface MessageResponse {
   // Client-side only — not from the server
   pending?: boolean;
   failed?: boolean;
+  failedReason?: string; // why a send failed (e.g. "…only accepts messages from friends"), shown by the Retry row
   tempId?: number; // local negative counter; never a Snowflake
 }
 

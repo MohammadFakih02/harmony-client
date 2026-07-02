@@ -1,6 +1,8 @@
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { Channel, ChannelCapabilities, ChannelCategory } from '../models/channel.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { ChannelService } from '../services/channel.service';
 import { GuildStore } from './guild.store';
 
@@ -131,6 +133,9 @@ export const ChannelStore = signalStore(
     addChannel(channel: Channel): void {
       const gid = channel.guildId;
       const existing = store.channelsByGuild()[gid] ?? [];
+      // Idempotent: the creator both adds optimistically (createChannel) and receives the
+      // ChannelCreated broadcast — without this dedup the channel would appear twice.
+      if (existing.some((c) => c.id === channel.id)) return;
       patchState(store, {
         channelsByGuild: { ...store.channelsByGuild(), [gid]: [...existing, channel] },
       });
@@ -164,4 +169,23 @@ export const ChannelStore = signalStore(
       return channel;
     },
   })),
+  withHooks({
+    // Channel CRUD arrives for every guild we've joined — the add/update/remove methods are
+    // keyed by the channel's own guildId, so no cache guard is needed here.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'ChannelCreated':
+            store.addChannel(e.channel);
+            break;
+          case 'ChannelUpdated':
+            store.updateChannel(e.channel);
+            break;
+          case 'ChannelDeleted':
+            store.removeChannel(e.channelId);
+            break;
+        }
+      });
+    },
+  }),
 );

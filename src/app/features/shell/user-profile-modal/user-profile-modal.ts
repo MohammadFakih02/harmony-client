@@ -9,8 +9,10 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
-import { ageFromIso } from '../../../core/models/user.models';
+import { ToastService } from '../../../core/services/toast.service';
+import { DmPrivacy, ageFromIso } from '../../../core/models/user.models';
 import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { snowflakeToDate } from '../../../shared/util/snowflake';
@@ -22,6 +24,7 @@ interface ProfileView {
   bio: string | null;
   statusMessage: string | null;
   age: number | null;
+  dmPrivacy: DmPrivacy;
 }
 
 /**
@@ -44,7 +47,9 @@ export class UserProfileModal {
   private readonly roleStore = inject(RoleStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
+  private readonly friendStore = inject(FriendStore);
   private readonly nicknameStore = inject(NicknameStore);
+  private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
   protected readonly loading = signal(true);
@@ -62,6 +67,19 @@ export class UserProfileModal {
   protected readonly userId = computed(() => this.profileModal.target()?.userId ?? null);
   protected readonly guildId = computed(() => this.profileModal.target()?.guildId ?? null);
   protected readonly isSelf = computed(() => this.userId() === this.auth.currentUser()?.id);
+
+  private readonly isFriend = computed(() => {
+    const id = this.userId();
+    return !!id && this.friendStore.friends().some((f) => f.id === id);
+  });
+
+  /** Whether the Message action should be offered: not yourself, and not a "friends_only" stranger. */
+  protected readonly canMessage = computed(() => {
+    if (this.isSelf() || !this.userId()) return false;
+    const v = this.view();
+    if (!v) return false;
+    return v.dmPrivacy !== 'friends_only' || this.isFriend();
+  });
 
   private readonly member = computed(() => {
     const t = this.profileModal.target();
@@ -137,6 +155,7 @@ export class UserProfileModal {
           bio: me.bio,
           statusMessage: me.statusMessage,
           age: ageFromIso(me.dateOfBirth),
+          dmPrivacy: me.dmPrivacy,
         });
       } else {
         const p = await this.userService.getProfile(userId);
@@ -148,6 +167,7 @@ export class UserProfileModal {
           bio: p.bio,
           statusMessage: p.statusMessage,
           age: p.age,
+          dmPrivacy: p.dmPrivacy,
         });
       }
     } catch {
@@ -234,8 +254,13 @@ export class UserProfileModal {
   protected async message(): Promise<void> {
     const id = this.userId();
     if (!id) return;
-    const dm = await this.dmStore.open(id);
-    this.close();
-    await this.router.navigate(['/app/dm', dm.channelId]);
+    try {
+      const dm = await this.dmStore.open(id);
+      this.close();
+      await this.router.navigate(['/app/dm', dm.channelId]);
+    } catch {
+      // friends_only stranger (or block) — the server rejects opening the DM.
+      this.toast.info('This user only accepts messages from friends.', 'fa-user-lock');
+    }
   }
 }
