@@ -5,6 +5,7 @@ import { InviteService } from '../../../core/services/invite.service';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { InvitePreview } from '../../../core/models/invite.models';
 import { extractInviteCode } from '../../../shared/util/invite-code';
+import { extractApiError } from '../../../shared/util/api-error';
 
 /**
  * Paste an invite code (or link) → preview the server → join. On success the guild is added to
@@ -78,11 +79,12 @@ export class JoinServerModal {
   }
 
   private messageFor(e: unknown, fallback: string): string {
-    return this.statusOf(e) === 410
-      ? 'That invite has expired or been used up.'
-      : this.statusOf(e) === 404
-        ? 'That invite is invalid.'
-        : fallback;
+    const status = this.statusOf(e);
+    if (status === 410) return 'That invite has expired or been used up.';
+    if (status === 404) return 'That invite is invalid.';
+    // A ban (403) carries a specific server message (incl. the reason) — surface it verbatim.
+    if (status === 403) return extractApiError(e);
+    return fallback;
   }
 
   reset(): void {

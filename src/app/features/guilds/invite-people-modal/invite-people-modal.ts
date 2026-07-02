@@ -166,9 +166,11 @@ export class InvitePeopleModal implements OnInit {
   }
 
   protected usesLabel(invite: Invite): string {
-    return invite.maxUses === null
-      ? `${invite.useCount} uses`
-      : `${invite.useCount} / ${invite.maxUses} uses`;
+    // null max-uses = unlimited (∞); show how many times it's actually been used separately.
+    if (invite.maxUses === null) {
+      return `Unlimited · ${invite.useCount} used`;
+    }
+    return `${invite.useCount} / ${invite.maxUses} uses`;
   }
 
   protected expiryLabel(invite: Invite): string {
