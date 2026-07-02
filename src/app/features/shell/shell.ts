@@ -27,7 +27,6 @@ import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
-import { RolesModal } from '../guilds/roles-modal/roles-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
@@ -49,7 +48,6 @@ import { ToastService } from '../../core/services/toast.service';
     MemberSidebar,
     NotificationBell,
     InvitePeopleModal,
-    RolesModal,
     GroupDmModal,
     UiAvatar,
     UiIconButton,
@@ -80,8 +78,6 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly inDm = computed(() => this.url().includes('/dm/'));
   // Invite People modal (guild header) — keyed to the currently-selected guild.
   protected readonly showInviteModal = signal(false);
-  // Roles management modal (guild header) — gated on ManageRoles.
-  protected readonly showRolesModal = signal(false);
   // Pinned-messages panel (header, guild + DM) — anchored under the pin button.
   protected readonly showPins = signal(false);
   protected readonly pinsPanelPositions: ConnectionPositionPair[] = [
@@ -93,10 +89,6 @@ export class ShellComponent implements OnInit, OnDestroy {
     { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
   ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
-  protected readonly canManageRoles = computed(() => {
-    const guildId = this.activeGuildId();
-    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canManageRoles;
-  });
   // Invite People is gated on CreateInvite (every member has it by default, but a role can deny it).
   protected readonly canCreateInvite = computed(() => {
     const guildId = this.activeGuildId();

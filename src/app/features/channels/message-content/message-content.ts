@@ -1,6 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { MdNode, parseMarkdown } from '../../../shared/util/markdown';
+import { MentionContext } from '../../../shared/util/mention-match';
 import { SpoilerDirective } from './spoiler.directive';
 
 /**
@@ -20,10 +21,10 @@ import { SpoilerDirective } from './spoiler.directive';
 })
 export class MessageContent {
   readonly content = input.required<string>();
-  /** Lowercased usernames eligible to render as mention chips (guild members / the DM peer). */
-  readonly knownUsernames = input.required<Set<string>>();
+  /** Candidate users (username + nickname) and roles that render as mention chips. */
+  readonly mentionContext = input.required<MentionContext>();
 
   protected readonly nodes = computed<MdNode[]>(() =>
-    parseMarkdown(this.content(), this.knownUsernames()),
+    parseMarkdown(this.content(), this.mentionContext()),
   );
 }

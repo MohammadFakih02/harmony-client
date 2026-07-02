@@ -13,7 +13,8 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
-import { memberColor } from '../../../core/models/role.models';
+import { memberColor, roleColorHex } from '../../../core/models/role.models';
+import { MentionContext, buildMentionSets } from '../../../shared/util/mention-match';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -21,7 +22,7 @@ import { MessageResponse } from '../../../core/models/message.models';
 import { MentionCandidate } from '../../../core/models/member.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
-import { EVERYONE_MENTION_CANDIDATES } from '../../../shared/util/mention-candidates';
+import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
 import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
 import { extractInviteCodes } from '../../../shared/util/invite-links';
@@ -106,18 +107,27 @@ export class MessageList {
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
 
-  // Candidate usernames for mention-chip rendering — guild members, or the DM peer.
-  // Consumed by <app-message-content> to decide which @tokens become chips.
-  protected readonly knownUsernamesLower = computed<Set<string>>(() => {
+  // Mention candidates for chip rendering — consumed by <app-message-content> to decide which
+  // @tokens become chips (and to colour role chips). In a guild: member usernames + server
+  // nicknames, plus the non-default roles. In a DM: the participant usernames only.
+  protected readonly mentionContext = computed<MentionContext>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (guildId) {
-      return new Set(this.memberStore.membersOf(guildId).map((m) => m.username.toLowerCase()));
+      const names: string[] = [];
+      for (const m of this.memberStore.membersOf(guildId)) {
+        names.push(m.username);
+        if (m.nickname) names.push(m.nickname);
+      }
+      const roles = this.roleStore
+        .rolesOf(guildId)
+        .filter((r) => !r.isDefault)
+        .map((r) => ({ name: r.name, color: roleColorHex(r.color) }));
+      return { sets: buildMentionSets(names, roles), guild: true };
     }
     const channelId = this.messageStore.activeChannelId();
     const dm = channelId ? this.dmStore.find(channelId) : undefined;
-    return dm
-      ? new Set(dm.participants.map((p) => p.username.toLowerCase()))
-      : new Set<string>();
+    const names = dm ? dm.participants.map((p) => p.username) : [];
+    return { sets: buildMentionSets(names, []), guild: false };
   });
 
   // Invite codes from any full invite links in the message → inline embed cards. Memoized per
@@ -228,10 +238,10 @@ export class MessageList {
   private readonly editMentionPool = computed<MentionCandidate[]>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (guildId) {
-      const members = this.memberStore
-        .membersOf(guildId)
-        .map((m) => ({ userId: m.userId, username: m.username, avatarKey: m.avatarKey }));
-      return [...EVERYONE_MENTION_CANDIDATES, ...members];
+      return buildGuildMentionCandidates(
+        this.memberStore.membersOf(guildId),
+        this.roleStore.rolesOf(guildId),
+      );
     }
     const channelId = this.messageStore.activeChannelId();
     return channelId ? (this.dmStore.find(channelId)?.participants ?? []) : [];
