@@ -44,26 +44,86 @@
         <span class="truncate">Welcome</span>
       </button>
       }
+
+      @if (canManageRoles()) {
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm font-medium transition-colors"
+        [class.bg-surface-3]="activeTab() === 'roles'"
+        [class.text-primary]="activeTab() === 'roles'"
+        [class.text-muted]="activeTab() !== 'roles'"
+        [class.hover:bg-surface-3]="activeTab() !== 'roles'"
+        (click)="activeTab.set('roles')"
+      >
+        <i class="fas fa-user-shield w-4 text-center"></i>
+        <span class="truncate">Roles</span>
+      </button>
+      }
+      @if (canBan()) {
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm font-medium transition-colors"
+        [class.bg-surface-3]="activeTab() === 'bans'"
+        [class.text-primary]="activeTab() === 'bans'"
+        [class.text-muted]="activeTab() !== 'bans'"
+        [class.hover:bg-surface-3]="activeTab() !== 'bans'"
+        (click)="activeTab.set('bans')"
+      >
+        <i class="fas fa-gavel w-4 text-center"></i>
+        <span class="truncate">Bans</span>
+      </button>
+      }
+      @if (canViewAuditLog()) {
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm font-medium transition-colors"
+        [class.bg-surface-3]="activeTab() === 'audit'"
+        [class.text-primary]="activeTab() === 'audit'"
+        [class.text-muted]="activeTab() !== 'audit'"
+        [class.hover:bg-surface-3]="activeTab() !== 'audit'"
+        (click)="activeTab.set('audit')"
+      >
+        <i class="fas fa-scroll w-4 text-center"></i>
+        <span class="truncate">Audit Log</span>
+      </button>
+      }
     </div>
   </nav>
 
   <!-- Content pane -->
   <div class="relative flex-1 overflow-y-auto">
-    <div class="mx-auto max-w-2xl px-10 py-12">
-      @switch (activeTab()) {
-        @case ('notifications') {
+    @switch (activeTab()) {
+      @case ('notifications') {
+      <div class="mx-auto max-w-2xl px-10 py-12">
         <app-guild-notifications [guildId]="guildId" [textChannels]="textChannels()" />
-        }
-        @case ('overview') {
-        @if (canManageGuild()) { <app-guild-overview [guildId]="guildId" /> }
-        }
-        @case ('welcome') {
-        @if (canManageGuild()) {
-        <app-guild-welcome [guildId]="guildId" [textChannels]="textChannels()" />
-        }
-        }
+      </div>
       }
-    </div>
+      @case ('overview') {
+      @if (canManageGuild()) {
+      <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-overview [guildId]="guildId" /></div>
+      }
+      }
+      @case ('welcome') {
+      @if (canManageGuild()) {
+      <div class="mx-auto max-w-2xl px-10 py-12">
+        <app-guild-welcome [guildId]="guildId" [textChannels]="textChannels()" />
+      </div>
+      }
+      }
+      @case ('roles') {
+      @if (canManageRoles()) { <div class="h-full"><app-guild-roles [guildId]="guildId" /></div> }
+      }
+      @case ('bans') {
+      @if (canBan()) {
+      <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-bans [guildId]="guildId" /></div>
+      }
+      }
+      @case ('audit') {
+      @if (canViewAuditLog()) {
+      <div class="mx-auto max-w-3xl px-10 py-12"><app-guild-audit-log [guildId]="guildId" /></div>
+      }
+      }
+    }
 
     <!-- Close -->
     <button

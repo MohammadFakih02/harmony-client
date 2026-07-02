@@ -1,7 +1,11 @@
 import { MdNode, parseMarkdown } from './markdown';
+import { MentionContext, buildMentionSets } from './mention-match';
 
-const known = new Set<string>(['alice', 'bob']);
-const parse = (s: string): MdNode[] => parseMarkdown(s, known);
+const ctx: MentionContext = {
+  sets: buildMentionSets(['alice', 'bob', 'bobby mcbobface'], [{ name: 'Server Admin', color: '#ff0000' }]),
+  guild: true,
+};
+const parse = (s: string): MdNode[] => parseMarkdown(s, ctx);
 
 // Flatten a tree to a "type:text" string list (depth-first) for compact structural assertions.
 const flatten = (nodes: MdNode[]): string[] =>
@@ -82,6 +86,22 @@ describe('parseMarkdown', () => {
 
   it('leaves an unknown @username as plain text', () => {
     expect(parse('@stranger')).toEqual([{ type: 'text', text: '@stranger' }]);
+  });
+
+  it('renders a multi-word nickname as one mention chip', () => {
+    expect(flatten(parse('hi @Bobby McBobface !'))).toEqual([
+      'text:hi ',
+      'mention:@Bobby McBobface',
+      'text: !',
+    ]);
+  });
+
+  it('renders a role mention with its colour', () => {
+    const nodes = parse('ping @Server Admin now');
+    expect(flatten(nodes)).toEqual(['text:ping ', 'mention:@Server Admin', 'text: now']);
+    const chip = nodes.find((n) => n.type === 'mention')!;
+    expect(chip.mentionRole).toBe(true);
+    expect(chip.color).toBe('#ff0000');
   });
 
   it('parses a mention inside bold', () => {

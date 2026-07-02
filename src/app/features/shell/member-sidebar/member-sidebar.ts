@@ -11,7 +11,6 @@ import { GuildMember } from '../../../core/models/member.models';
 import { memberColor, memberHoistRole } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { MemberActionsMenu } from './member-actions-menu';
-import { BansModal } from './bans-modal';
 import { UserProfilePopout } from '../user-profile-popout/user-profile-popout';
 
 interface MemberRow {
@@ -32,7 +31,7 @@ interface MemberSection {
 @Component({
   selector: 'app-member-sidebar',
   standalone: true,
-  imports: [UiAvatar, OverlayModule, MemberActionsMenu, BansModal, UserProfilePopout],
+  imports: [UiAvatar, OverlayModule, MemberActionsMenu, UserProfilePopout],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './member-sidebar.html',
 })
@@ -142,7 +141,6 @@ export class MemberSidebar implements OnDestroy {
   // --- moderation action menu (CDK overlay anchored to the clicked row) ---
   protected readonly menuMember = signal<GuildMember | null>(null);
   protected readonly menuOrigin = signal<CdkOverlayOrigin | null>(null);
-  protected readonly showBans = signal(false);
   protected readonly menuPositions: ConnectionPositionPair[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },

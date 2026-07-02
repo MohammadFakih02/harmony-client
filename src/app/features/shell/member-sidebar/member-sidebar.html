@@ -3,16 +3,6 @@
     <span class="text-xs font-bold uppercase tracking-wider text-faint">
       Members — {{ visibleMembers().length }}
     </span>
-    @if (caps()?.canBan) {
-    <button
-      type="button"
-      class="ml-auto text-faint hover:text-primary transition-micro"
-      title="Banned users"
-      (click)="showBans.set(true)"
-    >
-      <i class="fas fa-gavel text-xs"></i>
-    </button>
-    }
   </div>
 
   <div class="flex-1 overflow-y-auto py-2 px-2">
@@ -118,8 +108,4 @@
     (close)="closeMenu()"
   />
 </ng-template>
-}
-
-@if (showBans()) {
-<app-bans-modal [guildId]="guildStore.selectedGuildId()!" (close)="showBans.set(false)" />
 }
