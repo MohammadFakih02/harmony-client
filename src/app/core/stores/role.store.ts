@@ -1,6 +1,8 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { CreateRolePayload, Role, UpdateRolePayload } from '../models/role.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { RoleService } from '../services/role.service';
 
 interface RoleState {
@@ -88,5 +90,21 @@ export const RoleStore = signalStore(
         setGuild(guildId, list.filter((r) => r.id !== roleId));
       },
     };
+  }),
+  withHooks({
+    // Own role events off the gateway stream. upsert/applyRoleDeleted cache-guard on the guild
+    // being loaded, so events for guilds we haven't opened are ignored.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'RoleUpserted':
+            store.applyRoleUpserted(e.role);
+            break;
+          case 'RoleDeleted':
+            store.applyRoleDeleted(e.payload.guildId, e.payload.roleId);
+            break;
+        }
+      });
+    },
   }),
 );

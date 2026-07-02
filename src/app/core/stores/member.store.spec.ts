@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MemberStore } from './member.store';
 import { MemberService } from '../services/member.service';
 import { GuildMember } from '../models/member.models';
+import { GatewayEvents } from '../hub/gateway-events';
 
 const makeMember = (overrides: Partial<GuildMember> & { userId: string; username: string }): GuildMember => ({
   nickname: null,
@@ -204,5 +205,46 @@ describe('MemberStore', () => {
     const m = store.membersOf('1')[0];
     expect(m.nickname).toBe('Ace');
     expect(m.communicationDisabledUntil).toBe(999);
+  });
+
+  it('reacts to a MemberUpdated gateway event (self-subscribed in onInit)', async () => {
+    service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
+    await store.loadIfNeeded('1');
+
+    TestBed.inject(GatewayEvents).emit({
+      type: 'MemberUpdated',
+      payload: { guildId: '1', userId: '10', nickname: 'Ace', communicationDisabledUntil: 999 },
+    });
+
+    const m = store.membersOf('1')[0];
+    expect(m.nickname).toBe('Ace');
+    expect(m.communicationDisabledUntil).toBe(999);
+  });
+
+  it('ignores a MemberUpdated gateway event for an unloaded guild (cache guard)', () => {
+    TestBed.inject(GatewayEvents).emit({
+      type: 'MemberUpdated',
+      payload: { guildId: 'not-loaded', userId: '10', nickname: 'X', communicationDisabledUntil: 1 },
+    });
+
+    expect(store.membersOf('not-loaded')).toEqual([]);
+  });
+
+  it('adds a member on a MemberJoined gateway event (cache-guarded + idempotent)', async () => {
+    service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
+    await store.loadIfNeeded('1');
+    const joined = makeMember({ userId: '20', username: 'bob' });
+
+    // Unloaded guild → ignored.
+    TestBed.inject(GatewayEvents).emit({ type: 'MemberJoined', payload: { guildId: 'nope', member: joined } });
+    expect(store.membersOf('nope')).toEqual([]);
+
+    // Loaded guild → appended.
+    TestBed.inject(GatewayEvents).emit({ type: 'MemberJoined', payload: { guildId: '1', member: joined } });
+    expect(store.membersOf('1').map((m) => m.userId)).toEqual(['10', '20']);
+
+    // Duplicate join → no-op (idempotent).
+    TestBed.inject(GatewayEvents).emit({ type: 'MemberJoined', payload: { guildId: '1', member: joined } });
+    expect(store.membersOf('1').map((m) => m.userId)).toEqual(['10', '20']);
   });
 });

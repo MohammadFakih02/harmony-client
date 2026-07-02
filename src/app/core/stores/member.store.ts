@@ -1,6 +1,8 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { GuildCapabilities, GuildMember } from '../models/member.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { MemberService } from '../services/member.service';
 
 interface MemberState {
@@ -75,6 +77,16 @@ export const MemberStore = signalStore(
       }
     },
 
+    /** Adds a member to local state (invite redeem via SignalR). Cache-guarded + idempotent — a
+     *  no-op if the guild isn't loaded or the member is already present. */
+    addMember(guildId: string, member: GuildMember): void {
+      const list = store.byGuild()[guildId];
+      if (!list || list.some((m) => m.userId === member.userId)) return;
+      patchState(store, {
+        byGuild: { ...store.byGuild(), [guildId]: [...list, member] },
+      });
+    },
+
     /** Removes a member from local state (kick / ban / leave — own action or SignalR event). */
     removeMember(guildId: string, userId: string): void {
       const list = store.byGuild()[guildId];
@@ -145,4 +157,32 @@ export const MemberStore = signalStore(
       this.applyMemberNickname(guildId, userId, nickname);
     },
   })),
+  withHooks({
+    // Own member moderation/role events off the gateway stream. Each apply-method cache-guards on
+    // the guild being loaded, so events for unloaded guilds are ignored. `Kicked` targets only the
+    // affected user (navigation) and stays in the shell.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'MemberJoined':
+            store.addMember(e.payload.guildId, e.payload.member);
+            break;
+          case 'MemberRemoved':
+            store.removeMember(e.payload.guildId, e.payload.userId);
+            break;
+          case 'MemberUpdated':
+            // One event carries the member's full mutable state — apply both so neither field
+            // (nickname / timeout) clobbers the other.
+            store.patchMember(e.payload.guildId, e.payload.userId, {
+              nickname: e.payload.nickname,
+              communicationDisabledUntil: e.payload.communicationDisabledUntil,
+            });
+            break;
+          case 'MemberRoleUpdated':
+            store.applyMemberRoleUpdated(e.payload.guildId, e.payload.userId, e.payload.roleIds);
+            break;
+        }
+      });
+    },
+  }),
 );

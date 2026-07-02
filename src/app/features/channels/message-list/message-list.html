@@ -172,7 +172,8 @@
             }
             @if (msg.failed) {
               <span class="text-xs ml-1 inline-flex items-center gap-1.5">
-                <i class="fas fa-circle-exclamation"></i> Failed to send
+                <i class="fas fa-circle-exclamation"></i>
+                {{ msg.failedReason || 'Failed to send' }}
                 <button
                   class="underline hover:no-underline text-danger font-medium"
                   (click)="messageStore.retryMessage(msg.tempId!)"

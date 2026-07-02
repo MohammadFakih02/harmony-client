@@ -1,7 +1,9 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { AuthService } from '../services/auth.service';
 import { PresenceService } from '../services/presence.service';
+import { GatewayEvents } from '../hub/gateway-events';
 import {
   OfflineStatusPayload,
   OnlineStatusPayload,
@@ -176,4 +178,22 @@ export const PresenceStore = signalStore(
       }
     },
   })),
+  withHooks({
+    // Own presence events off the gateway stream (self-status sync + others' member-list dots).
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'OnlineStatus':
+            store.applyOnline(e.payload);
+            break;
+          case 'OfflineStatus':
+            store.applyOffline(e.payload);
+            break;
+          case 'StatusChanged':
+            store.applyStatusChanged(e.payload);
+            break;
+        }
+      });
+    },
+  }),
 );

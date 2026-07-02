@@ -109,6 +109,9 @@ export class InvitePeopleModal implements OnInit {
         maxUses: this.friendMaxUses() ?? undefined,
         expiresInSeconds: this.friendExpiry() ?? undefined,
       });
+      // Surface it in the invite list immediately (same optimistic add as `generate`), so a
+      // friend-minted invite is visible/revocable without reopening the modal.
+      this.list.set([invite, ...this.list()]);
       const dm = await this.dmStore.open(friend.id);
       const link = `${window.location.origin}/invite/${invite.code}`;
       await this.messages.sendMessage(null, dm.channelId, link);

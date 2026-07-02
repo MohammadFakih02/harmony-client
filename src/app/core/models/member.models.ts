@@ -59,6 +59,12 @@ export interface MemberUpdatedPayload {
   communicationDisabledUntil: number | null;
 }
 
+/** SignalR: a member joined a guild (invite redeem). Carries the full member so the list updates live. */
+export interface MemberJoinedPayload {
+  guildId: string;
+  member: GuildMember;
+}
+
 /** A minimal mentionable identity — what the @-autocomplete dropdown needs to render and insert. */
 export interface MentionCandidate {
   userId: string;

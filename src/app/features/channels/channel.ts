@@ -9,14 +9,16 @@ import { SignalRService } from '../../core/services/signalr.service';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { MessageList } from './message-list/message-list';
 import { MessageInput } from './message-input/message-input';
+import { TypingIndicator } from './typing-indicator/typing-indicator';
 
 @Component({
   selector: 'app-channel',
   standalone: true,
-  imports: [MessageList, MessageInput],
+  imports: [MessageList, MessageInput, TypingIndicator],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
     <app-message-list #list class="flex-1 min-h-0" />
+    <app-typing-indicator />
     <app-message-input (editLastRequested)="list.editLastOwnMessage()" />
   `,
 })

@@ -77,19 +77,26 @@
   <!-- Add server + utility -->
   <div class="flex flex-col items-center gap-2 w-full">
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
-    <div class="relative">
-      <button
-        class="guild-icon bg-surface-2 text-success hover:bg-success hover:text-white"
-        title="Add a Server"
-        (click)="showAddMenu.set(!showAddMenu())"
-      >
-        <i class="fas fa-plus"></i>
-      </button>
-      @if (showAddMenu()) {
-      <!-- outside-click backdrop -->
-      <div class="fixed inset-0 z-40" (click)="showAddMenu.set(false)"></div>
+    <button
+      class="guild-icon bg-surface-2 text-success hover:bg-success hover:text-white"
+      title="Add a Server"
+      cdkOverlayOrigin
+      #addTrigger="cdkOverlayOrigin"
+      (click)="showAddMenu.set(!showAddMenu())"
+    >
+      <i class="fas fa-plus"></i>
+    </button>
+    <!-- Create / Join chooser — its own CDK overlay (escapes the rail's overflow-x-hidden) -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="addTrigger"
+      [cdkConnectedOverlayOpen]="showAddMenu()"
+      [cdkConnectedOverlayPositions]="addMenuPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showAddMenu.set(false)"
+    >
       <div
-        class="absolute left-full bottom-0 ml-3 z-50 w-44 bg-surface-1 rounded-lg shadow-2xl border border-border-subtle p-1 flex flex-col"
+        class="w-44 bg-surface-1 rounded-lg shadow-2xl border border-border-subtle p-1 flex flex-col"
       >
         <button
           class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
@@ -104,8 +111,7 @@
           <i class="fas fa-right-to-bracket text-accent w-4"></i> Join a Server
         </button>
       </div>
-      }
-    </div>
+    </ng-template>
     <button
       class="guild-icon bg-surface-2 text-muted hover:text-white"
       title="Explore Servers"

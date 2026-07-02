@@ -131,6 +131,19 @@ describe('MessageStore', () => {
       expect(failed?.content).toBe('oops');
     });
 
+    it('captures the server reason (ProblemDetails detail) on a failed send', async () => {
+      // A DM to a "friends_only" stranger 403s with a specific reason the composer surfaces.
+      service.sendMessage.mockRejectedValue({
+        status: 403,
+        error: { detail: 'This user only accepts direct messages from friends.' },
+      });
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('hey'));
+
+      const failed = store.messages().find((m) => m.failed);
+      expect(failed?.failedReason).toBe('This user only accepts direct messages from friends.');
+    });
+
     it('carries attachment ids on the optimistic entry and forwards them to the service', async () => {
       service.sendMessage.mockResolvedValue({ messageId: '600', channelId: '1', guildId: '1' });
 

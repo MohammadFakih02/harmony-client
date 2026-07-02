@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -16,7 +17,7 @@ import { JoinServerModal } from '../../guilds/join-server-modal/join-server-moda
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink, FormsModule, JoinServerModal],
+  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',
@@ -62,9 +63,13 @@ export class GuildSidebar {
     this.router.navigate(['/app/dm', channelId]);
   }
 
-  // "+" rail button opens a small Create / Join chooser.
+  // "+" rail button opens a small Create / Join chooser. Rendered in a CDK overlay so it escapes
+  // the guild rail's overflow-x-hidden (which would otherwise clip the right-anchored menu).
   protected readonly showAddMenu = signal(false);
   protected readonly showJoinModal = signal(false);
+  protected readonly addMenuPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'bottom', overlayX: 'start', overlayY: 'bottom', offsetX: 12 },
+  ];
 
   protected readonly showCreateModal = signal(false);
   protected readonly guildName = signal('');
