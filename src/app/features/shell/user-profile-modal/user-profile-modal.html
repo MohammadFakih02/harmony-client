@@ -191,7 +191,7 @@
         >
           <i class="fas fa-pen mr-1.5"></i> Edit Profile
         </button>
-        } @else {
+        } @else if (canMessage()) {
         <button
           type="button"
           class="flex-1 px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
@@ -199,6 +199,10 @@
         >
           <i class="fas fa-message mr-1.5"></i> Message
         </button>
+        } @else {
+        <p class="flex-1 px-3 py-1.5 rounded-md text-xs text-muted bg-surface-2 inline-flex items-center gap-1.5">
+          <i class="fas fa-user-lock"></i> Only accepts messages from friends
+        </p>
         }
       </div>
       } @else {

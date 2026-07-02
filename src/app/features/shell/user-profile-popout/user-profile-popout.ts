@@ -8,6 +8,7 @@ import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { snowflakeToDate } from '../../../shared/util/snowflake';
@@ -39,6 +40,7 @@ export class UserProfilePopout {
   private readonly nicknameStore = inject(NicknameStore);
   private readonly auth = inject(AuthService);
   private readonly profileModal = inject(ProfileModalService);
+  private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
   private readonly member = computed(() => {
@@ -81,9 +83,14 @@ export class UserProfilePopout {
 
   async message(): Promise<void> {
     if (this.isSelf()) return;
-    const dm = await this.dmStore.open(this.userId());
-    this.close.emit();
-    await this.router.navigate(['/app/dm', dm.channelId]);
+    try {
+      const dm = await this.dmStore.open(this.userId());
+      this.close.emit();
+      await this.router.navigate(['/app/dm', dm.channelId]);
+    } catch {
+      // friends_only stranger (or block) — the server rejects opening the DM.
+      this.toast.info('This user only accepts messages from friends.', 'fa-user-lock');
+    }
   }
 
   viewFullProfile(): void {

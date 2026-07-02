@@ -1,8 +1,11 @@
 import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { MessageFailedPayload, MessageResponse, ReplyTarget } from '../models/message.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../services/message.service';
+import { extractApiError } from '../../shared/util/api-error';
 
 let _tempIdCounter = -1;
 const nextTempId = (): number => _tempIdCounter--;
@@ -276,10 +279,11 @@ export const MessageStore = signalStore(
           replyToId: replyToId ?? undefined,
         });
         confirmSent(tempId, response.messageId);
-      } catch {
+      } catch (err) {
+        const failedReason = extractApiError(err);
         patchState(store, {
           messages: store.messages().map((m) =>
-            m.tempId === tempId ? { ...m, pending: false, failed: true } : m,
+            m.tempId === tempId ? { ...m, pending: false, failed: true, failedReason } : m,
           ),
         });
       }
@@ -337,7 +341,14 @@ export const MessageStore = signalStore(
       patchState(store, {
         messages: store.messages().map((m) =>
           m.tempId === tempId
-            ? { ...m, tempId: newTempId, messageId: String(newTempId), failed: false, pending: true }
+            ? {
+                ...m,
+                tempId: newTempId,
+                messageId: String(newTempId),
+                failed: false,
+                failedReason: undefined,
+                pending: true,
+              }
             : m,
         ),
       });
@@ -348,10 +359,11 @@ export const MessageStore = signalStore(
           replyToId: msg.replyToId ?? undefined,
         });
         confirmSent(newTempId, response.messageId);
-      } catch {
+      } catch (err) {
+        const failedReason = extractApiError(err);
         patchState(store, {
           messages: store.messages().map((m) =>
-            m.tempId === newTempId ? { ...m, pending: false, failed: true } : m,
+            m.tempId === newTempId ? { ...m, pending: false, failed: true, failedReason } : m,
           ),
         });
       }
@@ -455,5 +467,27 @@ export const MessageStore = signalStore(
       patchState(store, { unreadOnOpen: 0 });
     },
     };
+  }),
+  withHooks({
+    // Own the message lifecycle events off the unified gateway stream. Location-aware reactions
+    // (mark-read-if-active, DM resurface) stay in the shell — this store only mutates its own list.
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'MessageReceived':
+            store.appendMessage(e.message);
+            break;
+          case 'MessageEdited':
+            store.editMessage(e.edit.messageId, e.edit.content, e.edit.editedAt);
+            break;
+          case 'MessageDeleted':
+            store.deleteMessage(e.messageId);
+            break;
+          case 'MessageFailed':
+            store.handleFailed(e.payload);
+            break;
+        }
+      });
+    },
   }),
 );

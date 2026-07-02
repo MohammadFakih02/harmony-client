@@ -1,6 +1,8 @@
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { MessageResponse, PinnedMessageResponse } from '../models/message.models';
+import { GatewayEvents } from '../hub/gateway-events';
 import { MessageService } from '../services/message.service';
 import { AuthService } from '../services/auth.service';
 
@@ -119,5 +121,24 @@ export const PinStore = signalStore(
         patchState(store, { guildId: null, channelId: null, pins: [], loading: false });
       },
     };
+  }),
+  withHooks({
+    // Keep the active channel's pins in sync off the gateway stream (all handlers are
+    // channel-scoped internally, so events for other channels are ignored).
+    onInit(store, gateway = inject(GatewayEvents)) {
+      gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+        switch (e.type) {
+          case 'MessagePinned':
+            void store.applyPinned(e.pin.channelId, e.pin.messageId);
+            break;
+          case 'MessageUnpinned':
+            store.applyUnpinned(e.pin.channelId, e.pin.messageId);
+            break;
+          case 'MessageDeleted':
+            store.applyMessageDeleted(e.messageId);
+            break;
+        }
+      });
+    },
   }),
 );

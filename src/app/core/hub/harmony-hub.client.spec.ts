@@ -1,5 +1,5 @@
-import { Subject } from 'rxjs';
 import { HarmonyHubClient } from './harmony-hub.client';
+import { GatewayEvent } from './gateway-events';
 import { HubConnectionState } from '@microsoft/signalr';
 
 // Minimal mock that captures .on() registrations so we can trigger them in tests
@@ -25,11 +25,14 @@ function makeMockConnection() {
 
 describe('HarmonyHubClient', () => {
   let conn: ReturnType<typeof makeMockConnection>;
+  let events: GatewayEvent[];
   let client: HarmonyHubClient;
 
   beforeEach(() => {
     conn = makeMockConnection();
-    client = new HarmonyHubClient(conn as never);
+    events = [];
+    // Every coerced server→client event is pushed into this sink (GatewayEvents.emit in production).
+    client = new HarmonyHubClient(conn as never, (e) => events.push(e));
   });
 
   it('registers all expected server→client event handlers on construction', () => {
@@ -42,10 +45,7 @@ describe('HarmonyHubClient', () => {
     expect(registeredEvents).toContain('TypingStarted');
   });
 
-  it('dispatches MessageReceived to messageReceived$ coercing Snowflake ids to strings', () => {
-    const received: unknown[] = [];
-    client.messageReceived$.subscribe((m) => received.push(m));
-
+  it('emits a MessageReceived gateway event coercing Snowflake ids to strings', () => {
     // SignalR delivers ids as JSON numbers; the handler coerces them to strings.
     conn.emit('MessageReceived', {
       messageId: 1,
@@ -60,50 +60,54 @@ describe('HarmonyHubClient', () => {
       mentionIds: [],
     });
 
-    expect(received).toHaveLength(1);
-    expect(received[0]).toMatchObject({
-      messageId: '1',
-      channelId: '2',
-      guildId: '3',
-      userId: '4',
-      content: 'hello',
-      sentAt: 1704067200000,
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'MessageReceived',
+      message: {
+        messageId: '1',
+        channelId: '2',
+        guildId: '3',
+        userId: '4',
+        content: 'hello',
+        sentAt: 1704067200000,
+      },
     });
   });
 
-  it('dispatches MessageFailed to messageFailed$', () => {
-    const received: unknown[] = [];
-    client.messageFailed$.subscribe((p) => received.push(p));
-
+  it('emits a MessageFailed gateway event carrying the payload', () => {
     const payload = { messageId: 42, channelId: 1, guildId: 1 };
     conn.emit('MessageFailed', payload);
 
-    expect(received[0]).toBe(payload);
+    expect(events[0]).toEqual({ type: 'MessageFailed', payload });
   });
 
-  it('dispatches UnreadCountUpdated to unreadCountUpdated$', () => {
-    const received: unknown[] = [];
-    client.unreadCountUpdated$.subscribe((p) => received.push(p));
-
+  it('emits an UnreadCountUpdated gateway event carrying the payload', () => {
     const payload = { channelId: 5, guildId: 1, unreadCount: 3 };
     conn.emit('UnreadCountUpdated', payload);
 
-    expect(received[0]).toBe(payload);
+    expect(events[0]).toEqual({ type: 'UnreadCountUpdated', payload });
   });
 
-  it('dispatches MessageEdited as a single payload object to messageEdited$', () => {
-    const received: unknown[] = [];
-    client.messageEdited$.subscribe((e) => received.push(e));
-
+  it('emits MessageEdited from the single payload object, coercing id + editedAt', () => {
     // Backend broadcasts MessageEditedPayload { messageId, newContent, editedAt }
     // as one object; editedAt is a Unix-ms long. The handler coerces the id to a
     // string and editedAt to a number.
     conn.emit('MessageEdited', { messageId: 99, newContent: 'new content', editedAt: 1704067200000 });
 
-    expect(received[0]).toEqual({
-      messageId: '99',
-      content: 'new content',
-      editedAt: 1704067200000,
+    expect(events[0]).toEqual({
+      type: 'MessageEdited',
+      edit: { messageId: '99', content: 'new content', editedAt: 1704067200000 },
+    });
+  });
+
+  it('folds RoleCreated and RoleUpdated into RoleUpserted, coercing ids + permissionBits', () => {
+    conn.emit('RoleCreated', { id: 10, guildId: 20, name: 'Mods', permissionBits: '8', position: 1 });
+    conn.emit('RoleUpdated', { id: 10, guildId: 20, name: 'Mods', permissionBits: '8', position: 2 });
+
+    expect(events.map((e) => e.type)).toEqual(['RoleUpserted', 'RoleUpserted']);
+    expect(events[0]).toMatchObject({
+      type: 'RoleUpserted',
+      role: { id: '10', guildId: '20', permissionBits: 8 },
     });
   });
 
@@ -143,31 +147,22 @@ describe('HarmonyHubClient', () => {
     expect(registeredEvents).toContain('StatusChanged');
   });
 
-  it('dispatches OnlineStatus to onlineStatus$ coercing userId to a string', () => {
-    const received: unknown[] = [];
-    client.onlineStatus$.subscribe((p) => received.push(p));
-
+  it('emits OnlineStatus coercing userId to a string', () => {
     conn.emit('OnlineStatus', { userId: 7, status: 'online' });
-
-    expect(received[0]).toEqual({ userId: '7', status: 'online' });
+    expect(events[0]).toEqual({ type: 'OnlineStatus', payload: { userId: '7', status: 'online' } });
   });
 
-  it('dispatches OfflineStatus to offlineStatus$', () => {
-    const received: unknown[] = [];
-    client.offlineStatus$.subscribe((p) => received.push(p));
-
+  it('emits OfflineStatus coercing userId to a string', () => {
     conn.emit('OfflineStatus', { userId: 7 });
-
-    expect(received[0]).toEqual({ userId: '7' });
+    expect(events[0]).toEqual({ type: 'OfflineStatus', payload: { userId: '7' } });
   });
 
-  it('dispatches StatusChanged to statusChanged$', () => {
-    const received: unknown[] = [];
-    client.statusChanged$.subscribe((p) => received.push(p));
-
+  it('emits StatusChanged carrying the status message', () => {
     conn.emit('StatusChanged', { userId: 7, status: 'dnd', statusMessage: null });
-
-    expect(received[0]).toEqual({ userId: '7', status: 'dnd', statusMessage: null });
+    expect(events[0]).toEqual({
+      type: 'StatusChanged',
+      payload: { userId: '7', status: 'dnd', statusMessage: null },
+    });
   });
 
   it('setIdle() invokes SetIdle with the boolean flag', async () => {
