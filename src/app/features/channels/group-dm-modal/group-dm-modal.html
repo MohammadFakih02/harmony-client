@@ -73,6 +73,7 @@
         placeholder="Group name (optional)"
         [ngModel]="name()"
         (ngModelChange)="name.set($event)"
+        (keydown.enter)="confirm()"
       />
       }
       <div class="flex items-center justify-end gap-2">

@@ -18,6 +18,7 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
       class="mb-4 w-full rounded bg-surface-3 px-3 py-2 text-sm text-primary outline-none"
       [(ngModel)]="name"
       maxlength="100"
+      (keydown.enter)="save()"
     />
 
     <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Description</label>

@@ -84,6 +84,7 @@
         placeholder="Add a message (optional)"
         [ngModel]="note()"
         (ngModelChange)="note.set($event)"
+        (keydown.enter)="send()"
       />
       <div class="flex items-center justify-end gap-2">
         <button
