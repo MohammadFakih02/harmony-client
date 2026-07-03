@@ -1,0 +1,58 @@
+@if (contextMenu.state(); as s) {
+<!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. -->
+<div class="fixed inset-0 z-[200]" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
+  <div
+    #menu
+    class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-up"
+    [style.left.px]="pos().x"
+    [style.top.px]="pos().y"
+    (click)="$event.stopPropagation()"
+    (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    @for (entry of s.entries; track $index) {
+      @if (isSep(entry)) {
+      <div class="h-px bg-border-subtle my-0.5"></div>
+      } @else if (asItem(entry); as it) {
+        @if (it.children?.length) {
+        <!-- Item with a one-level hover submenu -->
+        <div class="relative group/sub">
+          <ng-container *ngTemplateOutlet="row; context: { $implicit: it, hasSub: true }"></ng-container>
+          <div
+            class="hidden group-hover/sub:flex flex-col gap-0.5 absolute -top-1.5 w-52 max-h-72 overflow-y-auto p-1.5 rounded-xl bg-surface shadow-modal border border-border"
+            [class.left-full]="!openLeft()"
+            [class.right-full]="openLeft()"
+          >
+            @for (child of it.children; track $index) {
+              @if (isSep(child)) {
+              <div class="h-px bg-border-subtle my-0.5"></div>
+              } @else if (asItem(child); as ch) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: ch }"></ng-container>
+              }
+            }
+          </div>
+        </div>
+        } @else {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: it }"></ng-container>
+        }
+      }
+    }
+  </div>
+</div>
+}
+
+<ng-template #row let-item let-hasSub="hasSub">
+  <button
+    type="button"
+    class="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-surface-3 transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
+    [class.text-danger]="item.danger"
+    [class.text-primary]="!item.danger"
+    [disabled]="item.disabled"
+    (click)="run(item)"
+  >
+    <i class="fas w-4 text-center text-xs shrink-0" [class.text-faint]="!item.danger" [ngClass]="leftIcon(item)"></i>
+    <span class="flex-1 truncate">{{ item.label }}</span>
+    @if (hasSub) {
+    <i class="fas fa-chevron-right text-2xs text-faint shrink-0"></i>
+    }
+  </button>
+</ng-template>

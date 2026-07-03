@@ -29,7 +29,7 @@ import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
-import { UiAvatar, UiIconButton, Lightbox } from '../../shared/ui';
+import { UiAvatar, UiIconButton, Lightbox, ContextMenu } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
   DmParticipant,
@@ -55,6 +55,7 @@ import { ToastService } from '../../core/services/toast.service';
     Lightbox,
     ToastContainer,
     UserProfileModal,
+    ContextMenu,
     OverlayModule,
     PinsPanel,
     SearchPanel,

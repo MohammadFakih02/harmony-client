@@ -4,6 +4,7 @@ import { InviteService } from '../../../core/services/invite.service';
 import { MessageService } from '../../../core/services/message.service';
 import { FriendStore } from '../../../core/stores/friend.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { MemberStore } from '../../../core/stores/member.store';
 import { Invite } from '../../../core/models/invite.models';
 import { Friend } from '../../../core/models/friend.models';
 import { UiAvatar } from '../../../shared/ui';
@@ -32,6 +33,7 @@ export class InvitePeopleModal implements OnInit {
   private readonly messages = inject(MessageService);
   protected readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
+  private readonly memberStore = inject(MemberStore);
 
   readonly guildId = input.required<string>();
   readonly close = output<void>();
@@ -71,12 +73,15 @@ export class InvitePeopleModal implements OnInit {
 
   protected readonly filteredFriends = computed(() => {
     const q = this.friendQuery().trim().toLowerCase();
-    const friends = this.friendStore.friends();
+    // Exclude friends who are already in this guild — no point inviting them.
+    const inGuild = new Set(this.memberStore.membersOf(this.guildId()).map((m) => m.userId));
+    const friends = this.friendStore.friends().filter((f) => !inGuild.has(f.id));
     return q ? friends.filter((f) => f.username.toLowerCase().includes(q)) : friends;
   });
 
   async ngOnInit(): Promise<void> {
     this.friendStore.load(); // ensure the friend list is available (cheap; shell usually warmed it)
+    this.memberStore.loadIfNeeded(this.guildId()); // needed to hide friends already in the guild
     try {
       this.list.set(await this.invites.listInvites(this.guildId()));
     } catch {

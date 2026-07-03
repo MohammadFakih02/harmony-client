@@ -227,14 +227,14 @@ export class ChannelSidebar {
 
   selectStatus(status: PreferredStatus): void {
     // Online is the default/revert target, so an expiry on it is meaningless.
-    // Apply without dismissing — the popup stays open so further tweaks don't reopen it.
     this.presenceStore.setMyStatus(status, status === 'online' ? null : this.selectedExpiry());
+    this.showStatusMenu.set(false); // picking a status closes the menu
   }
 
   saveCustomStatus(): void {
     const message = this.customDraft().trim();
     this.presenceStore.setCustomStatus(message || null, message ? this.customExpiry() : null);
-    // Keep the editor open — saving shouldn't tear the popup down.
+    this.showCustomStatus.set(false); // saving closes the editor
   }
 
   clearCustomStatus(): void {

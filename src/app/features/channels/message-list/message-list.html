@@ -59,7 +59,7 @@
 </div>
 }
 
-<div #scroller (scroll)="onScroll()" class="flex-1 min-h-0 overflow-y-auto select-text">
+<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text">
   @for (group of messageGroups(); track group.firstMessageId) {
   <div class="animate-message-in" [attr.data-group]="group.firstMessageId">
     @if (group.isSystem) {
@@ -85,6 +85,7 @@
       ringClass="border-surface-2 group-hover:border-surface-2"
       class="mt-0.5 shrink-0 cursor-pointer"
       (click)="openProfile(group, authorOrigin)"
+      (contextmenu)="openAuthorMenu($event, group)"
     />
     <div class="flex flex-col gap-0.5 flex-1 min-w-0">
       <div class="flex items-baseline gap-2">
@@ -95,12 +96,13 @@
           [class.text-primary]="!authorColor(group.userId)"
           [style.color]="authorColor(group.userId)"
           (click)="openProfile(group, authorOrigin)"
+          (contextmenu)="openAuthorMenu($event, group)"
           >{{ authorName(group) }}</span
         >
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
       </div>
       @for (msg of group.messages; track msg.messageId) {
-      <div class="relative group/msg" [ngClass]="highlightClass(msg)">
+      <div class="relative group/msg" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <textarea
