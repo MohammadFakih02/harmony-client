@@ -13,11 +13,18 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
+import { Router } from '@angular/router';
+import { UnreadStore } from '../../../core/stores/unread.store';
 import { memberColor, roleColorHex } from '../../../core/models/role.models';
 import { MentionContext, buildMentionSets } from '../../../shared/util/mention-match';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { RoleService } from '../../../core/services/role.service';
+import { ProfileModalService } from '../../../core/services/profile-modal.service';
+import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { buildUserMenu, UserMenuDeps } from '../../shell/user-context-menu';
+import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { MessageResponse } from '../../../core/models/message.models';
 import { MentionCandidate } from '../../../core/models/member.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
@@ -106,6 +113,18 @@ export class MessageList {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
+  private readonly unreadStore = inject(UnreadStore);
+  private readonly contextMenu = inject(ContextMenuService);
+  private readonly userMenuDeps: UserMenuDeps = {
+    memberStore: this.memberStore,
+    roleStore: this.roleStore,
+    roleService: inject(RoleService),
+    dmStore: this.dmStore,
+    profileModal: inject(ProfileModalService),
+    toast: this.toast,
+    router: inject(Router),
+    auth: this.auth,
+  };
 
   // Mention candidates for chip rendering — consumed by <app-message-content> to decide which
   // @tokens become chips (and to colour role chips). In a guild: member usernames + server
@@ -220,6 +239,82 @@ export class MessageList {
   protected closeProfile(): void {
     this.profileGroup.set(null);
     this.profileOrigin.set(null);
+  }
+
+  // --- right-click context menus (message / author / page) ---
+
+  /** Right-click a message → its actions (reply/copy/pin/forward/edit/delete), gated by capability. */
+  protected openMessageMenu(event: MouseEvent, msg: MessageResponse): void {
+    const entries: ContextMenuEntry[] = [];
+    if (this.canReply(msg)) entries.push({ label: 'Reply', icon: 'fa-reply', action: () => this.replyTo(msg) });
+    if (this.canCopy(msg)) entries.push({ label: 'Copy Text', icon: 'fa-copy', action: () => this.copyText(msg) });
+    entries.push({ label: 'Copy Message ID', icon: 'fa-hashtag', action: () => this.copyMessageId(msg) });
+
+    const mid: ContextMenuEntry[] = [];
+    if (this.canPin(msg)) {
+      mid.push({
+        label: this.isPinned(msg) ? 'Unpin Message' : 'Pin Message',
+        icon: 'fa-thumbtack',
+        action: () => this.togglePin(msg),
+      });
+    }
+    if (this.canForward(msg)) mid.push({ label: 'Forward', icon: 'fa-share', action: () => this.openForward(msg) });
+    if (mid.length) entries.push({ separator: true }, ...mid);
+
+    const tail: ContextMenuEntry[] = [];
+    if (this.canEdit(msg)) tail.push({ label: 'Edit Message', icon: 'fa-pen', action: () => this.startEdit(msg) });
+    if (this.canDelete(msg)) {
+      tail.push({ label: 'Delete Message', icon: 'fa-trash', danger: true, action: () => this.deleteMsg(msg) });
+    }
+    if (tail.length) entries.push({ separator: true }, ...tail);
+
+    this.contextMenu.open(event, entries);
+  }
+
+  protected copyMessageId(msg: MessageResponse): void {
+    void navigator.clipboard?.writeText(msg.messageId).then(
+      () => this.toast.info('Copied message ID'),
+      () => this.toast.info('Copy failed', 'fa-triangle-exclamation'),
+    );
+  }
+
+  /** Right-click a message author → the shared user menu (profile/message/moderation). */
+  protected openAuthorMenu(event: MouseEvent, group: MessageGroup): void {
+    this.closeProfile();
+    const guildId = this.messageStore.activeGuildId();
+    const member = guildId
+      ? this.memberStore.membersOf(guildId).find((m) => m.userId === group.userId)
+      : undefined;
+    const caps = guildId ? this.memberStore.capabilitiesOf(guildId) : null;
+    this.contextMenu.open(
+      event,
+      buildUserMenu(this.userMenuDeps, {
+        userId: group.userId,
+        guildId,
+        username: group.username,
+        member,
+        caps,
+      }),
+    );
+  }
+
+  /** Right-click the empty chat area → a minimal page menu (Mark As Read). */
+  protected openPageMenu(event: MouseEvent): void {
+    const guildId = this.messageStore.activeGuildId();
+    const channelId = this.messageStore.activeChannelId();
+    const msgs = this.messageStore.messages();
+    const newest = msgs[msgs.length - 1];
+    const hasUnread = !!channelId && (this.unreadStore.counts()[channelId] ?? 0) > 0;
+    this.contextMenu.open(event, [
+      {
+        label: 'Mark As Read',
+        icon: 'fa-check-double',
+        disabled: !hasUnread || !newest || !channelId,
+        action: () => {
+          if (channelId && newest) void this.unreadStore.markRead(guildId, channelId, newest.messageId);
+        },
+      },
+    ]);
   }
 
   // Inline-edit state: the messageId being edited and its working draft.

@@ -103,6 +103,7 @@
               class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
               [ngModel]="serverNickDraft()"
               (ngModelChange)="serverNickDraft.set($event)"
+              (keydown.enter)="saveServerNick()"
             />
             <button
               type="button"
@@ -148,6 +149,7 @@
               class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
               [ngModel]="friendNickDraft()"
               (ngModelChange)="friendNickDraft.set($event)"
+              (keydown.enter)="saveFriendNick()"
             />
             <button
               type="button"

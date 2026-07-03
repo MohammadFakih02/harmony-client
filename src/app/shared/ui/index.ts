@@ -6,3 +6,4 @@ export { UiAvatar } from './avatar/ui-avatar';
 export { Lightbox } from './lightbox/lightbox';
 export { MentionAutocomplete } from './mention-autocomplete/mention-autocomplete';
 export { EmojiPicker } from './emoji-picker/emoji-picker';
+export { ContextMenu } from './context-menu/context-menu';

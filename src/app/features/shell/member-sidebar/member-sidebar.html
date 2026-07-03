@@ -14,17 +14,17 @@
     <p class="text-xs text-faint text-center pt-6">No members found.</p>
     } @else {
     @for (section of sections(); track section.key) {
-      @if (showSectionHeader(section)) {
       <div class="px-2 pt-3 pb-1 text-2xs font-bold uppercase tracking-wider text-faint truncate">
         {{ section.label }} — {{ section.rows.length }}
       </div>
-      }
       @for (row of section.rows; track row.member.userId) {
       <div
         cdkOverlayOrigin
         #origin="cdkOverlayOrigin"
         class="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 transition-micro cursor-pointer"
+        [class.opacity-45]="row.dimmed"
         (click)="openProfile(row.member, origin)"
+        (contextmenu)="openUserMenu($event, row.member)"
       >
         <ui-avatar
           [src]="row.member.avatarKey"
@@ -54,16 +54,14 @@
           <span class="text-xs text-faint truncate leading-tight">{{ row.member.username }}</span>
           }
         </div>
-        @if (row.moderatable) {
         <button
           type="button"
           class="text-faint hover:text-primary text-xs opacity-0 group-hover:opacity-100 transition-micro shrink-0 px-1"
           aria-label="Member actions"
-          (click)="$event.stopPropagation(); openMenu(row.member, origin)"
+          (click)="$event.stopPropagation(); openUserMenu($event, row.member)"
         >
           <i class="fas fa-ellipsis-vertical"></i>
         </button>
-        }
       </div>
       }
     }
@@ -87,25 +85,6 @@
     [fallbackUsername]="member.username"
     [fallbackAvatarKey]="member.avatarKey"
     (close)="closeProfile()"
-  />
-</ng-template>
-}
-
-<!-- Moderation action menu (anchored to the clicked row) -->
-@if (menuMember(); as member) {
-<ng-template
-  cdkConnectedOverlay
-  [cdkConnectedOverlayOrigin]="menuOrigin()!"
-  [cdkConnectedOverlayOpen]="true"
-  [cdkConnectedOverlayPositions]="menuPositions"
-  [cdkConnectedOverlayHasBackdrop]="false"
-  (overlayOutsideClick)="closeMenu()"
->
-  <app-member-actions-menu
-    [guildId]="guildStore.selectedGuildId()!"
-    [member]="member"
-    [caps]="caps()!"
-    (close)="closeMenu()"
   />
 </ng-template>
 }
