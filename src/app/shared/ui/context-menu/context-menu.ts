@@ -57,12 +57,6 @@ export class ContextMenu {
     this.pos.set({ x, y });
   }
 
-  /** Left icon slot: a check for toggle items (when set), otherwise the item's own icon. */
-  protected leftIcon(item: ContextMenuItem): string {
-    if (item.checked) return item.checked() ? 'fa-check' : '';
-    return item.icon ?? '';
-  }
-
   protected async run(item: ContextMenuItem): Promise<void> {
     if (item.disabled || item.children?.length) return;
     try {

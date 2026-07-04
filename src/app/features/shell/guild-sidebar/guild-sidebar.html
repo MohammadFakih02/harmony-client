@@ -5,7 +5,12 @@
   <div class="flex flex-col items-center gap-1 w-full">
     <a
       routerLink="/app/friends"
-      class="guild-icon bg-surface-2 text-accent-light hover:text-white"
+      class="guild-icon hover:text-white"
+      [class.active]="homeSelected()"
+      [class.bg-accent]="homeSelected()"
+      [class.text-white]="homeSelected()"
+      [class.bg-surface-2]="!homeSelected()"
+      [class.text-accent-light]="!homeSelected()"
       title="Direct Messages"
     >
       <i class="fas fa-yin-yang text-2xl"></i>
@@ -30,7 +35,7 @@
         <span class="text-sm font-semibold select-none">{{ dmInitials(dmLabelOf(dm)) }}</span>
       }
       <span
-        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface-1"
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface"
       >
         {{ dmUnreadCount(dm.channelId) > 99 ? '99+' : dmUnreadCount(dm.channelId) }}
       </span>
@@ -43,11 +48,14 @@
   <!-- Guild list -->
   <div class="flex flex-col items-center gap-2 w-full flex-1">
     @for (guild of guildStore.guilds(); track guild.id) {
+    @let guildUnread = unreadStore.guildUnreadCount(guild.id);
     <button
       class="guild-icon text-muted hover:text-primary transition-micro relative"
-      [class.bg-accent]="guildStore.selectedGuildId() === guild.id"
-      [class.text-white]="guildStore.selectedGuildId() === guild.id"
-      [class.bg-surface-2]="guildStore.selectedGuildId() !== guild.id"
+      [class.active]="activeRailGuildId() === guild.id"
+      [class.unread]="guildUnread > 0"
+      [class.bg-accent]="activeRailGuildId() === guild.id"
+      [class.text-white]="activeRailGuildId() === guild.id"
+      [class.bg-surface-2]="activeRailGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"
     >
@@ -62,10 +70,9 @@
       }
 
       <!-- Unread count badge (sum across the guild's channels) -->
-      @let guildUnread = unreadStore.guildUnreadCount(guild.id);
       @if (guildUnread > 0) {
       <span
-        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface-1"
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface"
       >
         {{ guildUnread > 99 ? '99+' : guildUnread }}
       </span>
@@ -96,7 +103,7 @@
       (overlayOutsideClick)="showAddMenu.set(false)"
     >
       <div
-        class="w-44 bg-surface-1 rounded-lg shadow-2xl border border-border-subtle p-1 flex flex-col"
+        class="w-44 bg-surface rounded-lg shadow-modal border border-border-subtle p-1 flex flex-col"
       >
         <button
           class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
@@ -112,12 +119,6 @@
         </button>
       </div>
     </ng-template>
-    <button
-      class="guild-icon bg-surface-2 text-muted hover:text-white"
-      title="Explore Servers"
-    >
-      <i class="fas fa-compass"></i>
-    </button>
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
     <button
       class="guild-icon bg-surface-2 text-muted hover:bg-danger hover:text-white"
@@ -131,19 +132,12 @@
 
 <!-- Create Server Modal -->
 @if (showCreateModal()) {
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-  (click)="closeCreateModal()"
+<ui-modal
+  heading="Create a Server"
+  subtitle="Give your new server a name to get started."
+  (close)="closeCreateModal()"
 >
-  <div
-    class="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 flex flex-col gap-5"
-    (click)="$event.stopPropagation()"
-  >
-    <div class="flex flex-col gap-1">
-      <h2 class="text-lg font-bold text-primary text-center">Create a Server</h2>
-      <p class="text-sm text-muted text-center">Give your new server a name to get started.</p>
-    </div>
-
+  <div class="px-6 pb-6 flex flex-col gap-5">
     <div class="flex flex-col gap-1.5">
       <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="guild-name">
         Server Name
@@ -184,7 +178,7 @@
       </button>
     </div>
   </div>
-</div>
+</ui-modal>
 }
 
 <!-- Join Server Modal -->

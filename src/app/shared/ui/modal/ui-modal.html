@@ -1,0 +1,31 @@
+<div
+  class="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
+  [class]="layer() === 'top' ? 'z-60' : 'z-50'"
+  (click)="close.emit()"
+>
+  <div
+    class="relative w-full mx-4 flex flex-col max-h-[85vh] rounded-2xl bg-surface border border-border-subtle shadow-modal overflow-hidden animate-modal-in"
+    [class]="sizeClass()"
+    (click)="$event.stopPropagation()"
+  >
+    <button
+      type="button"
+      class="absolute top-3 right-3 z-10 w-7 h-7 rounded-full flex items-center justify-center text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+      aria-label="Close"
+      (click)="close.emit()"
+    >
+      <i class="fas fa-xmark text-sm"></i>
+    </button>
+
+    @if (heading()) {
+    <div class="flex flex-col gap-1 p-6 pb-3 shrink-0 text-center">
+      <h2 class="text-lg font-bold text-primary">{{ heading() }}</h2>
+      @if (subtitle()) {
+      <p class="text-sm text-muted">{{ subtitle() }}</p>
+      }
+    </div>
+    }
+
+    <ng-content />
+  </div>
+</div>

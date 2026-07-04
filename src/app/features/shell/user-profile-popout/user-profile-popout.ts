@@ -13,6 +13,9 @@ import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { snowflakeToDate } from '../../../shared/util/snowflake';
 
+const fmtDate = (d: Date | null): string | null =>
+  d ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+
 /**
  * Clickable-user profile card: identity, presence + custom status, "Member Since", and the
  * member's roles as colour chips. A Message button opens a DM (hidden for yourself). Resolves
@@ -74,11 +77,19 @@ export class UserProfilePopout {
       .map((r) => ({ id: r.id, name: r.name, color: roleColorHex(r.color) }));
   });
 
-  /** "Member Since" — the guild join date when known, else the account-creation date from the id. */
-  protected readonly memberSince = computed(() => {
+  /** Banner gradient — the member's top coloured role, falling back to the theme accent. */
+  protected readonly bannerStyle = computed(() => {
+    const c = this.roleChips().find((r) => r.color)?.color ?? 'var(--color-accent)';
+    return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 55%, #000) 100%)`;
+  });
+
+  /** Account-creation date, from the snowflake — always known. */
+  protected readonly accountSince = computed(() => fmtDate(snowflakeToDate(this.userId())));
+
+  /** Guild join date — only when viewing a loaded guild member. */
+  protected readonly serverSince = computed(() => {
     const joined = this.member()?.joinedAt;
-    const date = joined != null ? new Date(joined) : snowflakeToDate(this.userId());
-    return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    return joined != null ? fmtDate(new Date(joined)) : null;
   });
 
   async message(): Promise<void> {

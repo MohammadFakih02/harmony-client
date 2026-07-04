@@ -7,3 +7,4 @@ export { Lightbox } from './lightbox/lightbox';
 export { MentionAutocomplete } from './mention-autocomplete/mention-autocomplete';
 export { EmojiPicker } from './emoji-picker/emoji-picker';
 export { ContextMenu } from './context-menu/context-menu';
+export { UiModal } from './modal/ui-modal';

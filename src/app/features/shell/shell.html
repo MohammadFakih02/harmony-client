@@ -4,10 +4,21 @@
     <app-guild-sidebar />
   </div>
 
-  <!-- Channel Navigation Panel -->
-  <div class="flex flex-col h-full w-60 min-w-60 bg-surface-2 overflow-hidden border-r border-border-subtle">
+  <!-- Channel Navigation Panel (drag-resizable via the strip on its right edge) -->
+  <div
+    class="flex flex-col h-full bg-surface-2 overflow-hidden border-r border-border-subtle shrink-0"
+    [style.width.px]="settings.channelSidebarWidth()"
+  >
     <app-channel-sidebar />
   </div>
+  <div
+    class="w-1 -ml-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
+    [appResizeHandle]="settings.channelSidebarWidth()"
+    edge="right"
+    [min]="channelSidebarMin"
+    [max]="channelSidebarMax"
+    (widthChange)="settings.setChannelSidebarWidth($event)"
+  ></div>
 
   <!-- Content Workspace -->
   <main class="flex-1 h-full bg-surface overflow-hidden flex min-w-0">
@@ -93,14 +104,6 @@
 
         <app-notification-bell />
         @if (inGuild()) {
-        @if (canCreateInvite()) {
-        <ui-icon-button size="md" label="Invite People" (click)="showInviteModal.set(true)">
-          <i class="fas fa-user-plus"></i>
-        </ui-icon-button>
-        }
-        <ui-icon-button size="md" label="Server Settings" (click)="openGuildSettings()">
-          <i class="fas fa-gear"></i>
-        </ui-icon-button>
         <ui-icon-button
           size="md"
           [active]="showMembers()"
@@ -125,43 +128,79 @@
       <router-outlet />
     </div>
 
-    <!-- Member sidebar (togglable) — guild channels only -->
+    <!-- Member sidebar (togglable, drag-resizable) — guild channels only -->
     @if (inGuild() && showMembers()) {
-    <div class="w-60 min-w-60 h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0">
+    <div
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
+      [appResizeHandle]="settings.rightSidebarWidth()"
+      edge="left"
+      [min]="rightSidebarMin"
+      [max]="rightSidebarMax"
+      (widthChange)="settings.setRightSidebarWidth($event)"
+    ></div>
+    <div
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0"
+      [style.width.px]="settings.rightSidebarWidth()"
+    >
       <app-member-sidebar />
     </div>
     }
 
-    <!-- DM profile / group members panel (togglable) — direct messages only -->
+    <!-- DM profile / group members panel (togglable, drag-resizable) — direct messages only -->
     @if (inDm() && showDmProfile() && dmChannel(); as dm) {
-    <div class="w-80 min-w-80 h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0">
+    <div
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
+      [appResizeHandle]="settings.rightSidebarWidth()"
+      edge="left"
+      [min]="rightSidebarMin"
+      [max]="rightSidebarMax"
+      (widthChange)="settings.setRightSidebarWidth($event)"
+    ></div>
+    <div
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0"
+      [style.width.px]="settings.rightSidebarWidth()"
+    >
       <!-- Banner -->
-      <div class="h-24 bg-accent/30"></div>
+      <div class="h-24 profile-banner"></div>
       @if (dmIsGroup()) {
       <!-- Group: name, member list, add/leave -->
-      <div class="px-4 -mt-10">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-surface-3 ring-[6px] ring-surface-2 text-muted">
+      <div class="px-4 pb-4">
+        <div class="relative z-10 inline-flex items-center justify-center w-20 h-20 -mt-10 rounded-full bg-surface-3 ring-[6px] ring-surface-2 text-muted">
           <i class="fas fa-user-group text-2xl"></i>
         </div>
-        <div class="mt-3 rounded-lg bg-surface p-3">
-          <p class="text-lg font-bold text-primary leading-tight wrap-break-word">{{ dmHeaderName() }}</p>
-          <p class="text-xs text-muted mt-0.5">{{ dmMembers().length + 1 }} Members</p>
+
+        <div class="mt-2.5 min-w-0">
+          <p class="text-xl font-bold text-primary leading-tight wrap-break-word">{{ dmHeaderName() }}</p>
+          <p class="text-sm text-muted mt-0.5">{{ dmMembers().length + 1 }} Members</p>
         </div>
 
-        <p class="text-2xs font-bold uppercase tracking-wider text-faint mt-4 mb-1 px-1">Members</p>
-        <div class="flex flex-col gap-0.5">
-          @for (m of dmMembers(); track m.userId) {
-          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-2 transition-micro">
-            <ui-avatar [src]="m.avatarKey" [alt]="m.username" size="sm" />
-            <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ dmMemberName(m) }}</span>
+        <div class="mt-3 rounded-xl bg-surface border border-border-subtle p-2">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1 px-1.5">Members</p>
+          <div class="flex flex-col gap-0.5">
+            @for (m of dmMembers(); track m.userId) {
+            <button
+              type="button"
+              class="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-surface-2 transition-micro text-left w-full"
+              (click)="openUserProfile(m.userId)"
+            >
+              <ui-avatar
+                [src]="m.avatarKey"
+                [alt]="m.username"
+                size="md"
+                [status]="participantStatus(m.userId)"
+                ringClass="border-surface"
+              />
+              <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ dmMemberName(m) }}</span>
+              <i class="fas fa-chevron-right text-2xs text-faint shrink-0"></i>
+            </button>
+            }
           </div>
-          }
         </div>
 
-        <div class="flex flex-col gap-2 mt-4">
+        <div class="flex flex-col gap-1.5 mt-4">
           <button
             type="button"
-            class="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-surface hover:bg-surface-3 text-primary transition-micro"
+            class="flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-semibold bg-surface hover:bg-surface-3 text-primary transition-micro"
             (click)="openAddPeople()"
           >
             <i class="fas fa-user-plus text-xs"></i>
@@ -169,7 +208,7 @@
           </button>
           <button
             type="button"
-            class="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-micro"
+            class="flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-micro"
             (click)="leaveGroup()"
           >
             <i class="fas fa-arrow-right-from-bracket text-xs"></i>
@@ -179,25 +218,46 @@
       </div>
       } @else if (dmPeer(); as peer) {
       <!-- 1:1: peer profile -->
-      <div class="px-4 -mt-10">
-        <div class="inline-block rounded-full ring-[6px] ring-surface-2">
+      <div class="px-4 pb-4">
+        <div class="relative z-10 inline-block rounded-full ring-[6px] ring-surface-2 bg-surface-2 -mt-10">
           <ui-avatar
             [src]="peer.avatarKey"
             [alt]="peer.username"
-            size="xl"
+            size="2xl"
             [status]="dmPeerStatus()"
             ringClass="border-surface-2"
           />
         </div>
-        <div class="mt-3 rounded-lg bg-surface p-3">
-          <p class="text-lg font-bold text-primary leading-tight">{{ dmHeaderName() }}</p>
-          @if (dmPeerMessage(); as msg) {
-          <p class="text-sm text-muted mt-2 whitespace-pre-wrap wrap-break-word">{{ msg }}</p>
+
+        <div class="mt-2.5 min-w-0">
+          <p class="text-xl font-bold text-primary leading-tight truncate">{{ dmHeaderName() }}</p>
+          @if (dmHeaderName() !== peer.username) {
+          <p class="text-sm text-muted truncate mt-0.5">{{ peer.username }}</p>
           }
-          <div class="h-px bg-border-subtle my-3"></div>
-          <p class="text-2xs font-bold uppercase tracking-wider text-faint">Member Since</p>
-          <p class="text-sm text-muted mt-0.5">{{ memberSince(peer.userId) }}</p>
         </div>
+
+        @if (dmPeerMessage(); as msg) {
+        <div class="mt-2 rounded-lg bg-surface border border-border-subtle px-2.5 py-1.5 flex items-start gap-1.5">
+          <i class="fas fa-quote-left text-2xs text-faint mt-1 shrink-0"></i>
+          <span class="text-xs text-muted whitespace-pre-wrap wrap-break-word min-w-0">{{ msg }}</span>
+        </div>
+        }
+
+        <div class="mt-3 rounded-xl bg-surface border border-border-subtle p-3.5">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
+          <div class="flex items-center gap-2 text-sm text-muted">
+            <i class="fas fa-yin-yang text-faint text-xs shrink-0" title="Joined Harmony"></i>
+            <span>{{ memberSince(peer.userId) }}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="mt-3 w-full h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface hover:bg-surface-3 transition-micro"
+          (click)="openUserProfile(peer.userId)"
+        >
+          View Full Profile
+        </button>
       </div>
       }
     </div>
@@ -207,11 +267,6 @@
 
 <!-- App-wide image lightbox -->
 <ui-lightbox />
-
-<!-- Invite People (guild header) -->
-@if (showInviteModal() && activeGuildId(); as guildId) {
-<app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
-}
 
 <!-- Add people to the active group DM (from the members panel) -->
 @if (showAddPeople() && dmChannel(); as dm) {
