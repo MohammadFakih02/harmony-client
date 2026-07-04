@@ -1,8 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
+import { UiModal } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
@@ -16,7 +19,7 @@ import { JoinServerModal } from '../../guilds/join-server-modal/join-server-moda
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule],
+  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule, UiModal],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',
@@ -27,6 +30,23 @@ export class GuildSidebar {
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
   private readonly router = inject(Router);
+
+  // Reactive current URL — drives which rail icon shows as selected. We derive the active guild
+  // from the URL (not GuildStore.selectedGuildId, which stays stale on /friends), so that entering
+  // Friends/DMs correctly deselects the last guild and selects the home logo.
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly activeRailGuildId = computed(() => {
+    const m = this.url().match(/\/guilds\/([^/?#]+)/);
+    return m ? m[1] : null;
+  });
+  protected readonly homeSelected = computed(() => this.activeRailGuildId() === null);
 
   // DMs with unread messages surface as avatar pills at the top of the rail (Discord-style),
   // so an incoming DM is reachable even while you're inside a server.

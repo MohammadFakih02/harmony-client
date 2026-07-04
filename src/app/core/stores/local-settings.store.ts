@@ -1,11 +1,15 @@
 import { effect } from '@angular/core';
 import { getState, patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import {
+  CHANNEL_SIDEBAR_MAX,
+  CHANNEL_SIDEBAR_MIN,
   DEFAULT_LOCAL_SETTINGS,
   FONT_SCALE_MAX,
   FONT_SCALE_MIN,
   LocalSettings,
   MessageDisplay,
+  RIGHT_SIDEBAR_MAX,
+  RIGHT_SIDEBAR_MIN,
 } from '../models/settings.models';
 
 export const LOCAL_SETTINGS_STORAGE_KEY = 'harmony-settings';
@@ -16,13 +20,18 @@ export function loadLocalSettings(): LocalSettings {
   try {
     const raw = localStorage.getItem(LOCAL_SETTINGS_STORAGE_KEY);
     if (!raw) return { ...DEFAULT_LOCAL_SETTINGS };
-    return { ...DEFAULT_LOCAL_SETTINGS, ...(JSON.parse(raw) as Partial<LocalSettings>) };
+    const loaded = { ...DEFAULT_LOCAL_SETTINGS, ...(JSON.parse(raw) as Partial<LocalSettings>) };
+    // Persisted widths are re-clamped so a stale/hand-edited value can't wedge the layout.
+    loaded.channelSidebarWidth = clamp(loaded.channelSidebarWidth, CHANNEL_SIDEBAR_MIN, CHANNEL_SIDEBAR_MAX);
+    loaded.rightSidebarWidth = clamp(loaded.rightSidebarWidth, RIGHT_SIDEBAR_MIN, RIGHT_SIDEBAR_MAX);
+    return loaded;
   } catch {
     return { ...DEFAULT_LOCAL_SETTINGS };
   }
 }
 
-const clampScale = (n: number) => Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, n));
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+const clampScale = (n: number) => clamp(n, FONT_SCALE_MIN, FONT_SCALE_MAX);
 
 /**
  * Local-only UI personalization (message density, font scale, reduced motion), persisted to
@@ -42,6 +51,12 @@ export const LocalSettingsStore = signalStore(
     },
     setReducedMotion(reducedMotion: boolean): void {
       patchState(store, { reducedMotion });
+    },
+    setChannelSidebarWidth(width: number): void {
+      patchState(store, { channelSidebarWidth: clamp(width, CHANNEL_SIDEBAR_MIN, CHANNEL_SIDEBAR_MAX) });
+    },
+    setRightSidebarWidth(width: number): void {
+      patchState(store, { rightSidebarWidth: clamp(width, RIGHT_SIDEBAR_MIN, RIGHT_SIDEBAR_MAX) });
     },
     reset(): void {
       patchState(store, { ...DEFAULT_LOCAL_SETTINGS });

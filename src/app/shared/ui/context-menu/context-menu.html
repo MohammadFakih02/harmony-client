@@ -1,9 +1,9 @@
 @if (contextMenu.state(); as s) {
 <!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. -->
-<div class="fixed inset-0 z-[200]" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
+<div class="fixed inset-0 z-200" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
   <div
     #menu
-    class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-up"
+    class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-scale-in origin-top-left"
     [style.left.px]="pos().x"
     [style.top.px]="pos().y"
     (click)="$event.stopPropagation()"
@@ -43,16 +43,32 @@
 <ng-template #row let-item let-hasSub="hasSub">
   <button
     type="button"
-    class="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-surface-3 transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
+    class="group/item flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 rounded-lg text-sm font-medium transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
     [class.text-danger]="item.danger"
+    [class.hover:bg-danger]="item.danger && !item.disabled"
     [class.text-primary]="!item.danger"
+    [class.hover:bg-accent]="!item.danger && !item.disabled"
+    [class.hover:text-white]="!item.disabled"
     [disabled]="item.disabled"
     (click)="run(item)"
   >
-    <i class="fas w-4 text-center text-xs shrink-0" [class.text-faint]="!item.danger" [ngClass]="leftIcon(item)"></i>
+    @if (item.icon) {
+    <i
+      class="fas w-4 text-center text-xs shrink-0 text-faint group-hover/item:text-white transition-micro"
+      [ngClass]="item.icon"
+    ></i>
+    }
     <span class="flex-1 truncate">{{ item.label }}</span>
+    @if (item.checked) {
+    <!-- Right-side checkbox for toggle items (role assignments etc.) -->
+    <span class="w-4 h-4 flex items-center justify-center rounded-sm ring-1 ring-current/40 shrink-0">
+      @if (item.checked()) {
+      <i class="fas fa-check text-2xs"></i>
+      }
+    </span>
+    }
     @if (hasSub) {
-    <i class="fas fa-chevron-right text-2xs text-faint shrink-0"></i>
+    <i class="fas fa-chevron-right text-2xs text-faint group-hover/item:text-white shrink-0"></i>
     }
   </button>
 </ng-template>

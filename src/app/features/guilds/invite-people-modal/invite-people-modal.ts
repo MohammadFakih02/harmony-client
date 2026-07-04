@@ -7,7 +7,7 @@ import { DmStore } from '../../../core/stores/dm.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { Invite } from '../../../core/models/invite.models';
 import { Friend } from '../../../core/models/friend.models';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiModal } from '../../../shared/ui';
 
 interface ExpiryOption {
   label: string;
@@ -25,7 +25,7 @@ interface MaxUsesOption {
 @Component({
   selector: 'app-invite-people-modal',
   standalone: true,
-  imports: [FormsModule, UiAvatar],
+  imports: [FormsModule, UiAvatar, UiModal],
   templateUrl: './invite-people-modal.html',
 })
 export class InvitePeopleModal implements OnInit {

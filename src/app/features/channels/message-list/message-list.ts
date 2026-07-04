@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, computed, signal, viewChild, effect, inject, Injector,
+  Component, ElementRef, computed, signal, viewChild, effect, inject, Injector, untracked,
 } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -33,6 +33,7 @@ import { buildGuildMentionCandidates } from '../../../shared/util/mention-candid
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
 import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
 import { extractInviteCodes } from '../../../shared/util/invite-links';
+import { dmLabel } from '../../../core/models/direct-message.models';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 import { MessageContent } from '../message-content/message-content';
 import { ForwardModal } from '../forward-modal/forward-modal';
@@ -48,6 +49,8 @@ export interface MessageGroup {
   messages: MessageResponse[];
   // System notices (e.g. member-join) render as standalone centered lines, never as a user burst.
   isSystem: boolean;
+  // Set when this group starts a new calendar day — renders a date separator above it.
+  dayLabel: string | null;
 }
 
 const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin']);
@@ -69,6 +72,20 @@ function formatMessageTime(sentAt: number): string {
 }
 
 function formatBannerDate(sentAt: number): string {
+  return new Date(sentAt).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function isSameDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+function formatDayLabel(sentAt: number): string {
   return new Date(sentAt).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
@@ -380,6 +397,7 @@ export class MessageList {
 
   protected readonly messageGroups = computed<MessageGroup[]>(() => {
     const msgs = this.messageStore.messages();
+    const dividerId = this.newDividerId();
     const groups: MessageGroup[] = [];
 
     for (const msg of msgs) {
@@ -387,10 +405,14 @@ export class MessageList {
       const last = groups[groups.length - 1];
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg ? msg.sentAt - lastMsg.sentAt : Infinity;
+      // A new calendar day always starts a new group (the date separator sits between groups);
+      // so does the NEW-messages divider, so it never has to split a burst mid-group.
+      const newDay = !lastMsg || !isSameDay(lastMsg.sentAt, msg.sentAt);
+      const forcedBreak = newDay || msg.messageId === dividerId;
       // A system notice is always its own group; it never merges with (or accepts) a user burst.
       const sameUser = last && !last.isSystem && last.userId === msg.userId && !msg.failed;
 
-      if (!isSystem && sameUser && gap < GROUP_BREAK_MS) {
+      if (!isSystem && sameUser && gap < GROUP_BREAK_MS && !forcedBreak) {
         last.messages.push(msg);
       } else {
         groups.push({
@@ -401,12 +423,21 @@ export class MessageList {
           timestamp: formatMessageTime(msg.sentAt),
           messages: [msg],
           isSystem,
+          dayLabel: newDay ? formatDayLabel(msg.sentAt) : null,
         });
       }
     }
 
     return groups;
   });
+
+  // -------------------------------------------------------------------------
+  // "NEW" divider — the first unread message, snapshotted once per channel open.
+  // A snapshot (not a live computed over unreadOnOpen) so incoming messages
+  // don't shift the boundary onto themselves.
+  // -------------------------------------------------------------------------
+  protected readonly newDividerId = signal<string | null>(null);
+  private dividerCapturedFor: string | null = null;
 
   // -------------------------------------------------------------------------
   // "X new messages" jump banner — driven by the unread count captured when the
@@ -521,6 +552,32 @@ export class MessageList {
   protected systemMessageType(group: MessageGroup): string {
     return group.messages[0]?.messageType ?? 'system';
   }
+
+  /** Bare "14:32" time for the hover gutter on grouped (non-first) messages. */
+  protected shortTime(sentAt: number): string {
+    return new Date(sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // --- welcome empty-state (no messages yet) ---
+  protected readonly emptyTitle = computed(() => {
+    if (this.messageStore.activeGuildId()) {
+      const name = this.channelStore.selectedChannel()?.name;
+      return name ? `Welcome to #${name}!` : 'Welcome!';
+    }
+    const channelId = this.messageStore.activeChannelId();
+    const dm = channelId ? this.dmStore.find(channelId) : undefined;
+    return dm
+      ? dmLabel(dm, (p) => this.nicknameStore.nicknameOf(p.userId) ?? p.username)
+      : 'Welcome!';
+  });
+
+  protected readonly emptySubtitle = computed(() => {
+    if (this.messageStore.activeGuildId()) {
+      const name = this.channelStore.selectedChannel()?.name;
+      return name ? `This is the start of the #${name} channel.` : 'This is the start of the channel.';
+    }
+    return 'This is the beginning of your conversation.';
+  });
 
   /** Whether a message exposes any hover action (drives the hover toolbar's visibility). */
   protected hasActions(msg: MessageResponse): boolean {
@@ -702,6 +759,23 @@ export class MessageList {
   }
 
   constructor() {
+    // Snapshot the NEW-divider boundary once per channel open: the first unread message is
+    // approximated as the last `unreadOnOpen` loaded messages (same approximation as the jump
+    // banner). Captured once so live incoming messages can't move the line onto themselves.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      const count = this.messageStore.unreadOnOpen();
+      const msgs = this.messageStore.messages();
+      if (channelId !== this.dividerCapturedFor) {
+        this.dividerCapturedFor = channelId;
+        this.newDividerId.set(null);
+      }
+      if (untracked(this.newDividerId) === null && count > 0 && msgs.length > 0) {
+        const idx = Math.max(0, msgs.length - count);
+        this.newDividerId.set(msgs[idx].messageId);
+      }
+    });
+
     // Pin to the bottom once the scroll container mounts (channel open) and whenever we return to
     // the live tail. Never while anchored — the jump effect centres on the target instead.
     effect(() => {
@@ -767,12 +841,23 @@ export class MessageList {
     });
   }
 
+  // "Jump to latest" pill — shown when scrolled well away from the live tail (not while anchored,
+  // where the Jump to Present pill owns that spot).
+  protected readonly showJumpToBottom = signal(false);
+
+  protected jumpToBottom(): void {
+    this.showJumpToBottom.set(false);
+    this.scrollToBottom();
+  }
+
   /** Container scroll handler: tracks bottom-anchoring and triggers older-history loads near the top. */
   protected onScroll(): void {
     const el = this.scroller()?.nativeElement;
     if (!el) return;
-    this.atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    this.atBottom = fromBottom < 80;
     const anchored = this.messageStore.anchored();
+    this.showJumpToBottom.set(!anchored && fromBottom > 300);
 
     // Bound the loaded window while pinned to the live bottom (this fires after each programmatic
     // scroll-to-bottom too). Dropping the oldest, off-screen messages keeps the view put — the

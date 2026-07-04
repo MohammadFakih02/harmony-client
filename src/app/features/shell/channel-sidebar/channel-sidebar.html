@@ -1,23 +1,75 @@
 <aside class="flex flex-col w-full h-full bg-transparent">
   @if (!inDirectMessages()) {
-  <!-- Guild header -->
-  <div
-    class="flex items-center justify-between px-4 h-12 min-h-12 border-b border-border-subtle cursor-pointer transition-micro hover:bg-surface-2 shrink-0"
+  <!-- Guild header — opens the Server dropdown (Invite / Create Channel / Settings / Leave). -->
+  <button
+    type="button"
+    class="flex items-center gap-2 w-full px-4 h-12 min-h-12 border-b border-border-subtle transition-micro hover:bg-surface-2 shrink-0 text-left"
+    cdkOverlayOrigin
+    #serverMenuOrigin="cdkOverlayOrigin"
+    (click)="toggleServerMenu()"
   >
-    <span class="font-semibold text-primary truncate-text flex-1">
+    <span class="font-semibold text-primary truncate-text flex-1 min-w-0">
       {{ guildStore.selectedGuild()?.name ?? 'Select a server' }}
     </span>
-    <div class="flex items-center gap-1">
-      @if (guildStore.selectedGuildId() && canManageChannels()) {
-      <ui-icon-button size="sm" label="Create Channel" (click)="openCreateChannel()">
-        <i class="fas fa-plus"></i>
-      </ui-icon-button>
+    <i
+      class="fas fa-chevron-down text-xs text-faint shrink-0 transition-transform"
+      [class.rotate-180]="showServerMenu()"
+    ></i>
+  </button>
+
+  <!-- Server dropdown -->
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="serverMenuOrigin"
+    [cdkConnectedOverlayOpen]="showServerMenu() && !!guildStore.selectedGuildId()"
+    [cdkConnectedOverlayPositions]="serverMenuPositions"
+    [cdkConnectedOverlayHasBackdrop]="true"
+    cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+    (backdropClick)="showServerMenu.set(false)"
+    (detach)="showServerMenu.set(false)"
+  >
+    <div
+      class="w-56 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+    >
+      @if (canCreateInvite()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openInvitePeople()"
+      >
+        <i class="fas fa-user-plus w-4 text-center text-faint"></i> Invite People
+      </button>
       }
-      <ui-icon-button size="sm" hover="none">
-        <i class="fas fa-chevron-down"></i>
-      </ui-icon-button>
+      @if (canManageChannels()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="createChannelFromMenu()"
+      >
+        <i class="fas fa-plus w-4 text-center text-faint"></i> Create Channel
+      </button>
+      }
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openServerSettings()"
+      >
+        <i class="fas fa-gear w-4 text-center text-faint"></i> Server Settings
+      </button>
+      <div class="h-px bg-border-subtle my-1"></div>
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-danger hover:bg-danger/10 transition-micro text-left"
+        (click)="leaveOrDeleteServer()"
+      >
+        @if (isGuildOwner()) {
+        <i class="fas fa-trash w-4 text-center"></i> Delete Server
+        } @else {
+        <i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Leave Server
+        }
+      </button>
     </div>
-  </div>
+  </ng-template>
 
   <!-- Channel list -->
   <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
@@ -82,6 +134,10 @@
           [class.text-primary]="unread > 0"
           [attr.aria-label]="'Open ' + channel.name"
         >
+          <!-- Unread pill at the sidebar edge (Discord's unread marker) -->
+          @if (unread > 0) {
+          <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary"></span>
+          }
           <i
             class="fas w-4 text-center shrink-0 text-faint text-base"
             [class.fa-hashtag]="channel.type === 'text' || channel.type === 'announcement'"
@@ -96,18 +152,62 @@
           >
             {{ unread > 99 ? '99+' : unread }}
           </span>
-          } @else if (canCreateInvite() || canManageChannels()) {
-          <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-micro">
-            @if (canCreateInvite()) {
-            <ui-icon-button size="xs" hover="surface-3" label="Create Invite" (click)="$event.preventDefault()">
-              <i class="fas fa-user-plus"></i>
-            </ui-icon-button>
-            }
-            @if (canManageChannels()) {
-            <ui-icon-button size="xs" hover="surface-3" label="Channel Settings" (click)="$event.preventDefault()">
+          } @else {
+          <div class="opacity-0 group-hover:opacity-100 transition-micro">
+            <ui-icon-button
+              size="xs"
+              hover="surface-3"
+              label="Notification Settings"
+              cdkOverlayOrigin
+              #notifOrigin="cdkOverlayOrigin"
+              (click)="openChannelNotif(channel.id, $event)"
+            >
               <i class="fas fa-gear"></i>
             </ui-icon-button>
-            }
+            <ng-template
+              cdkConnectedOverlay
+              [cdkConnectedOverlayOrigin]="notifOrigin"
+              [cdkConnectedOverlayOpen]="channelNotifTarget() === channel.id"
+              [cdkConnectedOverlayPositions]="channelNotifPositions"
+              [cdkConnectedOverlayHasBackdrop]="true"
+              cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+              (backdropClick)="channelNotifTarget.set(null)"
+              (detach)="channelNotifTarget.set(null)"
+            >
+              <div
+                class="w-52 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+              >
+                <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 pt-1 pb-0.5">
+                  Notification Settings
+                </p>
+                <button
+                  type="button"
+                  class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                  (click)="setChannelNotif(channel.id, null)"
+                >
+                  <i
+                    class="fas fa-check text-xs w-3.5 text-center"
+                    [class.text-accent]="channelNotifLevel(channel.id) === null"
+                    [class.opacity-0]="channelNotifLevel(channel.id) !== null"
+                  ></i>
+                  Use Server Default
+                </button>
+                @for (opt of notifLevelOptions; track opt.value) {
+                <button
+                  type="button"
+                  class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                  (click)="setChannelNotif(channel.id, opt.value)"
+                >
+                  <i
+                    class="fas fa-check text-xs w-3.5 text-center"
+                    [class.text-accent]="channelNotifLevel(channel.id) === opt.value"
+                    [class.opacity-0]="channelNotifLevel(channel.id) !== opt.value"
+                  ></i>
+                  {{ opt.label }}
+                </button>
+                }
+              </div>
+            </ng-template>
           </div>
           }
         </a>
@@ -169,7 +269,7 @@
           [src]="peer.avatarKey"
           [alt]="peer.username"
           [status]="dmAvatarStatus(peer.userId)"
-          size="sm"
+          size="md"
         />
         }
         <span class="flex-1 truncate-text">{{ dmDisplayName(dm) }}</span>
@@ -210,20 +310,27 @@
       (overlayOutsideClick)="showStatusMenu.set(false)"
     >
     <div
-      class="w-64 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1 animate-slide-up"
+      class="w-72 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1 animate-scale-in origin-bottom-left"
     >
-      <!-- Current status summary — what you're set to + when it auto-clears -->
-      <div class="flex items-center gap-2 px-1 pt-0.5 pb-1.5">
-        <span
-          class="w-2.5 h-2.5 rounded-full shrink-0"
-          [class]="currentStatusOption()?.dotClass ?? 'bg-surface-3'"
-        ></span>
-        <span class="text-sm font-semibold text-primary">
-          {{ currentStatusOption()?.label ?? 'Offline' }}
-        </span>
-        @if (statusExpiryLabel(); as left) {
-        <span class="ml-auto text-2xs text-faint">Clears in {{ left }}</span>
-        }
+      <!-- Identity header — who you are + what you're set to + when it auto-clears -->
+      <div class="flex items-center gap-2.5 px-1.5 pt-1 pb-2">
+        <ui-avatar
+          [src]="auth.currentUser()?.avatarKey ?? null"
+          [alt]="auth.currentUser()?.username ?? ''"
+          [status]="myAvatarStatus()"
+          size="md"
+        />
+        <div class="flex flex-col min-w-0 flex-1">
+          <span class="text-sm font-semibold text-primary truncate-text leading-tight">
+            {{ auth.currentUser()?.username }}
+          </span>
+          <span class="text-2xs text-muted leading-tight">
+            {{ currentStatusOption()?.label ?? 'Offline' }}
+            @if (statusExpiryLabel(); as left) {
+            <span class="text-faint">· clears in {{ left }}</span>
+            }
+          </span>
+        </div>
       </div>
       <div class="h-px bg-border-subtle mb-0.5"></div>
 
@@ -231,22 +338,20 @@
       @for (opt of statusOptions; track opt.value) {
       <button
         type="button"
-        class="flex items-start gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
         [class.bg-surface-2]="presenceStore.myStatus() === opt.value"
         (click)="selectStatus(opt.value)"
       >
-        <span class="w-2.5 h-2.5 mt-1 rounded-full shrink-0" [class]="opt.dotClass"></span>
+        <span class="w-3 h-3 rounded-full shrink-0" [class]="opt.dotClass"></span>
         <span class="flex-1 min-w-0">
-          <span class="flex items-center gap-1.5">
-            <span class="text-sm font-medium">{{ opt.label }}</span>
-            @if (presenceStore.myStatus() === opt.value) {
-            <i class="fas fa-check text-xs text-accent"></i>
-            }
-          </span>
+          <span class="block text-sm font-medium">{{ opt.label }}</span>
           @if (opt.description) {
           <span class="block text-2xs text-faint leading-snug">{{ opt.description }}</span>
           }
         </span>
+        @if (presenceStore.myStatus() === opt.value) {
+        <i class="fas fa-check text-xs text-accent shrink-0"></i>
+        }
       </button>
       }
 
@@ -301,7 +406,7 @@
       (overlayOutsideClick)="showCustomStatus.set(false)"
     >
     <div
-      class="w-64 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1.5 animate-slide-up"
+      class="w-72 p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1.5 animate-scale-in origin-bottom-left"
     >
       <div class="flex items-center gap-2 px-1 pt-0.5 pb-1">
         <button
@@ -384,20 +489,17 @@
       }
     </div>
     <div class="flex gap-0.5">
-      <ui-icon-button
-        size="md"
-        hover="surface-3"
-        [label]="theme.isDark() ? 'Light Mode' : 'Dark Mode'"
-        (click)="toggleTheme()"
-      >
-        <i class="fas" [class.fa-sun]="theme.isDark()" [class.fa-moon]="!theme.isDark()"></i>
-      </ui-icon-button>
       <ui-icon-button size="md" hover="surface-3" label="User Settings" (click)="openSettings()">
         <i class="fas fa-gear"></i>
       </ui-icon-button>
     </div>
   </div>
 </aside>
+
+<!-- Invite People (from the Server dropdown) -->
+@if (showInviteModal() && guildStore.selectedGuildId(); as guildId) {
+<app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
+}
 
 <!-- New Group DM Modal -->
 @if (showGroupModal()) {

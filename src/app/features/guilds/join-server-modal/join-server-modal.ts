@@ -6,6 +6,7 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { InvitePreview } from '../../../core/models/invite.models';
 import { extractInviteCode } from '../../../shared/util/invite-code';
 import { extractApiError } from '../../../shared/util/api-error';
+import { UiModal } from '../../../shared/ui';
 
 /**
  * Paste an invite code (or link) → preview the server → join. On success the guild is added to
@@ -15,7 +16,7 @@ import { extractApiError } from '../../../shared/util/api-error';
 @Component({
   selector: 'app-join-server-modal',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, UiModal],
   templateUrl: './join-server-modal.html',
 })
 export class JoinServerModal {

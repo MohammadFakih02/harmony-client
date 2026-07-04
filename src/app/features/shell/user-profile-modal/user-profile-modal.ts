@@ -30,6 +30,9 @@ interface ProfileView {
   dmPrivacy: DmPrivacy;
 }
 
+const fmtDate = (d: Date | null): string | null =>
+  d ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+
 /**
  * Full-profile modal (the "View Full Profile" target from the user popout). Hosted once in the
  * shell, driven by {@link ProfileModalService}. Shows banner/avatar/bio/age/roles/member-since;
@@ -135,11 +138,35 @@ export class UserProfileModal {
       .map((r) => ({ id: r.id, name: r.name, color: roleColorHex(r.color) }));
   });
 
-  protected readonly memberSince = computed(() => {
-    const joined = this.member()?.joinedAt;
+  /** Banner gradient fallback — the member's top coloured role, else the theme accent. */
+  protected readonly bannerStyle = computed(() => {
+    const c = this.roleChips().find((r) => r.color)?.color ?? 'var(--color-accent)';
+    return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 55%, #000) 100%)`;
+  });
+
+  /** Nickname-aware display name: server nickname in a guild, private friend nickname elsewhere. */
+  protected readonly displayName = computed(() => {
+    const v = this.view();
+    if (!v) return '';
+    if (this.guildId()) return this.member()?.nickname ?? v.username;
     const id = this.userId();
-    const date = joined != null ? new Date(joined) : id ? snowflakeToDate(id) : null;
-    return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    return (id ? this.nicknameStore.nicknameOf(id) : null) ?? v.username;
+  });
+  protected readonly hasNickname = computed(() => {
+    const v = this.view();
+    return !!v && this.displayName() !== v.username;
+  });
+
+  /** Account-creation date, from the snowflake — always known. */
+  protected readonly accountSince = computed(() => {
+    const id = this.userId();
+    return id ? fmtDate(snowflakeToDate(id)) : null;
+  });
+
+  /** Guild join date — only when viewing a loaded guild member. */
+  protected readonly serverSince = computed(() => {
+    const joined = this.member()?.joinedAt;
+    return joined != null ? fmtDate(new Date(joined)) : null;
   });
 
   constructor() {
@@ -288,6 +315,7 @@ export class UserProfileModal {
   // ---- server nickname edit ----
   protected startServerNickEdit(): void {
     this.serverNickDraft.set(this.serverNickname() ?? '');
+    this.error.set('');
     this.editingServerNick.set(true);
   }
 
@@ -311,6 +339,7 @@ export class UserProfileModal {
   // ---- friend (private) nickname edit ----
   protected startFriendNickEdit(): void {
     this.friendNickDraft.set(this.friendNickname() ?? '');
+    this.error.set('');
     this.editingFriendNick.set(true);
   }
 

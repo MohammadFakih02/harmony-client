@@ -15,8 +15,8 @@
   </div>
   } @if (status()) {
   <div
-    class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
-    [class]="ringClass() + ' ' + statusClasses[status()!]"
+    class="absolute rounded-full"
+    [class]="dotClass() + ' ' + ringClass() + ' ' + statusClasses[status()!]"
   ></div>
   }
 </div>
