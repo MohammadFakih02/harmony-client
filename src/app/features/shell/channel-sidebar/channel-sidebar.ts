@@ -5,7 +5,6 @@ import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { ThemeService } from '../../../core/services/theme.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -22,7 +21,13 @@ import {
 } from '../../../core/models/direct-message.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
+import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
+import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
+import {
+  NOTIFICATION_LEVEL_OPTIONS,
+  NotificationLevel,
+} from '../../../core/models/notification-setting.models';
 
 interface StatusOption {
   value: PreferredStatus;
@@ -47,6 +52,7 @@ interface ExpiryOption {
     FormsModule,
     OverlayModule,
     GroupDmModal,
+    InvitePeopleModal,
   ],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
@@ -54,7 +60,6 @@ interface ExpiryOption {
 })
 export class ChannelSidebar {
   protected readonly auth = inject(AuthService);
-  protected readonly theme = inject(ThemeService);
   protected readonly guildStore = inject(GuildStore);
   protected readonly channelStore = inject(ChannelStore);
   protected readonly memberStore = inject(MemberStore);
@@ -62,6 +67,7 @@ export class ChannelSidebar {
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly dmStore = inject(DmStore);
   protected readonly nicknameStore = inject(NicknameStore);
+  protected readonly guildNotif = inject(GuildNotificationSettingsStore);
   private readonly router = inject(Router);
 
   /** DM display name: group name (or joined member names) / the 1:1 peer's friend-nickname ?? username. */
@@ -86,6 +92,91 @@ export class ChannelSidebar {
   protected readonly canCreateInvite = computed(
     () => !!this.memberStore.capabilitiesOf(this.guildStore.selectedGuildId() ?? '')?.canCreateInvite,
   );
+  protected readonly isGuildOwner = computed(
+    () => this.guildStore.selectedGuild()?.ownerId === this.auth.currentUser()?.id,
+  );
+
+  // Server dropdown (guild-header ▾) — a CDK overlay so it escapes the sidebar's overflow-hidden.
+  // The single home for Invite / Create Channel / Server Settings / Leave (the top bar no longer
+  // duplicates these). Actions gate on the resolved capabilities.
+  protected readonly showServerMenu = signal(false);
+  protected readonly serverMenuPositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+  ];
+  protected readonly showInviteModal = signal(false);
+
+  toggleServerMenu(): void {
+    this.showServerMenu.set(!this.showServerMenu());
+  }
+
+  openInvitePeople(): void {
+    this.showServerMenu.set(false);
+    this.showInviteModal.set(true);
+  }
+
+  createChannelFromMenu(): void {
+    this.showServerMenu.set(false);
+    this.openCreateChannel();
+  }
+
+  openServerSettings(): void {
+    this.showServerMenu.set(false);
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  }
+
+  /** Owner → delete the server; member → leave it. Both confirm first, then navigate home. */
+  async leaveOrDeleteServer(): Promise<void> {
+    this.showServerMenu.set(false);
+    const guildId = this.guildStore.selectedGuildId();
+    const guild = this.guildStore.selectedGuild();
+    if (!guildId || !guild) return;
+    const owner = this.isGuildOwner();
+    const message = owner
+      ? `Delete “${guild.name}”? This permanently removes the server for everyone.`
+      : `Leave “${guild.name}”?`;
+    if (!window.confirm(message)) return;
+    try {
+      if (owner) await this.guildStore.deleteGuild(guildId);
+      else await this.guildStore.leaveGuild(guildId);
+      void this.router.navigate(['/app/friends']);
+    } catch {
+      // Best-effort — the API may reject (e.g. owner-can't-leave); leave local state untouched.
+    }
+  }
+
+  // Per-channel notification-level popover (the channel-row ⚙ — a personal preference, so it's
+  // available to every member, not just managers). Later this gear can grow into full channel
+  // settings (nsfw / slowmode / limits / rename); for now it sets the notification level.
+  protected readonly channelNotifTarget = signal<string | null>(null);
+  protected readonly channelNotifPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'top', overlayX: 'start', overlayY: 'top', offsetX: 8 },
+  ];
+  protected readonly notifLevelOptions = NOTIFICATION_LEVEL_OPTIONS;
+
+  openChannelNotif(channelId: string, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.guildNotif.load(guildId); // so the current level renders as checked
+    this.channelNotifTarget.set(this.channelNotifTarget() === channelId ? null : channelId);
+  }
+
+  /** The channel's explicit notification level, or null = "use server default". */
+  channelNotifLevel(channelId: string): NotificationLevel | null {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return null;
+    return (
+      this.guildNotif.settingsOf(guildId)?.channels.find((c) => c.channelId === channelId)?.level ??
+      null
+    );
+  }
+
+  setChannelNotif(channelId: string, level: NotificationLevel | null): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.guildNotif.setChannelLevel(guildId, channelId, level);
+    this.channelNotifTarget.set(null);
+  }
 
   // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
   protected readonly showLoading = delayedSignal(this.channelStore.loading);
@@ -244,10 +335,6 @@ export class ChannelSidebar {
 
   toggleCategory(categoryId: string | null): void {
     if (categoryId !== null) this.channelStore.toggleCategory(categoryId);
-  }
-
-  toggleTheme(): void {
-    this.theme.toggle();
   }
 
   openSettings(): void {

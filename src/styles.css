@@ -8,8 +8,9 @@
    @theme registers Tailwind utility names and their CSS output at build time.
    Values like `--color-bg: var(--color-bg)` are intentional: Tailwind emits
    `background-color: var(--color-bg)` for `bg-bg`, keeping the value as a live
-   CSS custom property reference. The actual colour is set in the `html.theme-*`
-   blocks below and swapped at runtime by ThemeService — no rebuild needed.
+   CSS custom property reference. The actual colour is set in the
+   `html.palette-*.mode-*` blocks below and swapped at runtime by ThemeService —
+   no rebuild needed.
 
    Token naming note:
    `--color-primary` maps to the primary TEXT colour, not the brand accent.
@@ -268,21 +269,27 @@
 }
 
 /* ============================================================
-   Theme: Dark (default)
+   Themes — two axes: Palette (colour identity) × Mode (dark/light).
+   ThemeService puts `palette-{violet|midnight|forest}` + `mode-{dark|light}`
+   on <html>; each combination below is a hand-tuned set, not a generated
+   inversion. index.html's pre-paint boot script duplicates the six --color-bg
+   hexes — update BOTH if a background changes.
    ============================================================ */
 
-:root,
-html.theme-dark {
-  --color-bg: #09090b;
-  --color-surface: #18181b;
-  --color-surface-2: #27272a;
-  --color-surface-3: #3f3f46;
-  --color-border: #3f3f46;
-  --color-border-subtle: #27272a;
+/* ---------- Violet · Dark (default) — violet-cast neutrals ---------- */
 
-  --color-text: #f4f4f5;
-  --color-text-muted: #a1a1aa;
-  --color-text-faint: #71717a;
+:root,
+html.palette-violet.mode-dark {
+  --color-bg: #0b0a10;
+  --color-surface: #15141b;
+  --color-surface-2: #1e1c26;
+  --color-surface-3: #2c2938;
+  --color-border: #363247;
+  --color-border-subtle: #262334;
+
+  --color-text: #f4f3f7;
+  --color-text-muted: #a29fb1;
+  --color-text-faint: #6f6b80;
 
   --color-accent: #8b5cf6;
   --color-accent-hover: #7c3aed;
@@ -290,14 +297,14 @@ html.theme-dark {
   --color-accent-muted: rgba(139, 92, 246, 0.15);
   --color-accent-glow: rgba(139, 92, 246, 0.3);
 
-  --color-danger: #ef4444;
-  --color-danger-muted: rgba(239, 68, 68, 0.15);
+  --color-danger: #f04747;
+  --color-danger-muted: rgba(240, 71, 71, 0.15);
   --color-success: #10b981;
   --color-success-muted: rgba(16, 185, 129, 0.15);
   --color-warning: #f59e0b;
   --color-warning-muted: rgba(245, 158, 11, 0.15);
 
-  --color-scrollbar: #3f3f46;
+  --color-scrollbar: #322f42;
   --color-scrollbar-hover: #8b5cf6;
 
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -305,64 +312,60 @@ html.theme-dark {
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* ============================================================
-   Theme: Light
-   ============================================================ */
+/* ---------- Violet · Light — white chat, lavender-gray chrome ---------- */
 
-html.theme-light {
-  --color-bg: #e4e4e7;
-  --color-surface: #f4f4f5;
-  --color-surface-2: #e4e4e7;
-  --color-surface-3: #d4d4d8;
-  --color-border: #a1a1aa;
-  --color-border-subtle: #d4d4d8;
+html.palette-violet.mode-light {
+  --color-bg: #e7e5f0;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2f0f8;
+  --color-surface-3: #e5e2ef;
+  --color-border: #c8c4d9;
+  --color-border-subtle: #e0dcea;
 
-  --color-text: #09090b;
-  --color-text-muted: #52525b;
-  --color-text-faint: #a1a1aa;
+  --color-text: #17151f;
+  --color-text-muted: #5b5768;
+  --color-text-faint: #918d9f;
 
-  --color-accent: #7c3aed;
-  --color-accent-hover: #6d28d9;
-  --color-accent-light: #8b5cf6;
-  --color-accent-muted: rgba(124, 58, 237, 0.1);
-  --color-accent-glow: rgba(124, 58, 237, 0.2);
+  --color-accent: #6d28d9;
+  --color-accent-hover: #5b21b6;
+  --color-accent-light: #7c3aed;
+  --color-accent-muted: rgba(109, 40, 217, 0.1);
+  --color-accent-glow: rgba(109, 40, 217, 0.2);
 
   --color-danger: #dc2626;
   --color-danger-muted: rgba(220, 38, 38, 0.1);
   --color-success: #059669;
   --color-success-muted: rgba(5, 150, 105, 0.1);
-  --color-warning: #d97706;
-  --color-warning-muted: rgba(217, 119, 6, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
 
-  --color-scrollbar: #d4d4d8;
-  --color-scrollbar-hover: #7c3aed;
+  --color-scrollbar: #d3cfe0;
+  --color-scrollbar-hover: #6d28d9;
 
-  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.15);
-  --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-panel: 0 4px 24px rgba(38, 32, 64, 0.1);
+  --shadow-modal: 0 8px 40px rgba(38, 32, 64, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(38, 32, 64, 0.14);
 }
 
-/* ============================================================
-   Theme: Midnight (OLED-friendly pure black)
-   ============================================================ */
+/* ---------- Midnight · Dark — OLED black, icy accent ---------- */
 
-html.theme-midnight {
+html.palette-midnight.mode-dark {
   --color-bg: #000000;
-  --color-surface: #0a0a0a;
-  --color-surface-2: #141414;
-  --color-surface-3: #1f1f1f;
-  --color-border: #2a2a2a;
-  --color-border-subtle: #1a1a1a;
+  --color-surface: #0a0a0c;
+  --color-surface-2: #131316;
+  --color-surface-3: #1d1d22;
+  --color-border: #2a2a31;
+  --color-border-subtle: #19191e;
 
-  --color-text: #ffffff;
-  --color-text-muted: #9ca3af;
-  --color-text-faint: #6b7280;
+  --color-text: #f7f7f8;
+  --color-text-muted: #9b9ba4;
+  --color-text-faint: #63636d;
 
-  --color-accent: #a78bfa;
-  --color-accent-hover: #8b5cf6;
-  --color-accent-light: #c4b5fd;
-  --color-accent-muted: rgba(167, 139, 250, 0.12);
-  --color-accent-glow: rgba(167, 139, 250, 0.25);
+  --color-accent: #0ea5e9;
+  --color-accent-hover: #0284c7;
+  --color-accent-light: #38bdf8;
+  --color-accent-muted: rgba(14, 165, 233, 0.12);
+  --color-accent-glow: rgba(14, 165, 233, 0.25);
 
   --color-danger: #f87171;
   --color-danger-muted: rgba(248, 113, 113, 0.12);
@@ -371,29 +374,62 @@ html.theme-midnight {
   --color-warning: #fbbf24;
   --color-warning-muted: rgba(251, 191, 36, 0.12);
 
-  --color-scrollbar: #2a2a2a;
-  --color-scrollbar-hover: #a78bfa;
+  --color-scrollbar: #26262c;
+  --color-scrollbar-hover: #0ea5e9;
 
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.8);
   --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.9);
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
-/* ============================================================
-   Theme: Forest (future theme placeholder)
-   ============================================================ */
+/* ---------- Midnight · Light — crisp paper monochrome, icy accent ---------- */
 
-html.theme-forest {
-  --color-bg: #0a0f0a;
-  --color-surface: #0f1a0f;
-  --color-surface-2: #162416;
-  --color-surface-3: #1e321e;
-  --color-border: #2d4a2d;
-  --color-border-subtle: #1e321e;
+html.palette-midnight.mode-light {
+  --color-bg: #e2e4e9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f3f6;
+  --color-surface-3: #e3e6eb;
+  --color-border: #c3c8d1;
+  --color-border-subtle: #dde1e7;
 
-  --color-text: #ecfdf5;
-  --color-text-muted: #86efac;
-  --color-text-faint: #4ade80;
+  --color-text: #101318;
+  --color-text-muted: #545b66;
+  --color-text-faint: #8c93a0;
+
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-light: #0ea5e9;
+  --color-accent-muted: rgba(2, 132, 199, 0.1);
+  --color-accent-glow: rgba(2, 132, 199, 0.2);
+
+  --color-danger: #dc2626;
+  --color-danger-muted: rgba(220, 38, 38, 0.1);
+  --color-success: #059669;
+  --color-success-muted: rgba(5, 150, 105, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
+
+  --color-scrollbar: #ccd1da;
+  --color-scrollbar-hover: #0284c7;
+
+  --shadow-panel: 0 4px 24px rgba(23, 30, 41, 0.1);
+  --shadow-modal: 0 8px 40px rgba(23, 30, 41, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(23, 30, 41, 0.14);
+}
+
+/* ---------- Forest · Dark — deep greens, desaturated sage text ---------- */
+
+html.palette-forest.mode-dark {
+  --color-bg: #0a0e0b;
+  --color-surface: #101712;
+  --color-surface-2: #17211a;
+  --color-surface-3: #223026;
+  --color-border: #2e4234;
+  --color-border-subtle: #1d2a21;
+
+  --color-text: #edf5ef;
+  --color-text-muted: #9db5a4;
+  --color-text-faint: #64796b;
 
   --color-accent: #10b981;
   --color-accent-hover: #059669;
@@ -403,17 +439,60 @@ html.theme-forest {
 
   --color-danger: #f87171;
   --color-danger-muted: rgba(248, 113, 113, 0.15);
-  --color-success: #10b981;
-  --color-success-muted: rgba(16, 185, 129, 0.15);
+  --color-success: #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.15);
   --color-warning: #fbbf24;
   --color-warning-muted: rgba(251, 191, 36, 0.15);
 
-  --color-scrollbar: #2d4a2d;
+  --color-scrollbar: #2b3d30;
   --color-scrollbar-hover: #10b981;
 
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.5);
   --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.7);
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Forest · Light — sage & mint ---------- */
+
+html.palette-forest.mode-light {
+  --color-bg: #e2eae4;
+  --color-surface: #fbfdfb;
+  --color-surface-2: #eef4ef;
+  --color-surface-3: #dfe9e2;
+  --color-border: #b9cdbf;
+  --color-border-subtle: #d7e3da;
+
+  --color-text: #131a15;
+  --color-text-muted: #4e6355;
+  --color-text-faint: #84988a;
+
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-light: #10b981;
+  --color-accent-muted: rgba(5, 150, 105, 0.1);
+  --color-accent-glow: rgba(5, 150, 105, 0.2);
+
+  --color-danger: #dc2626;
+  --color-danger-muted: rgba(220, 38, 38, 0.1);
+  --color-success: #047857;
+  --color-success-muted: rgba(4, 120, 87, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
+
+  --color-scrollbar: #c6d6cb;
+  --color-scrollbar-hover: #059669;
+
+  --shadow-panel: 0 4px 24px rgba(19, 38, 26, 0.1);
+  --shadow-modal: 0 8px 40px rgba(19, 38, 26, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(19, 38, 26, 0.14);
+}
+
+/* While dragging a panel resize handle: keep the col-resize cursor everywhere
+   and suppress text selection (added/removed by the ResizeHandle directive). */
+body.is-col-resizing,
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 /* Disable all transitions/animations during window resize so fullscreen
@@ -639,8 +718,8 @@ button:active:not(:disabled),
       position: absolute;
       inset: 0;
       box-shadow:
-        inset 200px 200px 300px rgba(139, 92, 246, 0.06),
-        inset -200px -200px 300px rgba(139, 92, 246, 0.03);
+        inset 200px 200px 300px color-mix(in srgb, var(--color-accent) 6%, transparent),
+        inset -200px -200px 300px color-mix(in srgb, var(--color-accent) 3%, transparent);
       pointer-events: none;
       z-index: 0;
     }
@@ -648,5 +727,14 @@ button:active:not(:disabled),
   .logo-pulse {
     will-change: box-shadow;
     isolation: isolate;
+  }
+  /* Profile banner fallback — accent gradient (the popout/modal use a role-coloured
+     variant of the same recipe inline; keep the two in step). */
+  .profile-banner {
+    background: linear-gradient(
+      135deg,
+      var(--color-accent) 0%,
+      color-mix(in srgb, var(--color-accent) 55%, #000) 100%
+    );
   }
 }

@@ -1,16 +1,10 @@
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-  (click)="close.emit()"
+<ui-modal
+  heading="Invite People"
+  subtitle="Generate an invite link to share with others."
+  size="md"
+  (close)="close.emit()"
 >
-  <div
-    class="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 flex flex-col gap-5"
-    (click)="$event.stopPropagation()"
-  >
-    <div class="flex flex-col gap-1">
-      <h2 class="text-lg font-bold text-primary text-center">Invite People</h2>
-      <p class="text-sm text-muted text-center">Generate an invite link to share with others.</p>
-    </div>
-
+  <div class="px-6 pb-6 flex flex-col gap-5 overflow-y-auto">
     <!-- Generate controls -->
     <div class="flex flex-col gap-3">
       <div class="flex gap-3">
@@ -143,18 +137,12 @@
       </button>
     </div>
   </div>
-</div>
+</ui-modal>
 
 <!-- Send-side confirmation: tweak expiry/uses before DMing the invite (Discord-style) -->
 @if (invitingFriend(); as friend) {
-<div
-  class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-  (click)="cancelFriendInvite()"
->
-  <div
-    class="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-5 flex flex-col gap-4"
-    (click)="$event.stopPropagation()"
-  >
+<ui-modal size="xs" layer="top" (close)="cancelFriendInvite()">
+  <div class="p-5 flex flex-col gap-4">
     <div class="flex flex-col items-center gap-2 text-center">
       <ui-avatar [src]="friend.avatarKey" [alt]="friend.username" />
       <h3 class="text-base font-bold text-primary">Invite {{ friend.username }}</h3>
@@ -207,5 +195,5 @@
       </button>
     </div>
   </div>
-</div>
+</ui-modal>
 }

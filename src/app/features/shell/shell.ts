@@ -27,7 +27,6 @@ import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
-import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { UiAvatar, UiIconButton, Lightbox, ContextMenu } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
@@ -38,6 +37,15 @@ import {
 } from '../../core/models/direct-message.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
+import { ProfileModalService } from '../../core/services/profile-modal.service';
+import { LocalSettingsStore } from '../../core/stores/local-settings.store';
+import { ResizeHandle } from '../../shared/directives/resize-handle.directive';
+import {
+  CHANNEL_SIDEBAR_MAX,
+  CHANNEL_SIDEBAR_MIN,
+  RIGHT_SIDEBAR_MAX,
+  RIGHT_SIDEBAR_MIN,
+} from '../../core/models/settings.models';
 
 @Component({
   selector: 'app-shell',
@@ -48,7 +56,6 @@ import { ToastService } from '../../core/services/toast.service';
     ChannelSidebar,
     MemberSidebar,
     NotificationBell,
-    InvitePeopleModal,
     GroupDmModal,
     UiAvatar,
     UiIconButton,
@@ -59,11 +66,18 @@ import { ToastService } from '../../core/services/toast.service';
     OverlayModule,
     PinsPanel,
     SearchPanel,
+    ResizeHandle,
   ],
   templateUrl: './shell.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {
   protected readonly signalR = inject(SignalRService);
+  // Drag-resizable panel widths (persisted).
+  protected readonly settings = inject(LocalSettingsStore);
+  protected readonly channelSidebarMin = CHANNEL_SIDEBAR_MIN;
+  protected readonly channelSidebarMax = CHANNEL_SIDEBAR_MAX;
+  protected readonly rightSidebarMin = RIGHT_SIDEBAR_MIN;
+  protected readonly rightSidebarMax = RIGHT_SIDEBAR_MAX;
   private readonly gateway = inject(GatewayEvents);
   protected readonly showMembers = signal(true);
   private readonly router = inject(Router);
@@ -79,8 +93,6 @@ export class ShellComponent implements OnInit, OnDestroy {
   );
   protected readonly inGuild = computed(() => this.url().includes('/guilds/'));
   protected readonly inDm = computed(() => this.url().includes('/dm/'));
-  // Invite People modal (guild header) — keyed to the currently-selected guild.
-  protected readonly showInviteModal = signal(false);
   // Pinned-messages panel (header, guild + DM) — anchored under the pin button.
   protected readonly showPins = signal(false);
   protected readonly pinsPanelPositions: ConnectionPositionPair[] = [
@@ -92,11 +104,6 @@ export class ShellComponent implements OnInit, OnDestroy {
     { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
   ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
-  // Invite People is gated on CreateInvite (every member has it by default, but a role can deny it).
-  protected readonly canCreateInvite = computed(() => {
-    const guildId = this.activeGuildId();
-    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canCreateInvite;
-  });
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
   protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);
@@ -200,12 +207,19 @@ export class ShellComponent implements OnInit, OnDestroy {
     return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   }
 
-  /** Opens the full-screen guild settings overlay for the active guild (open to every member). */
-  protected openGuildSettings(): void {
-    const guildId = this.activeGuildId();
-    if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  private readonly profileModal = inject(ProfileModalService);
+
+  /** Opens the full-profile modal for a DM peer / group member. */
+  protected openUserProfile(userId: string): void {
+    this.profileModal.open(userId, null);
   }
 
+  /** Presence dot for a group-DM member row. */
+  protected participantStatus(userId: string): ReturnType<typeof toAvatarStatus> {
+    return toAvatarStatus(this.presenceStore.statusOf(userId));
+  }
+
+  /** Opens the full-screen guild settings overlay for the active guild (open to every member). */
   // Add-people modal for the active group DM (opened from the profile panel).
   protected readonly showAddPeople = signal(false);
   // Ids already in the group — passed to the modal so they're filtered from the pick list.

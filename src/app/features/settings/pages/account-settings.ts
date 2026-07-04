@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
+import { PresenceStore } from '../../../core/stores/presence.store';
+import { toAvatarStatus } from '../../../core/models/presence.models';
 import { UiAvatar, UiButton } from '../../../shared/ui';
 
 /** My Account — a read-only identity summary plus Edit Profile + Log Out.
@@ -14,24 +16,49 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
     <h2 class="text-xl font-bold text-primary mb-5">My Account</h2>
 
     @if (auth.currentUser(); as me) {
-    <div class="rounded-lg bg-surface-2 overflow-hidden">
-      <div class="h-20 bg-accent/30"></div>
-      <div class="px-4 pb-4 -mt-8">
-        <div class="inline-block rounded-full ring-[6px] ring-surface-2">
-          <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="xl" ringClass="border-surface-2" />
+    <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden">
+      <div class="h-24 profile-banner"></div>
+      <div class="px-4 pb-4">
+        <!-- Identity row: avatar overlapping the banner + Edit Profile on the right -->
+        <div class="relative z-10 flex items-end justify-between -mt-10">
+          <div class="inline-block rounded-full ring-[6px] ring-surface-2 bg-surface-2">
+            <ui-avatar
+              [src]="me.avatarKey"
+              [alt]="me.username"
+              size="2xl"
+              [status]="myStatus()"
+              ringClass="border-surface-2"
+            />
+          </div>
+          <ui-button variant="ghost" size="sm" (click)="editProfile()">
+            <i class="fas fa-pen text-xs mr-1.5"></i> Edit Profile
+          </ui-button>
         </div>
 
-        <div class="mt-3 rounded-lg bg-surface p-4 space-y-4">
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint">Username</p>
-            <p class="text-sm text-primary mt-0.5">{{ me.username }}</p>
+        <p class="mt-2.5 text-lg font-bold text-primary leading-tight truncate">{{ me.username }}</p>
+
+        <!-- Details card -->
+        <div class="mt-3 rounded-lg bg-surface p-4 flex flex-col gap-4">
+          <div class="flex items-center gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-2xs font-bold uppercase tracking-wider text-faint">Username</p>
+              <p class="text-sm text-primary mt-0.5 truncate">{{ me.username }}</p>
+            </div>
           </div>
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint">Email</p>
-            <p class="text-sm text-primary mt-0.5">{{ me.email }}</p>
-          </div>
-          <div class="pt-1">
-            <ui-button variant="ghost" size="sm" (click)="editProfile()">Edit Profile</ui-button>
+          <div class="flex items-center gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-2xs font-bold uppercase tracking-wider text-faint">Email</p>
+              <p class="text-sm text-primary mt-0.5 truncate">
+                {{ revealEmail() ? me.email : maskedEmail() }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="text-xs text-accent hover:underline shrink-0"
+              (click)="revealEmail.set(!revealEmail())"
+            >
+              {{ revealEmail() ? 'Hide' : 'Reveal' }}
+            </button>
           </div>
         </div>
       </div>
@@ -52,6 +79,19 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
 export class AccountSettings {
   protected readonly auth = inject(AuthService);
   private readonly profileModal = inject(ProfileModalService);
+  private readonly presenceStore = inject(PresenceStore);
+
+  protected readonly revealEmail = signal(false);
+
+  protected readonly myStatus = computed(() => toAvatarStatus(this.presenceStore.myStatus()));
+
+  /** "m•••@gmail.com" — enough to recognise the account without shoulder-surfing it. */
+  protected readonly maskedEmail = computed(() => {
+    const email = this.auth.currentUser()?.email ?? '';
+    const at = email.indexOf('@');
+    if (at <= 1) return email;
+    return `${email[0]}${'•'.repeat(Math.min(at - 1, 8))}${email.slice(at)}`;
+  });
 
   protected editProfile(): void {
     const id = this.auth.currentUser()?.id;

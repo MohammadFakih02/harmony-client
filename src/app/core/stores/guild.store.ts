@@ -48,6 +48,24 @@ export const GuildStore = signalStore(
       return guild;
     },
 
+    /** Leave a guild (non-owner) then drop it from local state. */
+    async leaveGuild(guildId: string): Promise<void> {
+      await service.leaveGuild(guildId);
+      patchState(store, {
+        guilds: store.guilds().filter((g) => g.id !== guildId),
+        selectedGuildId: store.selectedGuildId() === guildId ? null : store.selectedGuildId(),
+      });
+    },
+
+    /** Delete a guild (owner only) then drop it from local state. */
+    async deleteGuild(guildId: string): Promise<void> {
+      await service.deleteGuild(guildId);
+      patchState(store, {
+        guilds: store.guilds().filter((g) => g.id !== guildId),
+        selectedGuildId: store.selectedGuildId() === guildId ? null : store.selectedGuildId(),
+      });
+    },
+
     /** Replace a guild in local state after an update (Overview/Welcome edit). No-op if unknown. */
     applyGuildUpdate(guild: GuildSummary): void {
       patchState(store, {
