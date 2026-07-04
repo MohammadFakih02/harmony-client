@@ -134,6 +134,11 @@ export class AuthService {
     return this._accessToken();
   }
 
+  /** Applies a partial update to the in-memory current user (e.g. a fresh avatarKey after upload). */
+  patchCurrentUser(patch: Partial<User>): void {
+    this._currentUser.update((u) => (u ? { ...u, ...patch } : u));
+  }
+
   private setSession(response: AuthResponse): void {
     this._accessToken.set(response.accessToken);
     this._currentUser.set(response.user);

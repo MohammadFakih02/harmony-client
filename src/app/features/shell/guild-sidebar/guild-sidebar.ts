@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GuildStore } from '../../../core/stores/guild.store';
-import { ChannelStore } from '../../../core/stores/channel.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import {
@@ -27,7 +26,6 @@ export class GuildSidebar {
   protected readonly guildStore = inject(GuildStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
-  private readonly channelStore = inject(ChannelStore);
   private readonly router = inject(Router);
 
   // DMs with unread messages surface as avatar pills at the top of the rail (Discord-style),
@@ -128,10 +126,9 @@ export class GuildSidebar {
     this.error.set('');
     try {
       const guild = await this.guildStore.createGuild(name);
-      // Create a default text channel, then navigate into it
-      const general = await this.channelStore.createChannel(guild.id, 'general', 'text');
+      // The backend seeds a default #general — the guild route redirects into it on load.
       this.showCreateModal.set(false);
-      this.router.navigate(['/app/guilds', guild.id, 'channels', general.id]);
+      this.router.navigate(['/app/guilds', guild.id]);
     } catch {
       this.error.set('Failed to create server. Please try again.');
     } finally {

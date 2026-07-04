@@ -24,9 +24,39 @@ export class UserService {
     return firstValueFrom(this.http.get<MyEditableProfile>(`${this.base}/users/me`));
   }
 
-  /** Updates the current user's profile. Omitted fields are left unchanged; "" clears the DOB. */
-  updateProfile(patch: { bio?: string; dateOfBirth?: string }): Promise<unknown> {
+  /** Updates the current user's profile. Omitted fields are left unchanged; "" clears DOB/colour. */
+  updateProfile(patch: {
+    bio?: string;
+    dateOfBirth?: string;
+    bannerColor?: string;
+  }): Promise<unknown> {
     return firstValueFrom(this.http.patch(`${this.base}/users/me`, patch));
+  }
+
+  // ---- profile assets (avatar/banner image) — user-scoped presign → PUT → confirm ----
+
+  presignAsset(
+    kind: 'avatar' | 'banner',
+    req: { filename: string; contentType: string; sizeBytes: number },
+  ): Promise<{ fileId: string; uploadUrl: string; objectKey: string; expiresAt: string }> {
+    return firstValueFrom(
+      this.http.post<{ fileId: string; uploadUrl: string; objectKey: string; expiresAt: string }>(
+        `${this.base}/users/me/${kind}/presign`,
+        req,
+      ),
+    );
+  }
+
+  /** Finalizes the upload — the returned key is now set on the profile. */
+  confirmAsset(kind: 'avatar' | 'banner', fileId: string): Promise<{ key: string }> {
+    return firstValueFrom(
+      this.http.post<{ key: string }>(`${this.base}/users/me/${kind}/${fileId}/confirm`, null),
+    );
+  }
+
+  /** Clears the avatar/banner image from the profile. */
+  removeAsset(kind: 'avatar' | 'banner'): Promise<unknown> {
+    return firstValueFrom(this.http.delete(`${this.base}/users/me/${kind}`));
   }
 
   /** Sets who may open a new DM with the current user. */

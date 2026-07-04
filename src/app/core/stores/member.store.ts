@@ -123,6 +123,22 @@ export const MemberStore = signalStore(
       this.patchMember(guildId, userId, { roleIds });
     },
 
+    /** Applies a user's avatar change across EVERY loaded guild (a profile change isn't guild-scoped). */
+    applyAvatar(userId: string, avatarKey: string | null): void {
+      const byGuild = store.byGuild();
+      const next: Record<string, GuildMember[]> = {};
+      let changed = false;
+      for (const [guildId, list] of Object.entries(byGuild)) {
+        if (list.some((m) => m.userId === userId && m.avatarKey !== avatarKey)) {
+          next[guildId] = list.map((m) => (m.userId === userId ? { ...m, avatarKey } : m));
+          changed = true;
+        } else {
+          next[guildId] = list;
+        }
+      }
+      if (changed) patchState(store, { byGuild: next });
+    },
+
     // ---- moderation actions (call the API, then update local state) ----
 
     async kick(guildId: string, userId: string): Promise<void> {
@@ -180,6 +196,9 @@ export const MemberStore = signalStore(
             break;
           case 'MemberRoleUpdated':
             store.applyMemberRoleUpdated(e.payload.guildId, e.payload.userId, e.payload.roleIds);
+            break;
+          case 'ProfileUpdated':
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
             break;
         }
       });

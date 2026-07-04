@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith, Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
+import { AuthService } from '../../core/services/auth.service';
 import { GatewayEvents } from '../../core/hub/gateway-events';
 import { IdleService } from '../../core/services/idle.service';
 import { GuildStore } from '../../core/stores/guild.store';
@@ -64,6 +65,7 @@ import { ToastService } from '../../core/services/toast.service';
 })
 export class ShellComponent implements OnInit, OnDestroy {
   protected readonly signalR = inject(SignalRService);
+  private readonly auth = inject(AuthService);
   private readonly gateway = inject(GatewayEvents);
   protected readonly showMembers = signal(true);
   private readonly router = inject(Router);
@@ -304,6 +306,14 @@ export class ShellComponent implements OnInit, OnDestroy {
           // a just-added member starts receiving live messages.
           if (e.channelId === this.messageStore.activeChannelId()) {
             void this.signalR.joinChannel(e.channelId);
+          }
+          break;
+
+        case 'ProfileUpdated':
+          // The stores patch member/DM/friend avatars themselves; the deck (our own avatar) lives on
+          // AuthService, so sync it for our OTHER tabs when it's us.
+          if (e.payload.userId === this.auth.currentUser()?.id) {
+            this.auth.patchCurrentUser({ avatarKey: e.payload.avatarKey });
           }
           break;
       }

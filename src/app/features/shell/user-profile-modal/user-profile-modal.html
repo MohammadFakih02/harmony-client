@@ -17,10 +17,13 @@
       <p class="text-sm text-muted">{{ error() }}</p>
     </div>
     } @else if (view(); as v) {
-    <!-- Banner -->
-    <div class="h-24 bg-surface-3 relative shrink-0">
+    <!-- Banner: image > picked colour > neutral default -->
+    <div
+      class="h-24 bg-surface-3 relative shrink-0"
+      [style.background-color]="!v.bannerKey && v.bannerColor ? v.bannerColor : null"
+    >
       @if (v.bannerKey) {
-      <img [src]="v.bannerKey" [alt]="v.username" class="w-full h-full object-cover" />
+      <img [src]="bannerUrl(v.bannerKey)" [alt]="v.username" class="w-full h-full object-cover" />
       }
       <button
         type="button"
@@ -231,6 +234,98 @@
             (ngModelChange)="dobDraft.set($event)"
           />
           <p class="text-2xs text-faint mt-1">Others see your age, not your birthday.</p>
+        </div>
+
+        <!-- Avatar image -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Avatar</label>
+          <div class="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-2 text-primary hover:bg-surface-3 disabled:opacity-50 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="avatarInput.click()"
+            >
+              @if (uploadingAsset() === 'avatar') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+              Change Avatar
+            </button>
+            @if (v.avatarKey) {
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-danger hover:bg-surface-2 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="removeAsset('avatar')"
+            >
+              Remove
+            </button>
+            }
+            <input
+              #avatarInput
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              class="hidden"
+              (change)="onAssetSelected('avatar', $event)"
+            />
+          </div>
+        </div>
+
+        <!-- Banner image -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Banner Image</label>
+          <div class="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-2 text-primary hover:bg-surface-3 disabled:opacity-50 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="bannerInput.click()"
+            >
+              @if (uploadingAsset() === 'banner') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+              Change Banner
+            </button>
+            @if (v.bannerKey) {
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-danger hover:bg-surface-2 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="removeAsset('banner')"
+            >
+              Remove
+            </button>
+            }
+            <input
+              #bannerInput
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              class="hidden"
+              (change)="onAssetSelected('banner', $event)"
+            />
+          </div>
+        </div>
+
+        <!-- Banner colour (shown when no banner image; independent of theme/role colours) -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Banner Colour</label>
+          <div class="mt-1 flex items-center gap-2">
+            <input
+              type="color"
+              class="w-9 h-7 rounded-md bg-surface-2 border border-border-subtle cursor-pointer"
+              [value]="bannerColorDraft() || '#5865f2'"
+              (input)="bannerColorDraft.set($any($event.target).value)"
+            />
+            @if (bannerColorDraft()) {
+            <span class="text-xs text-muted">{{ bannerColorDraft() }}</span>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="bannerColorDraft.set('')"
+            >
+              Clear
+            </button>
+            } @else {
+            <span class="text-xs text-faint">Default</span>
+            }
+          </div>
+          <p class="text-2xs text-faint mt-1">Used when you have no banner image.</p>
         </div>
         @if (error()) {
         <p class="text-xs text-danger">{{ error() }}</p>

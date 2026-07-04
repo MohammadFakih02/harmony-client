@@ -16,6 +16,7 @@ import { MentionContext, matchMentionAt } from './mention-match';
 export type MdNodeType =
   | 'text'
   | 'mention'
+  | 'link'
   | 'code'
   | 'codeblock'
   | 'bold'
@@ -53,6 +54,42 @@ function matchDelim(s: string, i: number): { open: string; type: ContainerType }
     if (s.startsWith(d.open, i)) return d;
   }
   return null;
+}
+
+// Only literal http(s):// URLs ever become links — javascript:/data: etc. can never match.
+const URL_RE = /^https?:\/\/[^\s]+/;
+// Sentence punctuation that shouldn't be swallowed when a message ends "…see https://x.com."
+const TRAILING_PUNCT = new Set(['.', ',', ':', ';', '!', '?', '"', "'"]);
+
+function count(s: string, ch: string): number {
+  let n = 0;
+  for (const c of s) if (c === ch) n++;
+  return n;
+}
+
+/** Matches a URL starting at index i, with trailing sentence punctuation (and unbalanced
+ *  closing brackets) trimmed off. Returns the URL text, or null. */
+function matchUrlAt(s: string, i: number): string | null {
+  const m = URL_RE.exec(s.slice(i));
+  if (!m) return null;
+  let url = m[0];
+  for (;;) {
+    const last = url[url.length - 1];
+    if (TRAILING_PUNCT.has(last)) {
+      url = url.slice(0, -1);
+      continue;
+    }
+    // Trim a closing bracket only while the URL holds more closers than openers, so
+    // wiki-style urls like /Foo_(bar) keep their balanced paren.
+    if ((last === ')' && count(url, ')') > count(url, '(')) ||
+        (last === ']' && count(url, ']') > count(url, '['))) {
+      url = url.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  // "https://" alone (or fully trimmed away) isn't a link.
+  return /^https?:\/\/./.test(url) ? url : null;
 }
 
 /** Index of the matching close marker, or -1. For single-char markers, occurrences that are part
@@ -109,6 +146,19 @@ function parseInline(s: string, ctx: MentionContext): MdNode[] {
           color: match.kind === 'role' ? match.color : null,
         });
         i = end;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Bare URL — consumed as a single node BEFORE delimiter matching, so `_`/`*`/`~~` inside
+    // a URL are never misread as formatting. Only http(s):// ever links (XSS-safe).
+    if (c === 'h' && (s.startsWith('http://', i) || s.startsWith('https://', i))) {
+      const url = matchUrlAt(s, i);
+      if (url) {
+        flush(i);
+        out.push({ type: 'link', text: url });
+        i += url.length;
         textStart = i;
         continue;
       }

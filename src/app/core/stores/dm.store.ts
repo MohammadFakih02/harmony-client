@@ -80,6 +80,24 @@ export const DmStore = signalStore(
         if (store.dms().some((d) => d.channelId === channelId)) return;
         await refetch();
       },
+
+      /** Patches a participant's avatar across all DM/group channels they're in. */
+      applyAvatar(userId: string, avatarKey: string | null): void {
+        let changed = false;
+        const dms = store.dms().map((dm) => {
+          if (!dm.participants.some((p) => p.userId === userId && p.avatarKey !== avatarKey)) {
+            return dm;
+          }
+          changed = true;
+          return {
+            ...dm,
+            participants: dm.participants.map((p) =>
+              p.userId === userId ? { ...p, avatarKey } : p,
+            ),
+          };
+        });
+        if (changed) patchState(store, { dms });
+      },
     };
   }),
   withHooks({
@@ -99,6 +117,9 @@ export const DmStore = signalStore(
             // A DM unread is the reliable signal a conversation exists for us even when we're not
             // joined to its channel group — surface it if it's new.
             if (e.payload.guildId == null) void store.ensureVisible(e.payload.channelId);
+            break;
+          case 'ProfileUpdated':
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
             break;
         }
       });

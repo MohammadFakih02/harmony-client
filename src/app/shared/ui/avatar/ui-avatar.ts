@@ -1,4 +1,5 @@
 import { Component, computed, input } from "@angular/core";
+import { publicFileUrl } from "../../util/public-file-url";
 
 @Component({
   selector: "ui-avatar",
@@ -6,7 +7,10 @@ import { Component, computed, input } from "@angular/core";
   templateUrl: "./ui-avatar.html",
 })
 export class UiAvatar {
+  /** Storage key (avatars/…) or an absolute URL — keys resolve through the public serve endpoint. */
   src = input<string | null>(null);
+
+  protected readonly resolvedSrc = computed(() => publicFileUrl(this.src()));
   alt = input("");
   status = input<"online" | "idle" | "dnd" | "offline" | null>(null);
   size = input<"sm" | "md" | "lg" | "xl">("md");

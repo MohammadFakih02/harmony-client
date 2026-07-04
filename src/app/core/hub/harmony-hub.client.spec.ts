@@ -165,6 +165,20 @@ describe('HarmonyHubClient', () => {
     });
   });
 
+  it('emits ProfileUpdated coercing userId to a string, keeping a null avatar', () => {
+    conn.emit('ProfileUpdated', { userId: 7, avatarKey: 'avatars/7/9' });
+    expect(events[0]).toEqual({
+      type: 'ProfileUpdated',
+      payload: { userId: '7', avatarKey: 'avatars/7/9' },
+    });
+
+    conn.emit('ProfileUpdated', { userId: 7, avatarKey: null });
+    expect(events[1]).toEqual({
+      type: 'ProfileUpdated',
+      payload: { userId: '7', avatarKey: null },
+    });
+  });
+
   it('setIdle() invokes SetIdle with the boolean flag', async () => {
     await client.setIdle(true);
     expect(conn.invoke).toHaveBeenCalledWith('SetIdle', true);
