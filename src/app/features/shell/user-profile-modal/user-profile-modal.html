@@ -4,27 +4,30 @@
   (click)="close()"
 >
   <div
-    class="bg-surface rounded-2xl shadow-modal w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[85vh] animate-modal-in"
+    class="bg-surface rounded-2xl shadow-modal w-full max-w-sm mx-4 overflow-hidden flex flex-col max-h-[85vh]"
     (click)="$event.stopPropagation()"
   >
     @if (loading()) {
     <div class="flex justify-center py-16">
       <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
     </div>
-    } @else if (error() && !view()) {
+    } @else if (error()) {
     <div class="flex flex-col items-center gap-2 py-12 px-6 text-center">
       <i class="fas fa-circle-exclamation text-2xl text-faint"></i>
       <p class="text-sm text-muted">{{ error() }}</p>
     </div>
     } @else if (view(); as v) {
-    <!-- Banner — image when set, else top-role/accent gradient -->
-    <div class="h-32 relative shrink-0" [style.background]="bannerStyle()">
+    <!-- Banner: image > picked colour > neutral default -->
+    <div
+      class="h-24 bg-surface-3 relative shrink-0"
+      [style.background-color]="!v.bannerKey && v.bannerColor ? v.bannerColor : null"
+    >
       @if (v.bannerKey) {
-      <img [src]="v.bannerKey" [alt]="v.username" class="absolute inset-0 w-full h-full object-cover" />
+      <img [src]="bannerUrl(v.bannerKey)" [alt]="v.username" class="w-full h-full object-cover" />
       }
       <button
         type="button"
-        class="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 text-white/90 hover:bg-black/60 flex items-center justify-center"
+        class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 text-white/90 hover:bg-black/60 flex items-center justify-center"
         aria-label="Close"
         (click)="close()"
       >
@@ -32,275 +35,320 @@
       </button>
     </div>
 
-    <div class="overflow-y-auto">
-      <div class="px-5 pb-5">
-        <!-- Avatar overlapping the banner + badges (relative z-10: the banner is a positioned
-             element, so an unpositioned avatar would paint underneath it) -->
-        <div class="relative z-10 flex items-end justify-between -mt-10">
-          <div class="inline-block rounded-full ring-[6px] ring-surface bg-surface">
-            <ui-avatar
-              [src]="v.avatarKey"
-              [alt]="v.username"
-              size="2xl"
-              [status]="avatarStatus()"
-              ringClass="border-surface"
-            />
-          </div>
-          <div class="flex items-center gap-1.5 mb-1.5">
-            @if (isOwner()) {
-            <span
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning-muted text-warning text-2xs font-semibold"
-              title="Server owner"
-            >
-              <i class="fas fa-crown"></i> Owner
-            </span>
-            }
-            @if (v.age != null) {
-            <span
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-2 border border-border-subtle text-muted text-2xs font-semibold"
-              title="Age"
-            >
-              <i class="fas fa-cake-candles"></i> {{ v.age }}
-            </span>
-            }
-          </div>
-        </div>
+    <div class="px-5 pb-5 -mt-9 overflow-y-auto">
+      <ui-avatar
+        [src]="v.avatarKey"
+        [alt]="v.username"
+        size="xl"
+        [status]="avatarStatus()"
+        ringClass="border-surface"
+      />
 
-        <!-- Identity -->
-        <div class="mt-2.5 min-w-0">
-          <p class="text-xl font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
-          @if (hasNickname()) {
-          <p class="text-sm text-muted truncate mt-0.5">{{ v.username }}</p>
-          }
-        </div>
+      <div class="mt-2 flex items-center gap-2 min-w-0">
+        <span class="text-lg font-bold text-primary truncate">{{ v.username }}</span>
+        @if (isOwner()) {
+        <i class="fas fa-crown text-warning text-sm shrink-0" title="Server owner"></i>
+        }
+        @if (v.age != null) {
+        <span class="ml-auto text-xs text-faint shrink-0">{{ v.age }} yrs</span>
+        }
+      </div>
+      @if (v.statusMessage) {
+      <p class="text-xs text-muted truncate mt-0.5" [title]="v.statusMessage">{{ v.statusMessage }}</p>
+      }
 
-        <!-- Custom status -->
-        @if (v.statusMessage) {
-        <div class="mt-2 rounded-lg bg-surface-2 border border-border-subtle px-2.5 py-1.5 flex items-start gap-1.5">
-          <i class="fas fa-quote-left text-2xs text-faint mt-1 shrink-0"></i>
-          <span class="text-xs text-muted whitespace-pre-wrap wrap-break-word min-w-0">{{ v.statusMessage }}</span>
+      @if (!editing()) {
+      <!-- ===== View mode ===== -->
+      <div class="mt-3 rounded-lg bg-surface-2 border border-border-subtle p-3 flex flex-col gap-3">
+        @if (v.bio) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">About Me</p>
+          <p class="text-sm text-muted whitespace-pre-wrap break-words">{{ v.bio }}</p>
         </div>
         }
 
-        @if (!editing()) {
-        <!-- ===== View mode ===== -->
-        <div class="mt-3 rounded-xl bg-surface-2 border border-border-subtle p-3.5 flex flex-col gap-3.5">
-          @if (v.bio) {
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">About Me</p>
-            <p class="text-sm text-primary whitespace-pre-wrap wrap-break-word">{{ v.bio }}</p>
-          </div>
-          }
-
-          @if (roleChips().length) {
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
-            <div class="flex flex-wrap gap-1">
-              @for (role of roleChips(); track role.id) {
+        @if (roleChips().length) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
+          <div class="flex flex-wrap gap-1">
+            @for (role of roleChips(); track role.id) {
+            <span
+              class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border-subtle text-xs text-muted"
+            >
               <span
-                class="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-md bg-surface border border-border-subtle text-xs font-medium text-primary"
-              >
-                <span
-                  class="w-2.5 h-2.5 rounded-full shrink-0"
-                  [style.background-color]="role.color ?? 'var(--color-text-faint)'"
-                ></span>
-                {{ role.name }}
-              </span>
-              }
-            </div>
-          </div>
-          }
-
-          <!-- Member since — Harmony account date + guild join date -->
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
-            <div class="flex items-center gap-2 text-sm text-muted min-w-0">
-              <i class="fas fa-yin-yang text-faint text-xs shrink-0" title="Joined Harmony"></i>
-              <span class="shrink-0">{{ accountSince() }}</span>
-              @if (serverSince(); as since) {
-              <span class="w-1 h-1 rounded-full bg-border shrink-0"></span>
-              <i class="fas fa-users text-faint text-xs shrink-0" title="Joined this server"></i>
-              <span class="truncate">{{ since }}</span>
-              }
-            </div>
-          </div>
-
-          <!-- Server nickname (guild-scoped: self, or a mod with ManageNicknames) -->
-          @if (canEditServerNick()) {
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Server Nickname</p>
-            @if (editingServerNick()) {
-            <div class="flex gap-1.5 mt-1">
-              <input
-                type="text"
-                maxlength="32"
-                placeholder="Nickname"
-                class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
-                [ngModel]="serverNickDraft()"
-                (ngModelChange)="serverNickDraft.set($event)"
-                (keydown.enter)="saveServerNick()"
-              />
-              <button
-                type="button"
-                class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
-                [disabled]="savingServerNick()"
-                (click)="saveServerNick()"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-3 transition-micro"
-                (click)="editingServerNick.set(false)"
-              >
-                Cancel
-              </button>
-            </div>
-            } @else {
-            <div class="flex items-center gap-2">
-              <p class="text-sm truncate" [class.text-primary]="serverNickname()" [class.text-faint]="!serverNickname()">
-                {{ serverNickname() ?? 'None' }}
-              </p>
-              <button
-                type="button"
-                class="ml-auto w-6 h-6 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro shrink-0"
-                title="Edit server nickname"
-                (click)="startServerNickEdit()"
-              >
-                <i class="fas fa-pen text-2xs"></i>
-              </button>
-            </div>
+                class="w-2 h-2 rounded-full shrink-0"
+                [style.background-color]="role.color ?? 'var(--color-surface-3, #999)'"
+              ></span>
+              {{ role.name }}
+            </span>
             }
           </div>
-          }
-
-          <!-- Friend nickname (private, only you see it; for anyone but yourself) -->
-          @if (!isSelf()) {
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">
-              Nickname <span class="normal-case font-normal">— only you can see this</span>
-            </p>
-            @if (editingFriendNick()) {
-            <div class="flex gap-1.5 mt-1">
-              <input
-                type="text"
-                maxlength="32"
-                placeholder="Add a nickname"
-                class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
-                [ngModel]="friendNickDraft()"
-                (ngModelChange)="friendNickDraft.set($event)"
-                (keydown.enter)="saveFriendNick()"
-              />
-              <button
-                type="button"
-                class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
-                [disabled]="savingFriendNick()"
-                (click)="saveFriendNick()"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-3 transition-micro"
-                (click)="editingFriendNick.set(false)"
-              >
-                Cancel
-              </button>
-            </div>
-            } @else {
-            <div class="flex items-center gap-2">
-              <p class="text-sm truncate" [class.text-primary]="friendNickname()" [class.text-faint]="!friendNickname()">
-                {{ friendNickname() ?? 'None' }}
-              </p>
-              <button
-                type="button"
-                class="ml-auto w-6 h-6 rounded-md text-muted hover:text-primary hover:bg-surface-3 transition-micro shrink-0"
-                title="Edit nickname"
-                (click)="startFriendNickEdit()"
-              >
-                <i class="fas fa-pen text-2xs"></i>
-              </button>
-            </div>
-            }
-          </div>
-          }
-
-          @if (error()) {
-          <p class="text-xs text-danger">{{ error() }}</p>
-          }
         </div>
+        }
 
-        <div class="mt-4 flex gap-2">
-          @if (isSelf()) {
-          <button
-            type="button"
-            class="flex-1 h-9 rounded-lg text-sm font-semibold bg-surface-2 text-primary hover:bg-surface-3 transition-micro flex items-center justify-center gap-2"
-            (click)="startEdit()"
-          >
-            <i class="fas fa-pen text-xs"></i> Edit Profile
-          </button>
-          } @else if (canMessage()) {
-          <button
-            type="button"
-            class="flex-1 h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro flex items-center justify-center gap-2"
-            (click)="message()"
-          >
-            <i class="fas fa-message text-xs"></i> Message
-          </button>
-          } @else {
-          <p class="flex-1 h-9 rounded-lg text-xs text-muted bg-surface-2 border border-border-subtle inline-flex items-center justify-center gap-1.5">
-            <i class="fas fa-user-lock"></i> Only accepts messages from friends
-          </p>
-          }
+        @if (memberSince(); as since) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Member Since</p>
+          <p class="text-sm text-muted">{{ since }}</p>
         </div>
-        } @else {
-        <!-- ===== Edit mode (self) ===== -->
-        <div class="mt-3 flex flex-col gap-3">
-          <div>
-            <label class="text-2xs font-bold uppercase tracking-wider text-muted">About Me</label>
-            <textarea
-              rows="4"
-              maxlength="500"
-              placeholder="Tell people about yourself…"
-              class="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro resize-none"
-              [ngModel]="bioDraft()"
-              (ngModelChange)="bioDraft.set($event)"
-            ></textarea>
-          </div>
-          <div>
-            <label class="text-2xs font-bold uppercase tracking-wider text-muted">Date of Birth</label>
+        }
+
+        <!-- Server nickname (guild-scoped: self, or a mod with ManageNicknames) -->
+        @if (canEditServerNick()) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Server Nickname</p>
+          @if (editingServerNick()) {
+          <div class="flex gap-1.5 mt-1">
             <input
-              type="date"
-              [max]="today"
-              class="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
-              [ngModel]="dobDraft()"
-              (ngModelChange)="dobDraft.set($event)"
+              type="text"
+              maxlength="32"
+              placeholder="Nickname"
+              class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="serverNickDraft()"
+              (ngModelChange)="serverNickDraft.set($event)"
+              (keydown.enter)="saveServerNick()"
             />
-            <p class="text-2xs text-faint mt-1">Others see your age, not your birthday.</p>
-          </div>
-          @if (error()) {
-          <p class="text-xs text-danger">{{ error() }}</p>
-          }
-          <div class="flex gap-2 justify-end">
             <button
               type="button"
-              class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
-              (click)="cancelEdit()"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+              [disabled]="savingServerNick()"
+              (click)="saveServerNick()"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="editingServerNick.set(false)"
             >
               Cancel
             </button>
+          </div>
+          } @else {
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-muted truncate">{{ serverNickname() ?? 'None' }}</p>
             <button
               type="button"
-              class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
-              [disabled]="saving()"
-              (click)="save()"
+              class="ml-auto text-xs text-accent hover:underline shrink-0"
+              (click)="startServerNickEdit()"
             >
-              {{ saving() ? 'Saving…' : 'Save' }}
+              <i class="fas fa-pen mr-1"></i>Edit
             </button>
           </div>
+          }
+        </div>
+        }
+
+        <!-- Friend nickname (private, only you see it; for anyone but yourself) -->
+        @if (!isSelf()) {
+        <div>
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-0.5">Nickname</p>
+          @if (editingFriendNick()) {
+          <div class="flex gap-1.5 mt-1">
+            <input
+              type="text"
+              maxlength="32"
+              placeholder="Add a nickname"
+              class="flex-1 min-w-0 px-2 py-1 rounded-md bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="friendNickDraft()"
+              (ngModelChange)="friendNickDraft.set($event)"
+              (keydown.enter)="saveFriendNick()"
+            />
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+              [disabled]="savingFriendNick()"
+              (click)="saveFriendNick()"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="editingFriendNick.set(false)"
+            >
+              Cancel
+            </button>
+          </div>
+          } @else {
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-muted truncate">{{ friendNickname() ?? 'None' }}</p>
+            <button
+              type="button"
+              class="ml-auto text-xs text-accent hover:underline shrink-0"
+              (click)="startFriendNickEdit()"
+            >
+              <i class="fas fa-pen mr-1"></i>Edit
+            </button>
+          </div>
+          }
+          <p class="text-2xs text-faint mt-1">Only you can see this nickname.</p>
         </div>
         }
       </div>
+
+      <div class="mt-4 flex gap-2">
+        @if (isSelf()) {
+        <button
+          type="button"
+          class="flex-1 px-3 py-1.5 rounded-md text-sm font-semibold bg-surface-2 text-primary hover:bg-surface-3 transition-micro"
+          (click)="startEdit()"
+        >
+          <i class="fas fa-pen mr-1.5"></i> Edit Profile
+        </button>
+        } @else if (canMessage()) {
+        <button
+          type="button"
+          class="flex-1 px-3 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
+          (click)="message()"
+        >
+          <i class="fas fa-message mr-1.5"></i> Message
+        </button>
+        } @else {
+        <p class="flex-1 px-3 py-1.5 rounded-md text-xs text-muted bg-surface-2 inline-flex items-center gap-1.5">
+          <i class="fas fa-user-lock"></i> Only accepts messages from friends
+        </p>
+        }
+      </div>
+      } @else {
+      <!-- ===== Edit mode (self) ===== -->
+      <div class="mt-3 flex flex-col gap-3">
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">About Me</label>
+          <textarea
+            rows="4"
+            maxlength="500"
+            placeholder="Tell people about yourself…"
+            class="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro resize-none"
+            [ngModel]="bioDraft()"
+            (ngModelChange)="bioDraft.set($event)"
+          ></textarea>
+        </div>
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Date of Birth</label>
+          <input
+            type="date"
+            [max]="today"
+            class="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+            [ngModel]="dobDraft()"
+            (ngModelChange)="dobDraft.set($event)"
+          />
+          <p class="text-2xs text-faint mt-1">Others see your age, not your birthday.</p>
+        </div>
+
+        <!-- Avatar image -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Avatar</label>
+          <div class="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-2 text-primary hover:bg-surface-3 disabled:opacity-50 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="avatarInput.click()"
+            >
+              @if (uploadingAsset() === 'avatar') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+              Change Avatar
+            </button>
+            @if (v.avatarKey) {
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-danger hover:bg-surface-2 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="removeAsset('avatar')"
+            >
+              Remove
+            </button>
+            }
+            <input
+              #avatarInput
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              class="hidden"
+              (change)="onAssetSelected('avatar', $event)"
+            />
+          </div>
+        </div>
+
+        <!-- Banner image -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Banner Image</label>
+          <div class="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface-2 text-primary hover:bg-surface-3 disabled:opacity-50 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="bannerInput.click()"
+            >
+              @if (uploadingAsset() === 'banner') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+              Change Banner
+            </button>
+            @if (v.bannerKey) {
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-danger hover:bg-surface-2 transition-micro"
+              [disabled]="uploadingAsset() !== null"
+              (click)="removeAsset('banner')"
+            >
+              Remove
+            </button>
+            }
+            <input
+              #bannerInput
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              class="hidden"
+              (change)="onAssetSelected('banner', $event)"
+            />
+          </div>
+        </div>
+
+        <!-- Banner colour (shown when no banner image; independent of theme/role colours) -->
+        <div>
+          <label class="text-2xs font-bold uppercase tracking-wider text-muted">Banner Colour</label>
+          <div class="mt-1 flex items-center gap-2">
+            <input
+              type="color"
+              class="w-9 h-7 rounded-md bg-surface-2 border border-border-subtle cursor-pointer"
+              [value]="bannerColorDraft() || '#5865f2'"
+              (input)="bannerColorDraft.set($any($event.target).value)"
+            />
+            @if (bannerColorDraft()) {
+            <span class="text-xs text-muted">{{ bannerColorDraft() }}</span>
+            <button
+              type="button"
+              class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+              (click)="bannerColorDraft.set('')"
+            >
+              Clear
+            </button>
+            } @else {
+            <span class="text-xs text-faint">Default</span>
+            }
+          </div>
+          <p class="text-2xs text-faint mt-1">Used when you have no banner image.</p>
+        </div>
+        @if (error()) {
+        <p class="text-xs text-danger">{{ error() }}</p>
+        }
+        <div class="flex gap-2 justify-end">
+          <button
+            type="button"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+            (click)="cancelEdit()"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+            [disabled]="saving()"
+            (click)="save()"
+          >
+            {{ saving() ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      </div>
+      }
     </div>
     }
   </div>

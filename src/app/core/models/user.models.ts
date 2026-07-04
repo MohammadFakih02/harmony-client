@@ -5,6 +5,8 @@ export interface PublicUserProfile {
   username: string;
   avatarKey: string | null;
   bannerKey: string | null;
+  /** User-picked banner colour ("#rrggbb"); shown when no banner image is set. */
+  bannerColor: string | null;
   bio: string | null;
   statusMessage: string | null;
   age: number | null;
@@ -22,6 +24,8 @@ export interface MyEditableProfile {
   username: string;
   avatarKey: string | null;
   bannerKey: string | null;
+  /** User-picked banner colour ("#rrggbb"); independent of theme/role colours. */
+  bannerColor: string | null;
   bio: string | null;
   statusMessage: string | null;
   dateOfBirth: string | null; // ISO yyyy-MM-dd

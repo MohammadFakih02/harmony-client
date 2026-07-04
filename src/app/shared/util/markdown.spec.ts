@@ -121,4 +121,56 @@ describe('parseMarkdown', () => {
     // `` is not a code span; it stays literal text.
     expect(parse('a `` b')).toEqual([{ type: 'text', text: 'a `` b' }]);
   });
+
+  it('linkifies a bare http(s) URL with surrounding text', () => {
+    expect(parse('see https://example.com now')).toEqual([
+      { type: 'text', text: 'see ' },
+      { type: 'link', text: 'https://example.com' },
+      { type: 'text', text: ' now' },
+    ]);
+    expect(flatten(parse('http://x.io'))).toEqual(['link:http://x.io']);
+  });
+
+  it('trims trailing sentence punctuation off a link', () => {
+    expect(flatten(parse('go to https://example.com.'))).toEqual([
+      'text:go to ',
+      'link:https://example.com',
+      'text:.',
+    ]);
+    expect(flatten(parse('(see https://example.com/a)'))).toEqual([
+      'text:(see ',
+      'link:https://example.com/a',
+      'text:)',
+    ]);
+  });
+
+  it('keeps a balanced paren inside a wiki-style link', () => {
+    expect(flatten(parse('https://en.wikipedia.org/wiki/Foo_(bar)'))).toEqual([
+      'link:https://en.wikipedia.org/wiki/Foo_(bar)',
+    ]);
+  });
+
+  it('does not mangle formatting characters inside a URL', () => {
+    expect(flatten(parse('https://x.com/a_b_c and *i*'))).toEqual([
+      'link:https://x.com/a_b_c',
+      'text: and ',
+      'italic',
+      'text:i',
+    ]);
+  });
+
+  it('parses a link inside bold', () => {
+    expect(flatten(parse('**https://x.com**'))).toEqual(['bold', 'link:https://x.com']);
+  });
+
+  it('keeps a URL inside a code span literal', () => {
+    expect(parse('`https://x.com`')).toEqual([{ type: 'code', text: 'https://x.com' }]);
+  });
+
+  it('never links non-http schemes or a bare scheme', () => {
+    expect(parse('javascript:alert(1)')).toEqual([
+      { type: 'text', text: 'javascript:alert(1)' },
+    ]);
+    expect(parse('https:// nothing')).toEqual([{ type: 'text', text: 'https:// nothing' }]);
+  });
 });
