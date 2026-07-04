@@ -86,6 +86,21 @@ export const FriendStore = signalStore(
           pending: store.pending().filter((x) => x.id !== p.userId),
         });
       },
+
+      /** Patches a friend's/pending user's avatar when they change it live. */
+      applyAvatar(userId: string, avatarKey: string | null): void {
+        const patch = <T extends { id: string; avatarKey: string | null }>(list: T[]): T[] =>
+          list.map((x) => (x.id === userId ? { ...x, avatarKey } : x));
+        if (
+          store.friends().some((f) => f.id === userId && f.avatarKey !== avatarKey) ||
+          store.pending().some((p) => p.id === userId && p.avatarKey !== avatarKey)
+        ) {
+          patchState(store, {
+            friends: patch(store.friends()),
+            pending: patch(store.pending()),
+          });
+        }
+      },
     };
   }),
   withHooks({
@@ -101,6 +116,9 @@ export const FriendStore = signalStore(
             break;
           case 'FriendRemoved':
             store.applyFriendRemoved(e.payload);
+            break;
+          case 'ProfileUpdated':
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
             break;
         }
       });

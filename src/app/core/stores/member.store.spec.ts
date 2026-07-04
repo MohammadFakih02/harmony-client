@@ -172,6 +172,23 @@ describe('MemberStore', () => {
     expect(store.membersOf('1').find((m) => m.userId === '20')!.communicationDisabledUntil).toBe(12345);
   });
 
+  it('applyAvatar() patches the user across every loaded guild', async () => {
+    service.getMembers.mockImplementation((guildId: string) =>
+      Promise.resolve([
+        makeMember({ userId: '10', username: 'alice', avatarKey: null }),
+        makeMember({ userId: '20', username: 'bob', avatarKey: null }),
+      ]),
+    );
+    await store.loadIfNeeded('1');
+    await store.loadIfNeeded('2');
+
+    store.applyAvatar('10', 'avatars/10/99');
+
+    expect(store.membersOf('1').find((m) => m.userId === '10')!.avatarKey).toBe('avatars/10/99');
+    expect(store.membersOf('2').find((m) => m.userId === '10')!.avatarKey).toBe('avatars/10/99');
+    expect(store.membersOf('1').find((m) => m.userId === '20')!.avatarKey).toBeNull();
+  });
+
   it('setOwnNickname() calls the API then patches the member nickname', async () => {
     service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
     await store.loadIfNeeded('1');

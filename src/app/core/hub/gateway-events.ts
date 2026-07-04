@@ -35,6 +35,11 @@ export interface TypingEvent {
   channelId: string;
 }
 
+export interface ProfileUpdatedPayload {
+  userId: string;
+  avatarKey: string | null;
+}
+
 /**
  * Every real-time server→client message as one discriminated union — the unified gateway stream.
  * The hub client coerces each raw SignalR payload (Snowflake ids → strings, longs → numbers) and
@@ -69,7 +74,8 @@ export type GatewayEvent =
   | { type: 'RoleUpserted'; role: Role }
   | { type: 'RoleDeleted'; payload: RoleDeletedPayload }
   | { type: 'MemberRoleUpdated'; payload: MemberRoleUpdatedPayload }
-  | { type: 'DmChannelUpdated'; channelId: string };
+  | { type: 'DmChannelUpdated'; channelId: string }
+  | { type: 'ProfileUpdated'; payload: ProfileUpdatedPayload };
 
 /** The `type` discriminants — handy for filtering. */
 export type GatewayEventType = GatewayEvent['type'];

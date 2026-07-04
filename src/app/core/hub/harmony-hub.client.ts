@@ -218,6 +218,15 @@ export class HarmonyHubClient {
 
     this.connection.on('DmChannelUpdated', (p: { channelId: unknown }) =>
       this.emit({ type: 'DmChannelUpdated', channelId: String(p.channelId) }));
+
+    this.connection.on('ProfileUpdated', (p: { userId: unknown; avatarKey: unknown }) =>
+      this.emit({
+        type: 'ProfileUpdated',
+        payload: {
+          userId: String(p.userId),
+          avatarKey: p.avatarKey != null ? String(p.avatarKey) : null,
+        },
+      }));
   }
 
   /** Coerce a member pushed over SignalR: Snowflake ids → strings, timestamps → numbers. */
