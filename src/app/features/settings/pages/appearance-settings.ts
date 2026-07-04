@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { THEME_OPTIONS, ThemeService } from '../../../core/services/theme.service';
+import { PALETTE_OPTIONS, ThemeService } from '../../../core/services/theme.service';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { FONT_SCALE_MAX, FONT_SCALE_MIN, MessageDisplay } from '../../../core/models/settings.models';
 
@@ -10,24 +10,54 @@ import { FONT_SCALE_MAX, FONT_SCALE_MIN, MessageDisplay } from '../../../core/mo
   template: `
     <h2 class="text-xl font-bold text-primary mb-5">Appearance</h2>
 
-    <!-- Theme -->
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">Theme</p>
-    <div class="grid grid-cols-2 gap-3 mb-8">
-      @for (opt of themes; track opt.id) {
+    <!-- Colour palette -->
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">Colour</p>
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      @for (opt of palettes; track opt.id) {
       <button
         type="button"
-        class="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors"
-        [class.border-accent]="theme.current() === opt.id"
-        [class.border-border-subtle]="theme.current() !== opt.id"
-        (click)="theme.setTheme(opt.id)"
+        class="flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors"
+        [class.border-accent]="theme.palette() === opt.id"
+        [class.border-border-subtle]="theme.palette() !== opt.id"
+        (click)="theme.setPalette(opt.id)"
       >
-        <i class="fas {{ opt.icon }} text-lg text-muted w-5 text-center"></i>
+        <span
+          class="flex items-center justify-center w-8 h-8 rounded-full text-white"
+          [style.background]="opt.swatch"
+        >
+          <i class="fas {{ opt.icon }} text-xs"></i>
+        </span>
         <span class="min-w-0">
           <span class="block text-sm font-semibold text-primary">{{ opt.label }}</span>
-          <span class="block text-xs text-muted truncate">{{ opt.description }}</span>
+          <span class="block text-xs text-muted">{{ opt.description }}</span>
         </span>
       </button>
       }
+    </div>
+
+    <!-- Mode -->
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">Mode</p>
+    <div class="flex gap-3 mb-8">
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-3 rounded-lg border p-3 text-left transition-colors"
+        [class.border-accent]="theme.mode() === 'dark'"
+        [class.border-border-subtle]="theme.mode() !== 'dark'"
+        (click)="theme.setMode('dark')"
+      >
+        <i class="fas fa-moon text-lg text-muted w-5 text-center"></i>
+        <span class="text-sm font-semibold text-primary">Dark</span>
+      </button>
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-3 rounded-lg border p-3 text-left transition-colors"
+        [class.border-accent]="theme.mode() === 'light'"
+        [class.border-border-subtle]="theme.mode() !== 'light'"
+        (click)="theme.setMode('light')"
+      >
+        <i class="fas fa-sun text-lg text-muted w-5 text-center"></i>
+        <span class="text-sm font-semibold text-primary">Light</span>
+      </button>
     </div>
 
     <!-- Message display -->
@@ -65,7 +95,7 @@ import { FONT_SCALE_MAX, FONT_SCALE_MIN, MessageDisplay } from '../../../core/mo
 export class AppearanceSettings {
   protected readonly theme = inject(ThemeService);
   protected readonly settings = inject(LocalSettingsStore);
-  protected readonly themes = THEME_OPTIONS;
+  protected readonly palettes = PALETTE_OPTIONS;
   protected readonly min = FONT_SCALE_MIN;
   protected readonly max = FONT_SCALE_MAX;
 

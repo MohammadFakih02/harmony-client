@@ -40,10 +40,18 @@
     transform: translateY(-50%);
     transition: height var(--duration-element) var(--ease-bounce);
   }
+  // Unread pill (small) → hover (medium) → active (full) — Discord's rail language.
+  &.unread::before {
+    height: 8px;
+  }
   &:hover::before {
     height: 20px;
   }
   &.active::before {
     height: 40px;
+  }
+  // The selected guild keeps the morphed squircle shape, not just on hover.
+  &.active {
+    border-radius: 35%;
   }
 }

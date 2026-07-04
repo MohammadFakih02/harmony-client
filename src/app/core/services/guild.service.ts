@@ -40,4 +40,14 @@ export class GuildService {
       this.http.patch<GuildSummary>(`${this.base}/guilds/${guildId}/welcome`, config),
     );
   }
+
+  /** Leave a guild (non-owner). The API rejects an owner with a 400. */
+  leaveGuild(guildId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/guilds/${guildId}/leave`));
+  }
+
+  /** Delete a guild (owner only). */
+  deleteGuild(guildId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/guilds/${guildId}`));
+  }
 }

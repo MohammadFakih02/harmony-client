@@ -5,7 +5,7 @@ import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { DirectMessageChannel } from '../../../core/models/direct-message.models';
 import { Friend } from '../../../core/models/friend.models';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiModal } from '../../../shared/ui';
 
 /**
  * Create a group DM from a multi-select of friends, or add people to an existing group.
@@ -15,7 +15,7 @@ import { UiAvatar } from '../../../shared/ui';
 @Component({
   selector: 'app-group-dm-modal',
   standalone: true,
-  imports: [FormsModule, UiAvatar],
+  imports: [FormsModule, UiAvatar, UiModal],
   templateUrl: './group-dm-modal.html',
 })
 export class GroupDmModal implements OnInit {

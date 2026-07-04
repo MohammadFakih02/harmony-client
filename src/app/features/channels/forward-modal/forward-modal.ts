@@ -8,7 +8,7 @@ import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { dmLabel, dmPeer } from '../../../core/models/direct-message.models';
 import { MessageResponse } from '../../../core/models/message.models';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiModal } from '../../../shared/ui';
 
 /** One selectable destination shown in the picker. */
 interface TargetRow {
@@ -34,7 +34,7 @@ const FORWARDABLE_CHANNEL_TYPES = new Set(['text', 'announcement']);
 @Component({
   selector: 'app-forward-modal',
   standalone: true,
-  imports: [FormsModule, UiAvatar],
+  imports: [FormsModule, UiAvatar, UiModal],
   templateUrl: './forward-modal.html',
 })
 export class ForwardModal implements OnInit {

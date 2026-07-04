@@ -27,6 +27,16 @@
 >
   Jump to Present <i class="fas fa-arrow-down text-2xs"></i>
 </button>
+} @else if (showJumpToBottom()) {
+<!-- "Jump to latest" — quietly back to the live tail after scrolling up -->
+<button
+  type="button"
+  class="absolute bottom-3 right-4 z-20 w-9 h-9 rounded-full bg-surface border border-border shadow-modal text-muted hover:text-primary hover:bg-surface-2 transition-micro flex items-center justify-center animate-scale-in"
+  title="Jump to latest"
+  (click)="jumpToBottom()"
+>
+  <i class="fas fa-arrow-down text-sm"></i>
+</button>
 }
 
 <!-- Degraded banner -->
@@ -46,9 +56,17 @@
 <!-- Loading but under the delay threshold → render nothing (avoids the flash) -->
 <div class="flex-1"></div>
 } @else if (messageStore.messages().length === 0) {
-<div class="flex flex-col items-center justify-center flex-1 gap-3 text-center">
-  <i class="fas fa-hashtag text-5xl text-faint"></i>
-  <p class="text-sm text-muted">No messages yet. Say hello!</p>
+<!-- Welcome block — anchored at the bottom, where the conversation will start -->
+<div class="flex flex-col justify-end flex-1 min-h-0 px-4 pb-4 select-none">
+  <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-3">
+    <i
+      class="fas text-2xl text-muted"
+      [class.fa-hashtag]="messageStore.activeGuildId()"
+      [class.fa-comments]="!messageStore.activeGuildId()"
+    ></i>
+  </div>
+  <h3 class="text-2xl font-bold text-primary">{{ emptyTitle() }}</h3>
+  <p class="text-sm text-muted mt-1">{{ emptySubtitle() }} Say hello!</p>
 </div>
 } @else {
 
@@ -61,7 +79,29 @@
 
 <div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text">
   @for (group of messageGroups(); track group.firstMessageId) {
-  <div class="animate-message-in" [attr.data-group]="group.firstMessageId">
+  <!-- Date separator — this group starts a new calendar day -->
+  @if (group.dayLabel) {
+  <div class="flex items-center gap-3 px-4 pt-5 pb-1 select-none">
+    <div class="flex-1 h-px bg-border-subtle"></div>
+    <span class="text-2xs font-semibold text-faint shrink-0">{{ group.dayLabel }}</span>
+    <div class="flex-1 h-px bg-border-subtle"></div>
+  </div>
+  }
+  <!-- NEW divider — where unread messages began when the channel was opened -->
+  @if (group.firstMessageId === newDividerId()) {
+  <div class="flex items-center px-4 pt-2 pb-1 select-none" aria-label="New messages">
+    <div class="flex-1 h-px bg-danger"></div>
+    <span class="ml-2 px-1.5 py-0.5 rounded-sm bg-danger text-white text-3xs font-bold uppercase tracking-wider leading-none shrink-0">
+      New
+    </span>
+  </div>
+  }
+  <!-- Cozy gives bursts breathing room; compact packs them (Appearance > Message Display) -->
+  <div
+    class="animate-message-in"
+    [ngClass]="isCompact() ? 'mt-0.5' : 'mt-3'"
+    [attr.data-group]="group.firstMessageId"
+  >
     @if (group.isSystem) {
     <div class="gap-1 px-4 py-2 text-xs text-muted flex">
       @if (systemMessageType(group) === 'pin') {
@@ -156,7 +196,6 @@
         }
         <div
           class="text-sm leading-relaxed wrap-break-words"
-          [class.text-muted]="!msg.pending && !msg.failed"
           [class.text-primary]="!msg.pending && !msg.failed"
           [class.opacity-60]="msg.pending"
           [class.text-danger]="msg.failed"
@@ -204,6 +243,7 @@
         <div
           class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
         >
+          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none">{{ shortTime(msg.sentAt) }}</span>
           @if (canReply(msg)) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
