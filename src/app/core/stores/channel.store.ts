@@ -18,6 +18,11 @@ interface ChannelState {
 
 const isTextChannel = (c: Channel) => c.type === 'text' || c.type === 'announcement';
 
+// Channel lists are kept position-sorted on write, so the currentCategories computed (which
+// re-evaluates on every state change) only filters — filtering preserves order.
+const sortChannels = (channels: Channel[]): Channel[] =>
+  [...channels].sort((a, b) => a.position - b.position);
+
 export const ChannelStore = signalStore(
   { providedIn: 'root' },
   withState<ChannelState>({
@@ -39,9 +44,8 @@ export const ChannelStore = signalStore(
       const categoryIds = new Set(
         all.filter((c) => c.categoryId !== null).map((c) => c.categoryId!),
       );
-      const categoryChannels = all
-        .filter((c) => categoryIds.has(c.id))
-        .sort((a, b) => a.position - b.position);
+      // `all` is kept position-sorted on write, so plain filters below stay in order.
+      const categoryChannels = all.filter((c) => categoryIds.has(c.id));
       const leafChannels = all.filter(
         (c) => !categoryIds.has(c.id) && c.type !== 'category',
       );
@@ -49,9 +53,7 @@ export const ChannelStore = signalStore(
       const categories: ChannelCategory[] = categoryChannels.map((cat) => ({
         id: cat.id,
         name: cat.name.toUpperCase(),
-        channels: leafChannels
-          .filter((c) => c.categoryId === cat.id)
-          .sort((a, b) => a.position - b.position),
+        channels: leafChannels.filter((c) => c.categoryId === cat.id),
         collapsed: collapsed[cat.id] ?? false,
       }));
 
@@ -60,7 +62,7 @@ export const ChannelStore = signalStore(
         categories.unshift({
           id: null,
           name: '',
-          channels: uncategorized.sort((a, b) => a.position - b.position),
+          channels: uncategorized,
           collapsed: false,
         });
       }
@@ -75,18 +77,34 @@ export const ChannelStore = signalStore(
       return (store.channelsByGuild()[guildId] ?? []).find((c) => c.id === channelId) ?? null;
     }),
   })),
-  withMethods((store, service = inject(ChannelService)) => ({
+  withMethods((store, service = inject(ChannelService)) => {
+    // Dedupe concurrent loads for the same guild (non-reactive — purely a stampede guard).
+    // loadChannels is a deliberate refresh (no cache-skip), but simultaneous identical calls
+    // (guild activate + forward-modal) share one request instead of racing.
+    const inFlight = new Map<string, Promise<void>>();
+
+    // Last-known capabilities per channel: applied instantly on re-open (no null flash while
+    // the fetch runs, so the composer doesn't flicker disabled). The fetch stays authoritative.
+    const capsCache = new Map<string, ChannelCapabilities>();
+
+    return {
     async loadChannels(guildId: string): Promise<void> {
-      patchState(store, { loading: true });
-      try {
-        const channels = await service.getGuildChannels(guildId);
-        patchState(store, {
-          channelsByGuild: { ...store.channelsByGuild(), [guildId]: channels },
-          loading: false,
-        });
-      } catch {
-        patchState(store, { loading: false });
-      }
+      const existing = inFlight.get(guildId);
+      if (existing) return existing;
+      const promise = (async () => {
+        patchState(store, { loading: true });
+        try {
+          const channels = await service.getGuildChannels(guildId);
+          patchState(store, {
+            channelsByGuild: { ...store.channelsByGuild(), [guildId]: sortChannels(channels) },
+            loading: false,
+          });
+        } catch {
+          patchState(store, { loading: false });
+        }
+      })().finally(() => inFlight.delete(guildId));
+      inFlight.set(guildId, promise);
+      return promise;
     },
 
     selectChannel(id: string): void {
@@ -95,15 +113,17 @@ export const ChannelStore = signalStore(
 
     /** Fetch the caller's capabilities for a channel (drives input-disable + edit/delete UI). */
     async loadCapabilities(guildId: string, channelId: string): Promise<void> {
-      patchState(store, { currentCapabilities: null });
+      patchState(store, { currentCapabilities: capsCache.get(channelId) ?? null });
       try {
         const caps = await service.getCapabilities(guildId, channelId);
+        capsCache.set(channelId, caps);
         // Ignore a stale response if the user already switched channels.
         if (store.selectedChannelId() === channelId) {
           patchState(store, { currentCapabilities: caps });
         }
       } catch {
-        // Leave null → the input stays optimistically enabled; the server still enforces.
+        // Leave the cached/null value → the input stays optimistically enabled; the server
+        // still enforces.
       }
     },
 
@@ -119,8 +139,8 @@ export const ChannelStore = signalStore(
       const channels = store.channelsByGuild()[guildId] ?? [];
       const last = store.lastChannelByGuild()[guildId];
       if (last && channels.some((c) => c.id === last && isTextChannel(c))) return last;
-      const firstText = [...channels].filter(isTextChannel).sort((a, b) => a.position - b.position)[0];
-      return firstText?.id ?? null;
+      // The list is position-sorted on write, so the first text channel is the lowest position.
+      return channels.find(isTextChannel)?.id ?? null;
     },
 
     toggleCategory(categoryId: string): void {
@@ -137,7 +157,7 @@ export const ChannelStore = signalStore(
       // ChannelCreated broadcast — without this dedup the channel would appear twice.
       if (existing.some((c) => c.id === channel.id)) return;
       patchState(store, {
-        channelsByGuild: { ...store.channelsByGuild(), [gid]: [...existing, channel] },
+        channelsByGuild: { ...store.channelsByGuild(), [gid]: sortChannels([...existing, channel]) },
       });
     },
 
@@ -147,7 +167,8 @@ export const ChannelStore = signalStore(
       patchState(store, {
         channelsByGuild: {
           ...store.channelsByGuild(),
-          [gid]: existing.map((c) => (c.id === channel.id ? channel : c)),
+          // Re-sort: an update can carry a position change (reorder broadcast).
+          [gid]: sortChannels(existing.map((c) => (c.id === channel.id ? channel : c))),
         },
       });
     },
@@ -160,15 +181,81 @@ export const ChannelStore = signalStore(
       patchState(store, { channelsByGuild: updated });
     },
 
+    /**
+     * Drag-reorder channels within one rendered category group: the group's channels take
+     * positions 0..n (within-group order is all the grouping reads — channels in other groups
+     * never compete). Optimistic + persisted; reverts on failure.
+     */
+    async reorderChannels(guildId: string, orderedIds: string[]): Promise<void> {
+      const previous = store.channelsByGuild()[guildId] ?? [];
+      const posById = new Map(orderedIds.map((id, i) => [id, i]));
+      const next = sortChannels(
+        previous.map((c) => (posById.has(c.id) ? { ...c, position: posById.get(c.id)! } : c)),
+      );
+      patchState(store, { channelsByGuild: { ...store.channelsByGuild(), [guildId]: next } });
+      try {
+        await service.reorder(
+          guildId,
+          orderedIds.map((channelId, i) => ({ channelId, position: i })),
+        );
+      } catch {
+        patchState(store, {
+          channelsByGuild: { ...store.channelsByGuild(), [guildId]: previous },
+        });
+      }
+    },
+
     async createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
       const channel = await service.createChannel(guildId, name, type);
       const existing = store.channelsByGuild()[guildId] ?? [];
       patchState(store, {
-        channelsByGuild: { ...store.channelsByGuild(), [guildId]: [...existing, channel] },
+        channelsByGuild: {
+          ...store.channelsByGuild(),
+          [guildId]: sortChannels([...existing, channel]),
+        },
       });
       return channel;
     },
-  })),
+
+    /** Saves channel settings (name/topic/NSFW/slowmode). The ChannelUpdated broadcast also
+     *  arrives for other clients; applying the response here updates the editor immediately. */
+    async saveChannel(
+      guildId: string,
+      channelId: string,
+      patch: { name?: string; topic?: string | null; isNsfw?: boolean; slowmodeSeconds?: number },
+    ): Promise<Channel> {
+      const updated = await service.update(guildId, channelId, patch);
+      const list = store.channelsByGuild()[guildId] ?? [];
+      patchState(store, {
+        channelsByGuild: {
+          ...store.channelsByGuild(),
+          [guildId]: sortChannels(list.map((c) => (c.id === channelId ? updated : c))),
+        },
+      });
+      return updated;
+    },
+
+    /** Deletes a channel (ManageChannels). Optimistically removes it; the ChannelDeleted
+     *  broadcast reconciles other clients. Reverts the local list if the request fails. */
+    async deleteChannel(guildId: string, channelId: string): Promise<void> {
+      const previous = store.channelsByGuild()[guildId] ?? [];
+      patchState(store, {
+        channelsByGuild: {
+          ...store.channelsByGuild(),
+          [guildId]: previous.filter((c) => c.id !== channelId),
+        },
+      });
+      try {
+        await service.delete(guildId, channelId);
+      } catch (err) {
+        patchState(store, {
+          channelsByGuild: { ...store.channelsByGuild(), [guildId]: previous },
+        });
+        throw err;
+      }
+    },
+    };
+  }),
   withHooks({
     // Channel CRUD arrives for every guild we've joined — the add/update/remove methods are
     // keyed by the channel's own guildId, so no cache guard is needed here.

@@ -19,10 +19,13 @@ const makeGuild = (id: string, name: string): GuildSummary => ({
 
 describe('GuildStore', () => {
   let store: InstanceType<typeof GuildStore>;
-  let service: { getMyGuilds: ReturnType<typeof vi.fn> };
+  let service: {
+    getMyGuilds: ReturnType<typeof vi.fn>;
+    updateGuildOrder: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
-    service = { getMyGuilds: vi.fn() };
+    service = { getMyGuilds: vi.fn(), updateGuildOrder: vi.fn().mockResolvedValue(undefined) };
     TestBed.configureTestingModule({
       providers: [GuildStore, { provide: GuildService, useValue: service }],
     });
@@ -69,5 +72,23 @@ describe('GuildStore', () => {
     store.addGuild(makeGuild('99', 'New'));
     expect(store.guilds()).toHaveLength(1);
     expect(store.guilds()[0].id).toBe('99');
+  });
+
+  it('reorderGuilds() moves optimistically and persists the full id order', async () => {
+    store.setGuilds([makeGuild('1', 'A'), makeGuild('2', 'B'), makeGuild('3', 'C')]);
+
+    await TestBed.runInInjectionContext(() => store.reorderGuilds(2, 0));
+
+    expect(store.guilds().map((g) => g.id)).toEqual(['3', '1', '2']);
+    expect(service.updateGuildOrder).toHaveBeenCalledWith(['3', '1', '2']);
+  });
+
+  it('reorderGuilds() reverts the move when persisting fails', async () => {
+    service.updateGuildOrder.mockRejectedValue(new Error('network'));
+    store.setGuilds([makeGuild('1', 'A'), makeGuild('2', 'B')]);
+
+    await TestBed.runInInjectionContext(() => store.reorderGuilds(0, 1));
+
+    expect(store.guilds().map((g) => g.id)).toEqual(['1', '2']);
   });
 });

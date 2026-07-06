@@ -67,6 +67,26 @@ export const MessageStore = signalStore(
     pendingJump: null,
   }),
   withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
+    // Instant re-open: settled messages stashed per channel when the view switches away, painted
+    // synchronously on return while the fresh fetch (still authoritative) is in flight.
+    // Non-reactive — only read inside load calls. LRU-capped so a long session stays bounded.
+    const MESSAGE_CACHE_MAX_CHANNELS = 20;
+    const cacheByChannel = new Map<string, MessageResponse[]>();
+
+    /** Stashes the active channel's settled messages (never pending/failed optimistics). */
+    const stashActive = (): void => {
+      const channelId = store.activeChannelId();
+      if (!channelId) return;
+      const settled = store.messages().filter((m) => !m.pending && !m.failed);
+      if (!settled.length) return;
+      cacheByChannel.delete(channelId); // re-insert → most-recently-used
+      cacheByChannel.set(channelId, settled);
+      if (cacheByChannel.size > MESSAGE_CACHE_MAX_CHANNELS) {
+        const oldest = cacheByChannel.keys().next().value;
+        if (oldest !== undefined) cacheByChannel.delete(oldest);
+      }
+    };
+
     /**
      * Reconcile an optimistic message with its server id once the POST resolves.
      * Under high latency the SignalR `MessageReceived` broadcast can arrive *before*
@@ -98,11 +118,19 @@ export const MessageStore = signalStore(
     };
 
     /**
+     * True while `channelId` is still the active channel. Every history fetch checks this after
+     * its await so a slow response for a channel the user already left is discarded instead of
+     * clobbering the new channel's list (the promise-based equivalent of a switchMap cancel).
+     */
+    const isCurrent = (channelId: string): boolean => store.activeChannelId() === channelId;
+
+    /**
      * Loads the latest page into the active channel and drops any anchored (history) state — the
      * shared core of a fresh channel open and "Jump to Present". Assumes activeChannel/Guild are set.
      */
     const fetchLatestInto = async (guildId: string | null, channelId: string): Promise<void> => {
       const response = await service.getMessages(guildId, channelId);
+      if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
       patchState(store, {
         messages: [...response.messages].reverse(),
         hasMore: response.messages.length === 50,
@@ -114,15 +142,28 @@ export const MessageStore = signalStore(
 
     return {
     async loadMessages(guildId: string | null, channelId: string): Promise<void> {
-      patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
+      if (store.activeChannelId() !== channelId) stashActive();
+      // Paint the cached list instantly (or clear, so the previous channel's content never
+      // bleeds into the new view); the fetch below replaces it wholesale.
+      const cached = cacheByChannel.get(channelId) ?? [];
+      patchState(store, {
+        isLoading: true,
+        activeChannelId: channelId,
+        activeGuildId: guildId,
+        messages: cached,
+        hasMore: true,
+        anchored: false,
+        realIdToTempId: {},
+      });
       try {
         await fetchLatestInto(guildId, channelId);
+        if (!isCurrent(channelId)) return; // stale — a newer load owns the state now
         patchState(store, {
           isLoading: false,
           mentionHighlights: {}, // new channel view → clear any prior highlights
         });
       } catch {
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
     },
 
@@ -133,9 +174,11 @@ export const MessageStore = signalStore(
      * whether jumping within the open channel or after navigating to another.
      */
     async jumpToMessage(guildId: string | null, channelId: string, messageId: string): Promise<void> {
+      if (store.activeChannelId() !== channelId) stashActive();
       patchState(store, { isLoading: true, activeChannelId: channelId, activeGuildId: guildId });
       try {
         const response = await service.getMessages(guildId, channelId, { around: messageId });
+        if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
         patchState(store, {
           messages: [...response.messages].reverse(),
           // We loaded a centred window: older history is (almost always) re-loadable on scroll-up,
@@ -149,7 +192,7 @@ export const MessageStore = signalStore(
           jumpRequest: { messageId, nonce: ++_jumpNonce },
         });
       } catch {
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
     },
 
@@ -168,6 +211,7 @@ export const MessageStore = signalStore(
       patchState(store, { isLoading: true });
       try {
         const response = await service.getMessages(guildId, channelId, { after: newest.messageId });
+        if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
         const newer = [...response.messages].reverse();
         const reachedTail = response.messages.length < 50;
         patchState(store, {
@@ -177,7 +221,7 @@ export const MessageStore = signalStore(
           anchored: !reachedTail,
         });
       } catch {
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
     },
 
@@ -189,9 +233,9 @@ export const MessageStore = signalStore(
       patchState(store, { isLoading: true });
       try {
         await fetchLatestInto(guildId, channelId);
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       } catch {
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
     },
 
@@ -222,6 +266,7 @@ export const MessageStore = signalStore(
       patchState(store, { isLoading: true });
       try {
         const response = await service.getMessages(guildId, channelId, { before: oldest.messageId });
+        if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
         const older = [...response.messages].reverse();
         patchState(store, {
           messages: [...older, ...store.messages()],
@@ -230,7 +275,7 @@ export const MessageStore = signalStore(
           isLoading: false,
         });
       } catch {
-        patchState(store, { isLoading: false });
+        if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
     },
 
@@ -386,6 +431,7 @@ export const MessageStore = signalStore(
     },
 
     clearMessages(): void {
+      stashActive(); // leaving the channel view entirely still feeds the re-open cache
       patchState(store, {
         messages: [],
         hasMore: true,

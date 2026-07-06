@@ -53,6 +53,8 @@ export class NotificationBell {
     switch (n.type) {
       case 'mention':
         return `${username} mentioned you`;
+      case 'reply':
+        return `${username} replied to you`;
       case 'friend_request':
         return `${username} sent you a friend request`;
       default:
@@ -73,7 +75,7 @@ export class NotificationBell {
   async open(n: AppNotification): Promise<void> {
     this.closePanel();
     this.store.markRead(n.id);
-    if (n.type === 'mention' && n.channelId) {
+    if ((n.type === 'mention' || n.type === 'reply') && n.channelId) {
       const route = n.guildId
         ? ['/app/guilds', n.guildId, 'channels', n.channelId]
         : ['/app/dm', n.channelId];

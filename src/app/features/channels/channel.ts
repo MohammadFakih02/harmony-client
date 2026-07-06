@@ -1,34 +1,52 @@
-import { Component, inject, OnDestroy, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, computed, inject, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MessageResponse } from '../../core/models/message.models';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { MessageStore } from '../../core/stores/message.store';
 import { PinStore } from '../../core/stores/pin.store';
 import { SignalRService } from '../../core/services/signalr.service';
+import { NsfwConsentService } from '../../core/services/nsfw-consent.service';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { MessageList } from './message-list/message-list';
 import { MessageInput } from './message-input/message-input';
 import { TypingIndicator } from './typing-indicator/typing-indicator';
+import { NsfwGate } from './nsfw-gate/nsfw-gate';
 
 @Component({
   selector: 'app-channel',
   standalone: true,
-  imports: [MessageList, MessageInput, TypingIndicator],
+  imports: [MessageList, MessageInput, TypingIndicator, NsfwGate],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
+    @if (gated()) {
+    <app-nsfw-gate
+      [channelName]="channelStore.selectedChannel()?.name ?? 'channel'"
+      (confirm)="acknowledgeNsfw()"
+      (back)="leaveNsfw()"
+    />
+    } @else {
     <app-message-list #list class="flex-1 min-h-0" />
     <app-typing-indicator />
     <app-message-input (editLastRequested)="list.editLastOwnMessage()" />
+    }
   `,
 })
 export class Channel implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
-  private readonly channelStore = inject(ChannelStore);
+  private readonly router = inject(Router);
+  protected readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
   private readonly pinStore = inject(PinStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly signalR = inject(SignalRService);
+  private readonly nsfwConsent = inject(NsfwConsentService);
+
+  /** NSFW channel the viewer hasn't acknowledged yet → show the consent gate instead of messages. */
+  protected readonly gated = computed(() => {
+    const channel = this.channelStore.selectedChannel();
+    return !!channel?.isNsfw && !this.nsfwConsent.has(channel.id);
+  });
 
   private channelId = '';
   // null = a DM (no owning guild). Guild channels carry their guild id here.
@@ -83,6 +101,27 @@ export class Channel implements OnInit, OnDestroy {
       if (prev) void this.signalR.leaveChannel(prev);
       void this.signalR.joinChannel(newChannelId);
     });
+  }
+
+  /** The viewer confirmed they're of age — remember it and reveal the channel. */
+  protected acknowledgeNsfw(): void {
+    if (this.channelId) this.nsfwConsent.acknowledge(this.channelId);
+  }
+
+  /** Declined the age gate — go back to the guild's default channel (or the guild root). */
+  protected leaveNsfw(): void {
+    if (this.guildId) {
+      const fallback = this.channelStore
+        .channelsByGuild()
+        [this.guildId]?.find((c) => c.id !== this.channelId && c.type === 'text' && !c.isNsfw);
+      void this.router.navigate(
+        fallback
+          ? ['/app/guilds', this.guildId, 'channels', fallback.id]
+          : ['/app/guilds', this.guildId],
+      );
+    } else {
+      void this.router.navigate(['/app/friends']);
+    }
   }
 
   ngOnDestroy(): void {

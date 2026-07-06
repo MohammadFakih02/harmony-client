@@ -13,6 +13,7 @@ function deps(overrides: Partial<Record<string, unknown>> = {}): UserMenuDeps {
     roleStore: { rolesOf: () => [] },
     roleService: {},
     dmStore: {},
+    blockStore: { isBlocked: () => false, block: () => Promise.resolve(), unblock: () => Promise.resolve() },
     profileModal: {},
     toast: {},
     router: {},
@@ -28,14 +29,20 @@ function target(over: Partial<UserMenuTarget> = {}): UserMenuTarget {
 }
 
 describe('buildUserMenu', () => {
-  it('offers Profile + Message + Copy for another user with no moderation context', () => {
+  it('offers Profile + Message + Copy + Block for another user with no moderation context', () => {
     const entries = buildUserMenu(deps(), target({ guildId: null }));
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Block']);
   });
 
-  it('hides Message for yourself', () => {
+  it('hides Message and Block for yourself', () => {
     const entries = buildUserMenu(deps(), target({ userId: 'me', guildId: null }));
     expect(labels(entries)).toEqual(['Profile', 'Copy User ID']);
+  });
+
+  it('offers Unblock instead of Block for an already-blocked user', () => {
+    const d = deps({ blockStore: { isBlocked: () => true } });
+    const entries = buildUserMenu(d, target({ guildId: null }));
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Unblock']);
   });
 
   it('appends moderation for a non-owner member the caller can moderate', () => {
@@ -44,7 +51,7 @@ describe('buildUserMenu', () => {
       d,
       target({ member: { userId: 'u1', username: 'bob', isOwner: false, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Roles', 'Timeout', 'Kick', 'Ban']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Roles', 'Timeout', 'Kick', 'Ban', 'Block']);
     expect(entries.some(isSeparator)).toBe(true);
   });
 
@@ -57,11 +64,11 @@ describe('buildUserMenu', () => {
     expect(labels(entries)).toContain('Kick');
   });
 
-  it('never moderates the guild owner', () => {
+  it('never moderates the guild owner (but can still block them)', () => {
     const entries = buildUserMenu(
       deps(),
       target({ member: { userId: 'u1', username: 'bob', isOwner: true, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Block']);
   });
 });

@@ -1,9 +1,10 @@
-import { Component, computed, inject, input, output } from '@angular/core';
+import { Component, computed, effect, inject, input, output, untracked } from '@angular/core';
 import { Router } from '@angular/router';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiProfileBanner, bannerGradient } from '../../../shared/ui';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
+import { ProfileStore } from '../../../core/stores/profile.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { AuthService } from '../../../core/services/auth.service';
@@ -26,7 +27,7 @@ const fmtDate = (d: Date | null): string | null =>
 @Component({
   selector: 'app-user-profile-popout',
   standalone: true,
-  imports: [UiAvatar],
+  imports: [UiAvatar, UiProfileBanner],
   templateUrl: './user-profile-popout.html',
 })
 export class UserProfilePopout {
@@ -39,6 +40,7 @@ export class UserProfilePopout {
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly presenceStore = inject(PresenceStore);
+  private readonly profileStore = inject(ProfileStore);
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly auth = inject(AuthService);
@@ -50,6 +52,17 @@ export class UserProfilePopout {
     const guildId = this.guildId();
     return guildId ? this.memberStore.membersOf(guildId).find((m) => m.userId === this.userId()) : undefined;
   });
+
+  /** Shared cached profile — brings the real banner + bio to the popout (Discord fetches here too). */
+  protected readonly profile = computed(() => this.profileStore.profileOf(this.userId()));
+
+  constructor() {
+    // Refresh on open: the cached copy paints instantly, the fetch patches in behind it.
+    effect(() => {
+      const id = this.userId();
+      untracked(() => void this.profileStore.refresh(id));
+    });
+  }
 
   protected readonly username = computed(() => this.member()?.username ?? this.fallbackUsername());
   // In a guild the server nickname is the display name; in a DM the caller's private friend nickname is.
@@ -77,11 +90,10 @@ export class UserProfilePopout {
       .map((r) => ({ id: r.id, name: r.name, color: roleColorHex(r.color) }));
   });
 
-  /** Banner gradient — the member's top coloured role, falling back to the theme accent. */
-  protected readonly bannerStyle = computed(() => {
-    const c = this.roleChips().find((r) => r.color)?.color ?? 'var(--color-accent)';
-    return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 55%, #000) 100%)`;
-  });
+  /** Banner gradient fallback — the member's top coloured role, else the theme accent. */
+  protected readonly bannerStyle = computed(() =>
+    bannerGradient(this.roleChips().find((r) => r.color)?.color),
+  );
 
   /** Account-creation date, from the snowflake — always known. */
   protected readonly accountSince = computed(() => fmtDate(snowflakeToDate(this.userId())));

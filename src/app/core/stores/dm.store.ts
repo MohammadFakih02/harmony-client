@@ -28,6 +28,11 @@ export const DmStore = signalStore(
     };
 
     return {
+      /** Distributes the bootstrap payload's DM list (no fetch). */
+      set(dms: DirectMessageChannel[]): void {
+        patchState(store, { dms });
+      },
+
       async load(): Promise<void> {
         patchState(store, { loading: true });
         await refetch();
@@ -58,6 +63,22 @@ export const DmStore = signalStore(
       async leave(channelId: string): Promise<void> {
         patchState(store, { dms: store.dms().filter((d) => d.channelId !== channelId) });
         await service.leave(channelId).catch(() => {});
+      },
+
+      /** Renames a group DM optimistically (empty clears back to joined names); reverts on failure. */
+      async rename(channelId: string, name: string): Promise<void> {
+        const previous = store.dms();
+        const trimmed = name.trim();
+        patchState(store, {
+          dms: previous.map((d) =>
+            d.channelId === channelId ? { ...d, name: trimmed || null } : d,
+          ),
+        });
+        try {
+          await service.rename(channelId, trimmed);
+        } catch {
+          patchState(store, { dms: previous });
+        }
       },
 
       async hide(channelId: string): Promise<void> {

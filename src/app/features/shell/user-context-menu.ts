@@ -4,6 +4,7 @@ import { GuildCapabilities, GuildMember } from '../../core/models/member.models'
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { BlockStore } from '../../core/stores/block.store';
 import { RoleService } from '../../core/services/role.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -15,6 +16,7 @@ export interface UserMenuDeps {
   roleStore: InstanceType<typeof RoleStore>;
   roleService: RoleService;
   dmStore: InstanceType<typeof DmStore>;
+  blockStore: InstanceType<typeof BlockStore>;
   profileModal: ProfileModalService;
   toast: ToastService;
   router: Router;
@@ -86,7 +88,10 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   // Moderation — only for a non-self, non-owner member the caller can act on.
   const moderatable =
     !!guildId && !!member && !isSelf && !member.isOwner && !!caps;
-  if (!moderatable) return entries;
+  if (!moderatable) {
+    appendBlockEntry(deps, target, entries, isSelf);
+    return entries;
+  }
 
   const gid = guildId!;
   const mod: ContextMenuEntry[] = [];
@@ -154,7 +159,46 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   }
 
   if (mod.length > 0) entries.push({ separator: true }, ...mod);
+  appendBlockEntry(deps, target, entries, isSelf);
   return entries;
+}
+
+/** Block / Unblock — offered for any other user, always as the last section (Discord-style). */
+function appendBlockEntry(
+  deps: UserMenuDeps,
+  target: UserMenuTarget,
+  entries: ContextMenuEntry[],
+  isSelf: boolean,
+): void {
+  if (isSelf) return;
+  const blocked = deps.blockStore.isBlocked(target.userId);
+  entries.push(
+    { separator: true },
+    blocked
+      ? {
+          label: 'Unblock',
+          icon: 'fa-user-check',
+          action: () => void deps.blockStore.unblock(target.userId),
+        }
+      : {
+          label: 'Block',
+          icon: 'fa-user-slash',
+          danger: true,
+          action: async () => {
+            if (!window.confirm(`Block ${displayName(target)}? Their messages will be hidden and any friendship removed.`)) return;
+            try {
+              await deps.blockStore.block({
+                id: target.userId,
+                username: target.username,
+                avatarKey: target.member?.avatarKey ?? null,
+              });
+              deps.toast.info(`Blocked ${displayName(target)}`, 'fa-user-slash');
+            } catch {
+              deps.toast.info('Could not block this user.', 'fa-triangle-exclamation');
+            }
+          },
+        },
+  );
 }
 
 function displayName(target: UserMenuTarget): string {

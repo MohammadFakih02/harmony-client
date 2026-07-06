@@ -26,6 +26,27 @@ export const GuildStore = signalStore(
       }
     },
 
+    /** Replaces the guild list (bootstrap payload distribution — no fetch). */
+    setGuilds(guilds: GuildSummary[]): void {
+      patchState(store, { guilds, loading: false });
+    },
+
+    /** Drag-reorder the rail: optimistic move + persist the full order. Reverts on failure. */
+    async reorderGuilds(previousIndex: number, currentIndex: number): Promise<void> {
+      if (previousIndex === currentIndex) return;
+      const previous = store.guilds();
+      const next = [...previous];
+      const [moved] = next.splice(previousIndex, 1);
+      if (!moved) return;
+      next.splice(currentIndex, 0, moved);
+      patchState(store, { guilds: next });
+      try {
+        await service.updateGuildOrder(next.map((g) => g.id));
+      } catch {
+        patchState(store, { guilds: previous });
+      }
+    },
+
     selectGuild(id: string): void {
       patchState(store, { selectedGuildId: id });
     },

@@ -21,6 +21,33 @@ export class ChannelService {
     );
   }
 
+  /** Persist new channel positions (ManageChannels). Returns the guild's full sorted list. */
+  reorder(
+    guildId: string,
+    updates: { channelId: string; position: number }[],
+  ): Promise<Channel[]> {
+    return firstValueFrom(
+      this.http.patch<Channel[]>(`${this.base}/guilds/${guildId}/channels/reorder`, updates),
+    );
+  }
+
+  /** Partial channel update (ManageChannels) — name/topic/NSFW/slowmode. */
+  update(
+    guildId: string,
+    channelId: string,
+    patch: { name?: string; topic?: string | null; isNsfw?: boolean; slowmodeSeconds?: number },
+  ): Promise<Channel> {
+    return firstValueFrom(
+      this.http.patch<Channel>(`${this.base}/guilds/${guildId}/channels/${channelId}`, patch),
+    );
+  }
+
+  delete(guildId: string, channelId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.base}/guilds/${guildId}/channels/${channelId}`),
+    );
+  }
+
   createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
     return firstValueFrom(
       this.http.post<Channel>(`${this.base}/guilds/${guildId}/channels`, {

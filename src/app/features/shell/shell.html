@@ -160,8 +160,17 @@
       class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0"
       [style.width.px]="settings.rightSidebarWidth()"
     >
-      <!-- Banner -->
+      <!-- Banner: the peer's real banner (image > colour > accent gradient); groups keep the gradient -->
+      @if (!dmIsGroup() && dmPeer(); as peer) {
+      <ui-profile-banner
+        class="h-24"
+        [bannerKey]="dmPeerProfile()?.bannerKey ?? null"
+        [bannerColor]="dmPeerProfile()?.bannerColor ?? null"
+        [alt]="peer.username"
+      />
+      } @else {
       <div class="h-24 profile-banner"></div>
+      }
       @if (dmIsGroup()) {
       <!-- Group: name, member list, add/leave -->
       <div class="px-4 pb-4">
@@ -170,7 +179,48 @@
         </div>
 
         <div class="mt-2.5 min-w-0">
-          <p class="text-xl font-bold text-primary leading-tight wrap-break-word">{{ dmHeaderName() }}</p>
+          @if (editingGroupName()) {
+          <div class="flex items-center gap-1.5">
+            <input
+              type="text"
+              maxlength="100"
+              placeholder="Group name"
+              class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="groupNameDraft()"
+              (ngModelChange)="groupNameDraft.set($event)"
+              (keydown.enter)="saveGroupName(dm.channelId)"
+              (keydown.escape)="editingGroupName.set(false)"
+            />
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg bg-accent text-white hover:bg-accent-hover transition-micro shrink-0"
+              aria-label="Save group name"
+              (click)="saveGroupName(dm.channelId)"
+            >
+              <i class="fas fa-check text-xs"></i>
+            </button>
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface transition-micro shrink-0"
+              aria-label="Cancel"
+              (click)="editingGroupName.set(false)"
+            >
+              <i class="fas fa-xmark text-xs"></i>
+            </button>
+          </div>
+          } @else {
+          <div class="group flex items-center gap-2 min-w-0">
+            <p class="text-xl font-bold text-primary leading-tight wrap-break-word min-w-0">{{ dmHeaderName() }}</p>
+            <button
+              type="button"
+              class="w-6 h-6 shrink-0 rounded-md text-faint hover:text-primary hover:bg-surface transition-micro opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              aria-label="Rename group"
+              (click)="startGroupRename(dm)"
+            >
+              <i class="fas fa-pen text-2xs"></i>
+            </button>
+          </div>
+          }
           <p class="text-sm text-muted mt-0.5">{{ dmMembers().length + 1 }} Members</p>
         </div>
 

@@ -28,6 +28,11 @@ export const FriendStore = signalStore(
     };
 
     return {
+      /** Distributes the bootstrap payload's friend snapshot (no fetch). */
+      set(friends: Friend[], pending: PendingFriend[]): void {
+        patchState(store, { friends, pending });
+      },
+
       async load(): Promise<void> {
         patchState(store, { loading: true });
         try {

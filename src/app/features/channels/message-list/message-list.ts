@@ -12,6 +12,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
+import { BlockStore } from '../../../core/stores/block.store';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { Router } from '@angular/router';
 import { UnreadStore } from '../../../core/stores/unread.store';
@@ -26,7 +27,7 @@ import { ContextMenuService } from '../../../core/services/context-menu.service'
 import { buildUserMenu, UserMenuDeps } from '../../shell/user-context-menu';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { MessageResponse } from '../../../core/models/message.models';
-import { MentionCandidate } from '../../../core/models/member.models';
+import { GuildMember, MentionCandidate } from '../../../core/models/member.models';
 import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
@@ -40,15 +41,38 @@ import { ForwardModal } from '../forward-modal/forward-modal';
 import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
 import { UserProfilePopout } from '../../shell/user-profile-popout/user-profile-popout';
 
+/** Compact preview of the message a message replies to (found:false → "unavailable" line). */
+export interface ReplyPreview {
+  found: boolean;
+  messageId: string;
+  authorName: string;
+  content: string;
+}
+
+/**
+ * A message enriched with everything the template used to resolve per call per change detection
+ * (reply preview, invite codes) — precomputed once in the messageGroups computed instead.
+ */
+export interface RenderedMessage {
+  msg: MessageResponse;
+  preview: ReplyPreview | null;
+  inviteCodes: string[];
+}
+
 export interface MessageGroup {
   userId: string;
   username: string;
   avatarKey: string | null;
   firstMessageId: string;
   timestamp: string;
-  messages: MessageResponse[];
+  items: RenderedMessage[];
+  // Nickname-aware display name + highest-role colour, resolved once per recompute.
+  authorName: string;
+  authorColor: string | null;
   // System notices (e.g. member-join) render as standalone centered lines, never as a user burst.
   isSystem: boolean;
+  // The author is blocked by the viewer — the burst renders as a collapsed bar until revealed.
+  blocked: boolean;
   // Set when this group starts a new calendar day — renders a date separator above it.
   dayLabel: string | null;
 }
@@ -126,6 +150,7 @@ export class MessageList {
   private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
+  private readonly blockStore = inject(BlockStore);
   private readonly messageService = inject(MessageService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -137,6 +162,7 @@ export class MessageList {
     roleStore: this.roleStore,
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    blockStore: this.blockStore,
     profileModal: inject(ProfileModalService),
     toast: this.toast,
     router: inject(Router),
@@ -167,9 +193,9 @@ export class MessageList {
   });
 
   // Invite codes from any full invite links in the message → inline embed cards. Memoized per
-  // message (keyed on content so an edit re-scans) to keep the regex off the change-detection path.
+  // message (keyed on content so an edit re-scans) to keep the regex out of the group recompute.
   private readonly inviteCodeCache = new WeakMap<MessageResponse, { content: string; codes: string[] }>();
-  protected inviteCodesOf(msg: MessageResponse): string[] {
+  private inviteCodesOf(msg: MessageResponse): string[] {
     if (msg.isDeleted || !msg.content) return [];
     const cached = this.inviteCodeCache.get(msg);
     if (cached && cached.content === msg.content) return cached.codes;
@@ -186,36 +212,6 @@ export class MessageList {
     return map;
   });
 
-  /**
-   * The compact preview of the message a given message replies to. Resolved from the loaded set;
-   * `found: false` when the referenced message isn't loaded (scrolled past / never fetched) or was
-   * deleted — the preview then renders a muted "original message unavailable" line.
-   */
-  protected referencedPreview(
-    msg: MessageResponse,
-  ): { found: boolean; messageId: string; authorName: string; content: string } | null {
-    if (!msg.replyToId || msg.isDeleted) return null;
-    const ref = this.messageIndex().get(msg.replyToId);
-    if (!ref || ref.isDeleted) {
-      return { found: false, messageId: msg.replyToId, authorName: '', content: '' };
-    }
-    return {
-      found: true,
-      messageId: ref.messageId,
-      authorName: this.resolveDisplayName(ref.userId, ref.username),
-      content: ref.content,
-    };
-  }
-
-  /**
-   * Display name for a message author: in a guild, their server nickname ?? username; in a DM, the
-   * caller's private friend nickname ?? username. (Server and friend nicknames never overlap — a
-   * guild uses the server one, a DM uses the friend one.)
-   */
-  protected authorName(group: MessageGroup): string {
-    return this.resolveDisplayName(group.userId, group.username);
-  }
-
   /** Nickname-aware display name for any author (guild server-nickname, else DM friend-nickname). */
   private resolveDisplayName(userId: string, fallbackUsername: string): string {
     const guildId = this.messageStore.activeGuildId();
@@ -228,16 +224,8 @@ export class MessageList {
 
   /** The optional admin greeting carried by a system (member-join) message; null when blank. */
   protected systemGreeting(group: MessageGroup): string | null {
-    const content = group.messages[0]?.content?.trim();
+    const content = group.items[0]?.msg.content?.trim();
     return content ? content : null;
-  }
-
-  /** Role colour for a message author's name — their highest coloured role in this guild (null in DMs). */
-  protected authorColor(userId: string): string | null {
-    const guildId = this.messageStore.activeGuildId();
-    if (!guildId) return null;
-    const member = this.memberStore.membersOf(guildId).find((m) => m.userId === userId);
-    return member ? memberColor(member.roleIds, this.roleStore.rolesOf(guildId)) : null;
   }
 
   // --- author profile popout (opened by clicking a message author's name/avatar) ---
@@ -398,12 +386,52 @@ export class MessageList {
   protected readonly messageGroups = computed<MessageGroup[]>(() => {
     const msgs = this.messageStore.messages();
     const dividerId = this.newDividerId();
-    const groups: MessageGroup[] = [];
 
+    // Author identity resolved once per recompute (O(1) map lookups) instead of per template
+    // call per change detection. Tracking member/role/nickname state here is deliberate: a
+    // nickname or role-colour change re-renders the list exactly once.
+    const guildId = this.messageStore.activeGuildId();
+    const membersById = new Map<string, GuildMember>();
+    if (guildId) {
+      for (const m of this.memberStore.membersOf(guildId)) membersById.set(m.userId, m);
+    }
+    const roles = guildId ? this.roleStore.rolesOf(guildId) : [];
+    const blockedIds = this.blockStore.blockedIds();
+
+    const displayName = (userId: string, fallback: string): string =>
+      guildId
+        ? (membersById.get(userId)?.nickname ?? fallback)
+        : (this.nicknameStore.nicknameOf(userId) ?? fallback);
+    const colorOf = (userId: string): string | null => {
+      const member = membersById.get(userId);
+      return member ? memberColor(member.roleIds, roles) : null;
+    };
+
+    const index = this.messageIndex();
+    const render = (msg: MessageResponse): RenderedMessage => {
+      // Reply preview: found:false when the referenced message isn't loaded (scrolled past /
+      // never fetched) or was deleted → a muted "original message unavailable" line.
+      let preview: ReplyPreview | null = null;
+      if (msg.replyToId && !msg.isDeleted) {
+        const ref = index.get(msg.replyToId);
+        preview =
+          !ref || ref.isDeleted
+            ? { found: false, messageId: msg.replyToId, authorName: '', content: '' }
+            : {
+                found: true,
+                messageId: ref.messageId,
+                authorName: displayName(ref.userId, ref.username),
+                content: ref.content,
+              };
+      }
+      return { msg, preview, inviteCodes: this.inviteCodesOf(msg) };
+    };
+
+    const groups: MessageGroup[] = [];
     for (const msg of msgs) {
       const isSystem = SYSTEM_MESSAGE_TYPES.has(msg.messageType);
       const last = groups[groups.length - 1];
-      const lastMsg = last?.messages[last.messages.length - 1];
+      const lastMsg = last?.items[last.items.length - 1]?.msg;
       const gap = lastMsg ? msg.sentAt - lastMsg.sentAt : Infinity;
       // A new calendar day always starts a new group (the date separator sits between groups);
       // so does the NEW-messages divider, so it never has to split a burst mid-group.
@@ -413,7 +441,7 @@ export class MessageList {
       const sameUser = last && !last.isSystem && last.userId === msg.userId && !msg.failed;
 
       if (!isSystem && sameUser && gap < GROUP_BREAK_MS && !forcedBreak) {
-        last.messages.push(msg);
+        last.items.push(render(msg));
       } else {
         groups.push({
           userId: msg.userId ?? '',
@@ -421,8 +449,11 @@ export class MessageList {
           avatarKey: msg.avatarKey ?? null,
           firstMessageId: msg.messageId,
           timestamp: formatMessageTime(msg.sentAt),
-          messages: [msg],
+          items: [render(msg)],
+          authorName: displayName(msg.userId ?? '', msg.username ?? 'Unknown'),
+          authorColor: colorOf(msg.userId ?? ''),
           isSystem,
+          blocked: !isSystem && blockedIds.has(msg.userId ?? ''),
           dayLabel: newDay ? formatDayLabel(msg.sentAt) : null,
         });
       }
@@ -430,6 +461,21 @@ export class MessageList {
 
     return groups;
   });
+
+  // -------------------------------------------------------------------------
+  // Blocked-author bursts render as a collapsed bar; revealing is per-group and
+  // session-only (Discord-style "Show blocked message"). Keyed by firstMessageId
+  // (globally unique snowflakes, so no cross-channel collisions).
+  // -------------------------------------------------------------------------
+  protected readonly revealedBlocked = signal<ReadonlySet<string>>(new Set());
+
+  protected toggleBlockedReveal(groupId: string): void {
+    this.revealedBlocked.update((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(groupId)) next.add(groupId);
+      return next;
+    });
+  }
 
   // -------------------------------------------------------------------------
   // "NEW" divider — the first unread message, snapshotted once per channel open.
@@ -476,7 +522,7 @@ export class MessageList {
    */
   private scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition): boolean {
     const group = this.messageGroups().find((g) =>
-      g.messages.some((m) => m.messageId === messageId),
+      g.items.some((i) => i.msg.messageId === messageId),
     );
     if (!group) return false;
     const el = this.scroller()?.nativeElement?.querySelector<HTMLElement>(
@@ -550,7 +596,7 @@ export class MessageList {
 
   /** The system message's type (e.g. 'pin' vs 'member_join'), for branching the notice render. */
   protected systemMessageType(group: MessageGroup): string {
-    return group.messages[0]?.messageType ?? 'system';
+    return group.items[0]?.msg.messageType ?? 'system';
   }
 
   /** Bare "14:32" time for the hover gutter on grouped (non-first) messages. */

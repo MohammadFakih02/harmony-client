@@ -17,6 +17,9 @@ export const RoleStore = signalStore(
   { providedIn: 'root' },
   withState<RoleState>({ byGuild: {} }),
   withMethods((store, service = inject(RoleService)) => {
+    // Dedupe concurrent loadIfNeeded calls per guild (non-reactive — purely a stampede guard).
+    const inFlight = new Map<string, Promise<void>>();
+
     const setGuild = (guildId: string, roles: Role[]) =>
       patchState(store, { byGuild: { ...store.byGuild(), [guildId]: sortRoles(roles) } });
 
@@ -34,14 +37,20 @@ export const RoleStore = signalStore(
         return store.byGuild()[guildId] ?? [];
       },
 
-      /** Fetches a guild's roles once and caches them; a no-op if already cached. */
+      /** Fetches a guild's roles once and caches them; a no-op if already cached or in flight. */
       async loadIfNeeded(guildId: string): Promise<void> {
         if (store.byGuild()[guildId]) return;
-        try {
-          setGuild(guildId, await service.getRoles(guildId));
-        } catch {
-          // Leave unset; the modal shows an error / empty state.
-        }
+        const existing = inFlight.get(guildId);
+        if (existing) return existing;
+        const promise = (async () => {
+          try {
+            setGuild(guildId, await service.getRoles(guildId));
+          } catch {
+            // Leave unset; the modal shows an error / empty state.
+          }
+        })().finally(() => inFlight.delete(guildId));
+        inFlight.set(guildId, promise);
+        return promise;
       },
 
       /** Forces a refresh (used when the management modal opens). */

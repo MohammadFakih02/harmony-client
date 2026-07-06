@@ -49,6 +49,26 @@ describe('PresenceStore', () => {
     expect(store.statusMessageOf('2')).toBe('busy');
   });
 
+  it('loadStatuses() dedupes already-requested ids (live updates keep them fresh)', async () => {
+    presence.getStatuses.mockResolvedValue({ '1': { status: 'online', statusMessage: null } });
+
+    await TestBed.runInInjectionContext(() => store.loadStatuses(['1']));
+    await TestBed.runInInjectionContext(() => store.loadStatuses(['1', '2']));
+
+    expect(presence.getStatuses).toHaveBeenCalledTimes(2);
+    expect(presence.getStatuses).toHaveBeenLastCalledWith(['2']);
+  });
+
+  it('loadStatuses({ force: true }) refetches even already-requested ids (reconnect reconcile)', async () => {
+    presence.getStatuses.mockResolvedValue({ '1': { status: 'online', statusMessage: null } });
+    await TestBed.runInInjectionContext(() => store.loadStatuses(['1']));
+
+    await TestBed.runInInjectionContext(() => store.loadStatuses(['1'], { force: true }));
+
+    expect(presence.getStatuses).toHaveBeenCalledTimes(2);
+    expect(presence.getStatuses).toHaveBeenLastCalledWith(['1']);
+  });
+
   it('loadStatuses() does not let a stale server offline override our own known status', async () => {
     // Establish our own status first (as initMyStatus would on startup).
     await TestBed.runInInjectionContext(() => store.initMyStatus()); // preferred: 'online'

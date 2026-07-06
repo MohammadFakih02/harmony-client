@@ -86,6 +86,72 @@ describe('MessageStore', () => {
 
       expect(store.degraded()).toBe(true);
     });
+
+    it('discards a stale response when the user switched channels mid-flight', async () => {
+      let resolveA!: (v: unknown) => void;
+      service.getMessages.mockImplementationOnce(() => new Promise((res) => (resolveA = res)));
+
+      // Channel A starts loading but its response hangs…
+      const loadA = TestBed.runInInjectionContext(() => store.loadMessages('1', 'A'));
+
+      // …the user switches to channel B, which resolves first.
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: 'b1', channelId: 'B' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', 'B'));
+
+      // A's late response must not clobber B's list.
+      resolveA({ messages: [makeMsg({ messageId: 'a1', channelId: 'A' })], degraded: false });
+      await loadA;
+
+      expect(store.activeChannelId()).toBe('B');
+      expect(store.messages().map((m) => m.messageId)).toEqual(['b1']);
+      expect(store.isLoading()).toBe(false);
+    });
+
+    it('switching to an uncached channel clears the previous channel’s messages immediately', async () => {
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: 'a1', channelId: 'A' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', 'A'));
+
+      let resolveB!: (v: unknown) => void;
+      service.getMessages.mockImplementationOnce(() => new Promise((res) => (resolveB = res)));
+      const load = TestBed.runInInjectionContext(() => store.loadMessages('1', 'B'));
+
+      // A's content must never bleed into B's view while B is loading.
+      expect(store.messages()).toEqual([]);
+
+      resolveB({ messages: [], degraded: false });
+      await load;
+    });
+
+    it('re-opening a channel paints its cached list instantly, then the fresh fetch replaces it', async () => {
+      // Open A (fills the list), then switch to B (stashes A into the cache).
+      service.getMessages.mockResolvedValueOnce({
+        messages: [makeMsg({ messageId: 'a1', channelId: 'A' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', 'A'));
+      service.getMessages.mockResolvedValueOnce({ messages: [], degraded: false });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', 'B'));
+
+      // Back to A: the cached message shows synchronously, before the fetch resolves.
+      let resolveA!: (v: unknown) => void;
+      service.getMessages.mockImplementationOnce(() => new Promise((res) => (resolveA = res)));
+      const load = TestBed.runInInjectionContext(() => store.loadMessages('1', 'A'));
+      expect(store.messages().map((m) => m.messageId)).toEqual(['a1']);
+
+      // The fresh fetch stays authoritative and replaces the cached paint.
+      resolveA({
+        messages: [makeMsg({ messageId: 'a2', channelId: 'A' }), makeMsg({ messageId: 'a1', channelId: 'A' })],
+        degraded: false,
+      });
+      await load;
+      expect(store.messages().map((m) => m.messageId)).toEqual(['a1', 'a2']);
+    });
   });
 
   describe('sendMessage() — optimistic flow', () => {
