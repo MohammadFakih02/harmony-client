@@ -2,15 +2,20 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
+import { Channel, ChannelCategory } from '../../../core/models/channel.models';
+import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { MuteStore } from '../../../core/stores/mute.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import {
@@ -21,6 +26,7 @@ import {
 } from '../../../core/models/direct-message.models';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
+import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
@@ -41,6 +47,16 @@ interface ExpiryOption {
   minutes: number | null; // null = don't clear
 }
 
+/** Mute durations offered in the channel context menu (null = until manually unmuted). */
+const MUTE_DURATIONS: { label: string; minutes: number | null }[] = [
+  { label: 'For 15 Minutes', minutes: 15 },
+  { label: 'For 1 Hour', minutes: 60 },
+  { label: 'For 3 Hours', minutes: 180 },
+  { label: 'For 8 Hours', minutes: 480 },
+  { label: 'For 24 Hours', minutes: 1440 },
+  { label: 'Until I turn it back on', minutes: null },
+];
+
 @Component({
   selector: 'app-channel-sidebar',
   standalone: true,
@@ -51,7 +67,9 @@ interface ExpiryOption {
     UiIconButton,
     FormsModule,
     OverlayModule,
+    DragDropModule,
     GroupDmModal,
+    ChannelSettingsModal,
     InvitePeopleModal,
   ],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
@@ -66,9 +84,76 @@ export class ChannelSidebar {
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
   protected readonly dmStore = inject(DmStore);
+  protected readonly muteStore = inject(MuteStore);
   protected readonly nicknameStore = inject(NicknameStore);
   protected readonly guildNotif = inject(GuildNotificationSettingsStore);
+  private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
+
+  /** The channel being edited in the settings modal (right-click → Edit Channel), or null. */
+  protected readonly editingChannel = signal<Channel | null>(null);
+
+  /** Right-click a channel row → Mute (any member) + Edit/Delete (ManageChannels). */
+  protected openChannelMenu(event: MouseEvent, channel: Channel): void {
+    const entries: ContextMenuEntry[] = [];
+
+    // Mute — a personal preference, so every member gets it.
+    if (this.muteStore.isMuted('channel', channel.id)) {
+      entries.push({
+        label: 'Unmute Channel',
+        icon: 'fa-bell',
+        action: () => void this.muteStore.remove('channel', channel.id),
+      });
+    } else {
+      entries.push({
+        label: 'Mute Channel',
+        icon: 'fa-bell-slash',
+        children: MUTE_DURATIONS.map((d) => ({
+          label: d.label,
+          action: () => void this.muteStore.mute('channel', channel.id, d.minutes),
+        })),
+      });
+    }
+
+    if (this.canManageChannels()) {
+      entries.push(
+        { separator: true },
+        {
+          label: 'Edit Channel',
+          icon: 'fa-pen',
+          action: () => this.editingChannel.set(channel),
+        },
+        {
+          label: 'Delete Channel',
+          icon: 'fa-trash',
+          danger: true,
+          action: () => void this.deleteChannel(channel),
+        },
+      );
+    }
+
+    this.contextMenu.open(event, entries);
+  }
+
+  private async deleteChannel(channel: Channel): Promise<void> {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    if (!window.confirm(`Delete #${channel.name}? This can't be undone.`)) return;
+    const wasActive = this.channelStore.selectedChannelId() === channel.id;
+    try {
+      await this.channelStore.deleteChannel(guildId, channel.id);
+      if (wasActive) {
+        const fallback = this.channelStore.resolveDefaultChannel(guildId);
+        void this.router.navigate(
+          fallback
+            ? ['/app/guilds', guildId, 'channels', fallback]
+            : ['/app/guilds', guildId],
+        );
+      }
+    } catch {
+      // Best-effort — the store reverts its optimistic removal on failure.
+    }
+  }
 
   /** DM display name: group name (or joined member names) / the 1:1 peer's friend-nickname ?? username. */
   protected dmDisplayName(dm: DirectMessageChannel): string {
@@ -95,6 +180,18 @@ export class ChannelSidebar {
   protected readonly isGuildOwner = computed(
     () => this.guildStore.selectedGuild()?.ownerId === this.auth.currentUser()?.id,
   );
+
+  /** Drag-reorder within a category group (ManageChannels; the drop list is disabled otherwise). */
+  protected onChannelDrop(event: CdkDragDrop<unknown>, category: ChannelCategory): void {
+    if (event.previousIndex === event.currentIndex) return;
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    const ids = category.channels.map((c) => c.id);
+    const [moved] = ids.splice(event.previousIndex, 1);
+    if (!moved) return;
+    ids.splice(event.currentIndex, 0, moved);
+    void this.channelStore.reorderChannels(guildId, ids);
+  }
 
   // Server dropdown (guild-header ▾) — a CDK overlay so it escapes the sidebar's overflow-hidden.
   // The single home for Invite / Create Channel / Server Settings / Leave (the top bar no longer
@@ -123,6 +220,24 @@ export class ChannelSidebar {
     this.showServerMenu.set(false);
     const guildId = this.guildStore.selectedGuildId();
     if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  }
+
+  /** Whether the active guild is muted (suppresses its unread emphasis + rail badge). */
+  protected readonly selectedGuildMuted = computed(() => {
+    const guildId = this.guildStore.selectedGuildId();
+    return !!guildId && this.muteStore.isMuted('guild', guildId);
+  });
+
+  muteServer(): void {
+    this.showServerMenu.set(false);
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.muteStore.mute('guild', guildId, null);
+  }
+
+  unmuteServer(): void {
+    this.showServerMenu.set(false);
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.muteStore.remove('guild', guildId);
   }
 
   /** Owner → delete the server; member → leave it. Both confirm first, then navigate home. */

@@ -13,6 +13,10 @@ export class BlockService {
     return firstValueFrom(this.http.get<BlockedUser[]>(`${this.base}/users/me/blocks`));
   }
 
+  block(userId: string): Promise<void> {
+    return firstValueFrom(this.http.post<void>(`${this.base}/users/${userId}/block`, {}));
+  }
+
   unblock(userId: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`${this.base}/users/${userId}/block`));
   }

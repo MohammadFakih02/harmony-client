@@ -35,6 +35,11 @@ export class DirectMessageService {
     return firstValueFrom(this.http.delete<void>(`${this.base}/dm/${channelId}/participants/me`));
   }
 
+  /** Renames a group DM (any participant); empty name clears back to the joined member names. */
+  rename(channelId: string, name: string): Promise<void> {
+    return firstValueFrom(this.http.patch<void>(`${this.base}/dm/${channelId}/name`, { name }));
+  }
+
   getMyDms(): Promise<DirectMessageChannel[]> {
     return firstValueFrom(this.http.get<DirectMessageChannel[]>(`${this.base}/dm`));
   }

@@ -1,75 +1,53 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, output } from '@angular/core';
 import { AuthService } from '../../../core/services/auth.service';
-import { ProfileModalService } from '../../../core/services/profile-modal.service';
-import { UserService } from '../../../core/services/user.service';
-import { UiAvatar, UiButton } from '../../../shared/ui';
-import { publicFileUrl } from '../../../shared/util/public-file-url';
+import { ProfileStore } from '../../../core/stores/profile.store';
+import { UiAvatar, UiButton, UiProfileBanner } from '../../../shared/ui';
 
-/** My Account — identity summary, the profile banner colour picker, Edit Profile + Log Out.
- *  Credential changes (password/email/username) are a separate future slice. The banner colour is
- *  a user-picked profile colour (PATCH /me) — independent of theme/role colours; a banner image
- *  (uploaded via Edit Profile) covers it when set. */
+/** My Account — identity summary + log out. Profile editing (avatar/banner/bio/DOB/colour) lives
+ *  in the Profile pane; the Edit Profile button switches to it inline. Credential changes
+ *  (password/email/username) are a separate future slice. */
 @Component({
   selector: 'app-account-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiAvatar, UiButton],
+  imports: [UiAvatar, UiButton, UiProfileBanner],
   template: `
     <h2 class="text-xl font-bold text-primary mb-5">My Account</h2>
 
     @if (auth.currentUser(); as me) {
-    <div class="rounded-lg bg-surface-2 overflow-hidden">
-      <div class="h-20" [style.background-color]="headerColor()">
-        @if (bannerImageUrl(); as banner) {
-        <img [src]="banner" alt="" class="w-full h-full object-cover" />
-        }
-      </div>
-      <div class="px-4 pb-4 -mt-8">
-        <div class="inline-block rounded-full ring-[6px] ring-surface-2">
-          <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="xl" ringClass="border-surface-2" />
+    <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden">
+      <ui-profile-banner
+        class="h-24"
+        [bannerKey]="profile()?.bannerKey ?? null"
+        [bannerColor]="profile()?.bannerColor ?? null"
+        [alt]="me.username"
+      />
+
+      <div class="px-4 pb-4">
+        <!-- Avatar overlapping the banner + Edit Profile on the card -->
+        <div class="relative z-10 flex items-end justify-between -mt-10">
+          <div class="inline-block rounded-full ring-[5px] ring-surface-2 bg-surface-2">
+            <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="2xl" ringClass="border-surface-2" />
+          </div>
+          <button
+            type="button"
+            class="mb-1.5 px-3 h-8 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-micro inline-flex items-center gap-1.5 shrink-0"
+            (click)="openProfile.emit()"
+          >
+            <i class="fas fa-pen text-2xs"></i> Edit Profile
+          </button>
         </div>
 
-        <div class="mt-3 rounded-lg bg-surface p-4 space-y-4">
-          <div>
+        <p class="mt-2.5 text-lg font-bold text-primary leading-tight truncate">{{ me.username }}</p>
+
+        <div class="mt-3 rounded-lg bg-surface border border-border-subtle divide-y divide-border-subtle">
+          <div class="px-3.5 py-3 min-w-0">
             <p class="text-2xs font-bold uppercase tracking-wider text-faint">Username</p>
-            <p class="text-sm text-primary mt-0.5">{{ me.username }}</p>
+            <p class="text-sm text-primary mt-0.5 truncate">{{ me.username }}</p>
           </div>
-          <div>
+          <div class="px-3.5 py-3 min-w-0">
             <p class="text-2xs font-bold uppercase tracking-wider text-faint">Email</p>
-            <p class="text-sm text-primary mt-0.5">{{ me.email }}</p>
-          </div>
-
-          <div>
-            <p class="text-2xs font-bold uppercase tracking-wider text-faint">Banner Colour</p>
-            <div class="mt-1.5 flex items-center gap-2">
-              <input
-                type="color"
-                class="w-9 h-7 rounded-md bg-surface-2 border border-border-subtle cursor-pointer disabled:opacity-50"
-                [value]="bannerColor() || '#5865f2'"
-                [disabled]="savingColor()"
-                (change)="pickColor($any($event.target).value)"
-              />
-              @if (bannerColor()) {
-              <span class="text-xs text-muted">{{ bannerColor() }}</span>
-              <button
-                type="button"
-                class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface-2 transition-micro"
-                [disabled]="savingColor()"
-                (click)="pickColor('')"
-              >
-                Clear
-              </button>
-              } @else {
-              <span class="text-xs text-faint">Default</span>
-              }
-            </div>
-            <p class="text-2xs text-faint mt-1">
-              Your profile banner colour. A banner image (set via Edit Profile) covers it.
-            </p>
-          </div>
-
-          <div class="pt-1">
-            <ui-button variant="ghost" size="sm" (click)="editProfile()">Edit Profile</ui-button>
+            <p class="text-sm text-primary mt-0.5 truncate">{{ me.email }}</p>
           </div>
         </div>
       </div>
@@ -89,44 +67,19 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
 })
 export class AccountSettings implements OnInit {
   protected readonly auth = inject(AuthService);
-  private readonly profileModal = inject(ProfileModalService);
-  private readonly userService = inject(UserService);
+  private readonly profileStore = inject(ProfileStore);
 
-  protected readonly bannerColor = signal<string | null>(null);
-  protected readonly bannerImageUrl = signal<string | null>(null);
-  protected readonly savingColor = signal(false);
+  /** Asks the settings shell to switch to the Profile pane (inline — no modal round-trip). */
+  readonly openProfile = output<void>();
 
-  /** Card-strip colour: the picked banner colour, else a neutral accent-ish default. */
-  protected headerColor(): string {
-    return this.bannerColor() ?? 'color-mix(in srgb, var(--color-accent) 30%, transparent)';
-  }
+  protected readonly profile = computed(() => {
+    const id = this.auth.currentUser()?.id;
+    return id ? this.profileStore.profileOf(id) : undefined;
+  });
 
   ngOnInit(): void {
-    void this.userService.getMe().then((me) => {
-      this.bannerColor.set(me.bannerColor);
-      this.bannerImageUrl.set(publicFileUrl(me.bannerKey));
-    }).catch(() => {
-      // fail-open — the picker just starts from the default
-    });
-  }
-
-  protected async pickColor(value: string): Promise<void> {
-    if (this.savingColor()) return;
-    const previous = this.bannerColor();
-    this.savingColor.set(true);
-    this.bannerColor.set(value || null);
-    try {
-      await this.userService.updateProfile({ bannerColor: value });
-    } catch {
-      this.bannerColor.set(previous); // revert on failure
-    } finally {
-      this.savingColor.set(false);
-    }
-  }
-
-  protected editProfile(): void {
     const id = this.auth.currentUser()?.id;
-    if (id) this.profileModal.open(id);
+    if (id) void this.profileStore.refresh(id);
   }
 
   protected logout(): void {

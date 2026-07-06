@@ -1,55 +1,40 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, UiProfileBanner, bannerGradient } from '../../../shared/ui';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
-import { UserService } from '../../../core/services/user.service';
-import { FileService } from '../../../core/services/file.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
+import { ProfileStore } from '../../../core/stores/profile.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { FriendStore } from '../../../core/stores/friend.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { ToastService } from '../../../core/services/toast.service';
-import { DmPrivacy, ageFromIso } from '../../../core/models/user.models';
 import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { snowflakeToDate } from '../../../shared/util/snowflake';
-import { publicFileUrl } from '../../../shared/util/public-file-url';
-
-interface ProfileView {
-  username: string;
-  avatarKey: string | null;
-  bannerKey: string | null;
-  bannerColor: string | null;
-  bio: string | null;
-  statusMessage: string | null;
-  age: number | null;
-  dmPrivacy: DmPrivacy;
-}
 
 const fmtDate = (d: Date | null): string | null =>
   d ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
 /**
  * Full-profile modal (the "View Full Profile" target from the user popout). Hosted once in the
- * shell, driven by {@link ProfileModalService}. Shows banner/avatar/bio/age/roles/member-since;
- * for yourself it offers an inline edit of bio + date of birth + banner colour (PATCH /me) and
- * avatar/banner image upload (user-scoped presign → PUT → confirm). The banner renders image >
- * picked colour > neutral default — never theme/role-derived.
+ * shell, driven by {@link ProfileModalService}, and **view-only** — profiles are read through the
+ * shared {@link ProfileStore} cache, and your own profile is edited in Settings ▸ Profile (the
+ * Edit Profile button routes there). Server/friend nicknames stay editable here: they're
+ * per-target, contextual settings, not profile fields.
  */
 @Component({
   selector: 'app-user-profile-modal',
   standalone: true,
-  imports: [UiAvatar, FormsModule],
+  imports: [UiAvatar, UiProfileBanner, FormsModule],
   templateUrl: './user-profile-modal.html',
 })
 export class UserProfileModal {
   protected readonly profileModal = inject(ProfileModalService);
-  private readonly userService = inject(UserService);
-  private readonly fileService = inject(FileService);
+  private readonly profileStore = inject(ProfileStore);
   private readonly auth = inject(AuthService);
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
@@ -60,26 +45,18 @@ export class UserProfileModal {
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
-  protected readonly loading = signal(true);
+  protected readonly loading = signal(false);
   protected readonly error = signal('');
-  protected readonly view = signal<ProfileView | null>(null);
-
-  // Edit state (self only).
-  protected readonly editing = signal(false);
-  protected readonly bioDraft = signal('');
-  protected readonly dobDraft = signal('');
-  protected readonly bannerColorDraft = signal(''); // '' = no colour picked
-  protected readonly saving = signal(false);
-  /** Which asset upload is in flight ('avatar' | 'banner'), or null. */
-  protected readonly uploadingAsset = signal<'avatar' | 'banner' | null>(null);
-  /** Resolves a banner storage key to its public URL (template helper). */
-  protected readonly bannerUrl = publicFileUrl;
-  private dob: string | null = null; // raw ISO DOB for the edit form
-  protected readonly today = new Date().toISOString().slice(0, 10);
 
   protected readonly userId = computed(() => this.profileModal.target()?.userId ?? null);
   protected readonly guildId = computed(() => this.profileModal.target()?.guildId ?? null);
   protected readonly isSelf = computed(() => this.userId() === this.auth.currentUser()?.id);
+
+  /** The shared cached profile — paints instantly on re-open while a refresh runs behind it. */
+  protected readonly view = computed(() => {
+    const id = this.userId();
+    return id ? (this.profileStore.profileOf(id) ?? null) : null;
+  });
 
   private readonly isFriend = computed(() => {
     const id = this.userId();
@@ -139,10 +116,9 @@ export class UserProfileModal {
   });
 
   /** Banner gradient fallback — the member's top coloured role, else the theme accent. */
-  protected readonly bannerStyle = computed(() => {
-    const c = this.roleChips().find((r) => r.color)?.color ?? 'var(--color-accent)';
-    return `linear-gradient(135deg, ${c} 0%, color-mix(in srgb, ${c} 55%, #000) 100%)`;
-  });
+  protected readonly bannerStyle = computed(() =>
+    bannerGradient(this.roleChips().find((r) => r.color)?.color),
+  );
 
   /** Nickname-aware display name: server nickname in a guild, private friend nickname elsewhere. */
   protected readonly displayName = computed(() => {
@@ -177,139 +153,23 @@ export class UserProfileModal {
   }
 
   private async load(userId: string): Promise<void> {
-    this.loading.set(true);
     this.error.set('');
-    this.editing.set(false);
-    this.view.set(null);
-    try {
-      if (userId === this.auth.currentUser()?.id) {
-        const me = await this.userService.getMe();
-        this.dob = me.dateOfBirth;
-        this.view.set({
-          username: me.username,
-          avatarKey: me.avatarKey,
-          bannerKey: me.bannerKey,
-          bannerColor: me.bannerColor,
-          bio: me.bio,
-          statusMessage: me.statusMessage,
-          age: ageFromIso(me.dateOfBirth),
-          dmPrivacy: me.dmPrivacy,
-        });
-      } else {
-        const p = await this.userService.getProfile(userId);
-        this.dob = null;
-        this.view.set({
-          username: p.username,
-          avatarKey: p.avatarKey,
-          bannerKey: p.bannerKey,
-          bannerColor: p.bannerColor,
-          bio: p.bio,
-          statusMessage: p.statusMessage,
-          age: p.age,
-          dmPrivacy: p.dmPrivacy,
-        });
-      }
-    } catch {
-      this.error.set('Could not load this profile.');
-    } finally {
-      this.loading.set(false);
-    }
+    this.editingServerNick.set(false);
+    this.editingFriendNick.set(false);
+    this.loading.set(!this.profileStore.profileOf(userId)); // cached copy paints instantly
+    const fresh = await this.profileStore.refresh(userId);
+    if (!fresh && !this.profileStore.profileOf(userId)) this.error.set('Could not load this profile.');
+    this.loading.set(false);
   }
 
   protected close(): void {
     this.profileModal.close();
   }
 
-  protected startEdit(): void {
-    this.bioDraft.set(this.view()?.bio ?? '');
-    this.dobDraft.set(this.dob ?? '');
-    this.bannerColorDraft.set(this.view()?.bannerColor ?? '');
-    this.error.set('');
-    this.editing.set(true);
-  }
-
-  protected cancelEdit(): void {
-    this.editing.set(false);
-  }
-
-  protected async save(): Promise<void> {
-    if (this.saving()) return;
-    this.saving.set(true);
-    this.error.set('');
-    try {
-      await this.userService.updateProfile({
-        bio: this.bioDraft(),
-        dateOfBirth: this.dobDraft(),
-        bannerColor: this.bannerColorDraft(), // '' clears it
-      });
-      const bio = this.bioDraft().trim() || null;
-      const dob = this.dobDraft() || null;
-      const bannerColor = this.bannerColorDraft() || null;
-      this.dob = dob;
-      this.view.update((v) => (v ? { ...v, bio, bannerColor, age: ageFromIso(dob) } : v));
-      this.editing.set(false);
-    } catch {
-      this.error.set('Could not save your profile. Check the date of birth.');
-    } finally {
-      this.saving.set(false);
-    }
-  }
-
-  // ---- avatar / banner image upload (self only) ----
-
-  private static readonly AssetTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-  private static readonly MaxAssetBytes = 10 * 1024 * 1024; // mirrors the server cap
-
-  protected async onAssetSelected(kind: 'avatar' | 'banner', event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = ''; // allow re-picking the same file
-    if (!file || this.uploadingAsset()) return;
-
-    if (!UserProfileModal.AssetTypes.includes(file.type)) {
-      this.toast.info('Use a png, jpeg, gif, or webp image.', 'fa-circle-exclamation');
-      return;
-    }
-    if (file.size > UserProfileModal.MaxAssetBytes) {
-      this.toast.info('Image must be 10 MB or smaller.', 'fa-circle-exclamation');
-      return;
-    }
-
-    this.uploadingAsset.set(kind);
-    try {
-      const presign = await this.userService.presignAsset(kind, {
-        filename: file.name,
-        contentType: file.type,
-        sizeBytes: file.size,
-      });
-      await this.fileService.upload(presign.uploadUrl, file);
-      const { key } = await this.userService.confirmAsset(kind, presign.fileId);
-
-      this.view.update((v) =>
-        v ? (kind === 'avatar' ? { ...v, avatarKey: key } : { ...v, bannerKey: key }) : v,
-      );
-      if (kind === 'avatar') this.auth.patchCurrentUser({ avatarKey: key });
-    } catch {
-      this.toast.info(`Could not upload the ${kind}.`, 'fa-circle-exclamation');
-    } finally {
-      this.uploadingAsset.set(null);
-    }
-  }
-
-  protected async removeAsset(kind: 'avatar' | 'banner'): Promise<void> {
-    if (this.uploadingAsset()) return;
-    this.uploadingAsset.set(kind);
-    try {
-      await this.userService.removeAsset(kind);
-      this.view.update((v) =>
-        v ? (kind === 'avatar' ? { ...v, avatarKey: null } : { ...v, bannerKey: null }) : v,
-      );
-      if (kind === 'avatar') this.auth.patchCurrentUser({ avatarKey: null });
-    } catch {
-      this.toast.info(`Could not remove the ${kind}.`, 'fa-circle-exclamation');
-    } finally {
-      this.uploadingAsset.set(null);
-    }
+  /** Your profile is edited in Settings ▸ Profile — one editor, no nested edit modes. */
+  protected editProfile(): void {
+    this.close();
+    void this.router.navigate(['/app/settings'], { queryParams: { tab: 'profile' } });
   }
 
   // ---- server nickname edit ----

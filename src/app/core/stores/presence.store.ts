@@ -40,12 +40,23 @@ export const PresenceStore = signalStore(
     myStatusExpiresAt: null,
     myStatusMessageExpiresAt: null,
   }),
-  withMethods((store, presence = inject(PresenceService), auth = inject(AuthService)) => ({
-    /** Reads presence (status + custom message) for a set of users and merges it in. */
-    async loadStatuses(userIds: string[]): Promise<void> {
-      if (userIds.length === 0) return;
+  withMethods((store, presence = inject(PresenceService), auth = inject(AuthService)) => {
+    // Ids already fetched (or in flight) — repeat loadStatuses calls with the same members
+    // (member-sidebar effect re-runs, /friends revisits) skip the round trip; live changes
+    // arrive via gateway events. `force: true` bypasses this (socket-recovery reconcile).
+    const requested = new Set<string>();
+
+    return {
+    /**
+     * Reads presence (status + custom message) for a set of users and merges it in.
+     * Deduped: ids already fetched or in flight are skipped unless `force` is set.
+     */
+    async loadStatuses(userIds: string[], opts?: { force?: boolean }): Promise<void> {
+      const ids = opts?.force ? userIds : userIds.filter((id) => !requested.has(id));
+      if (ids.length === 0) return;
+      for (const id of ids) requested.add(id);
       try {
-        const fetched = await presence.getStatuses(userIds);
+        const fetched = await presence.getStatuses(ids);
         const statuses: Record<string, string> = {};
         const messages: Record<string, string | null> = {};
         for (const [id, p] of Object.entries(fetched)) {
@@ -65,7 +76,9 @@ export const PresenceStore = signalStore(
           statusMessages: { ...store.statusMessages(), ...messages },
         });
       } catch {
-        // Fail open — absent statuses simply render as offline.
+        // Fail open — absent statuses simply render as offline. Un-mark the ids so a
+        // later call can retry the fetch.
+        for (const id of ids) requested.delete(id);
       }
     },
 
@@ -114,23 +127,36 @@ export const PresenceStore = signalStore(
       }
     },
 
+    /**
+     * Applies my durable profile (preferred status + custom message + expiries) — from the
+     * bootstrap payload or the /me fallback fetch. Also seeds my own effective status into the
+     * dot map so the member sidebar shows me online from the start, rather than defaulting to
+     * offline until my next change.
+     */
+    applyMyProfile(profile: {
+      preferredStatus: string;
+      statusMessage: string | null;
+      preferredStatusExpiresAt: number | null;
+      statusMessageExpiresAt: number | null;
+    }): void {
+      const myId = auth.currentUser()?.id;
+      patchState(store, {
+        myStatus: profile.preferredStatus,
+        myStatusMessage: profile.statusMessage,
+        myStatusExpiresAt: profile.preferredStatusExpiresAt,
+        myStatusMessageExpiresAt: profile.statusMessageExpiresAt,
+        ...(myId
+          ? { statuses: { ...store.statuses(), [myId]: effectiveOf(profile.preferredStatus) } }
+          : {}),
+      });
+    },
+
     /** Loads the current user's durable preferred status + custom message on startup. */
     async initMyStatus(): Promise<void> {
-      const myId = auth.currentUser()?.id;
       try {
-        const profile = await presence.getMyProfile();
-        patchState(store, {
-          myStatus: profile.preferredStatus,
-          myStatusMessage: profile.statusMessage,
-          myStatusExpiresAt: profile.preferredStatusExpiresAt,
-          myStatusMessageExpiresAt: profile.statusMessageExpiresAt,
-          // Seed our own effective status into the dot map so the member sidebar shows us
-          // online from the start, rather than defaulting to offline until our next change.
-          ...(myId
-            ? { statuses: { ...store.statuses(), [myId]: effectiveOf(profile.preferredStatus) } }
-            : {}),
-        });
+        this.applyMyProfile(await presence.getMyProfile());
       } catch {
+        const myId = auth.currentUser()?.id;
         patchState(store, {
           myStatus: 'online',
           ...(myId ? { statuses: { ...store.statuses(), [myId]: 'online' } } : {}),
@@ -177,7 +203,8 @@ export const PresenceStore = signalStore(
         patchState(store, { myStatusMessage: previous, myStatusMessageExpiresAt: previousExpiry });
       }
     },
-  })),
+    };
+  }),
   withHooks({
     // Own presence events off the gateway stream (self-status sync + others' member-list dots).
     onInit(store, gateway = inject(GatewayEvents)) {

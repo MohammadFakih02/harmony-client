@@ -4,6 +4,7 @@ import { MessageStore } from '../../../core/stores/message.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
+import { BlockStore } from '../../../core/stores/block.store';
 
 /**
  * "X is typing…" bar for the active channel. Resolves each typing user's display name from the
@@ -34,12 +35,17 @@ export class TypingIndicator {
   private readonly memberStore = inject(MemberStore);
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
+  private readonly blockStore = inject(BlockStore);
 
   private readonly names = computed<string[]>(() => {
     const channelId = this.messageStore.activeChannelId();
     if (!channelId) return [];
     const guildId = this.messageStore.activeGuildId();
-    return this.typingStore.typersOf(channelId).map((userId) => this.displayName(userId, guildId));
+    const blocked = this.blockStore.blockedIds();
+    return this.typingStore
+      .typersOf(channelId)
+      .filter((userId) => !blocked.has(userId))
+      .map((userId) => this.displayName(userId, guildId));
   });
 
   /** The "… is/are typing" sentence, or null when nobody's typing. */

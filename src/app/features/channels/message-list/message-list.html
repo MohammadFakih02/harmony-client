@@ -107,15 +107,26 @@
       @if (systemMessageType(group) === 'pin') {
       <i class="fas fa-thumbtack text-faint shrink-0"></i>
       <span class="min-w-0 flex items-center">
-        <span class="font-semibold text-primary mr-1">{{ authorName(group) }}</span> pinned a message to this channel.
+        <span class="font-semibold text-primary mr-1">{{ group.authorName }}</span> pinned a message to this channel.
       </span>
       } @else {
       <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
       <span class="min-w-0">
-        <span class="font-semibold text-primary">{{ authorName(group) }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
       </span>
       }
     </div>
+    } @else if (group.blocked && !revealedBlocked().has(group.firstMessageId)) {
+    <!-- Blocked author — collapsed bar, click to reveal this burst -->
+    <button
+      type="button"
+      class="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-faint hover:text-muted transition-micro select-none"
+      (click)="toggleBlockedReveal(group.firstMessageId)"
+    >
+      <i class="fas fa-eye-slash shrink-0"></i>
+      <span>{{ group.items.length }} blocked {{ group.items.length === 1 ? 'message' : 'messages' }}</span>
+      <span class="ml-auto text-2xs font-semibold uppercase tracking-wider shrink-0">Show</span>
+    </button>
     } @else {
     <div class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro">
     <ui-avatar
@@ -133,15 +144,25 @@
           cdkOverlayOrigin
           #authorOrigin="cdkOverlayOrigin"
           class="text-sm font-semibold leading-tight cursor-pointer hover:underline"
-          [class.text-primary]="!authorColor(group.userId)"
-          [style.color]="authorColor(group.userId)"
+          [class.text-primary]="!group.authorColor"
+          [style.color]="group.authorColor"
           (click)="openProfile(group, authorOrigin)"
           (contextmenu)="openAuthorMenu($event, group)"
-          >{{ authorName(group) }}</span
+          >{{ group.authorName }}</span
         >
         <span class="text-xs text-faint">{{ group.timestamp }}</span>
+        @if (group.blocked) {
+        <button
+          type="button"
+          class="text-2xs font-semibold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+          (click)="toggleBlockedReveal(group.firstMessageId)"
+        >
+          Hide
+        </button>
+        }
       </div>
-      @for (msg of group.messages; track msg.messageId) {
+      @for (item of group.items; track item.msg.messageId) {
+      @let msg = item.msg;
       <div class="relative group/msg" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
@@ -176,7 +197,7 @@
         </div>
         } @else {
         <!-- Reply preview (compact, clickable → jump to the referenced message) -->
-        @if (referencedPreview(msg); as ref) {
+        @if (item.preview; as ref) {
         <button
           type="button"
           class="flex items-center gap-1.5 max-w-full mb-0.5 text-xs text-faint hover:text-muted transition-micro"
@@ -234,7 +255,7 @@
         }
 
         <!-- Inline invite cards for any invite links in the message -->
-        @for (code of inviteCodesOf(msg); track code) {
+        @for (code of item.inviteCodes; track code) {
         <app-invite-embed [code]="code" />
         }
 

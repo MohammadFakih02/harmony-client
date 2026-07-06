@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
-import { UnreadCountPayload } from '../models/message.models';
+import { UnreadCountPayload, UnreadCountResponse } from '../models/message.models';
 import { MessageService } from '../services/message.service';
 
 interface UnreadState {
@@ -13,17 +13,21 @@ export const UnreadStore = signalStore(
   { providedIn: 'root' },
   withState<UnreadState>({ counts: {}, channelGuild: {}, loading: false }),
   withMethods((store, service = inject(MessageService)) => ({
+    /** Distributes a full unread snapshot (bootstrap payload or the /me/unread refresh). */
+    applyAll(responses: UnreadCountResponse[]): void {
+      const counts: Record<string, number> = {};
+      const channelGuild: Record<string, string> = {};
+      for (const r of responses) {
+        if (r.guildId != null) channelGuild[r.channelId] = r.guildId;
+        if (r.unreadCount > 0) counts[r.channelId] = r.unreadCount;
+      }
+      patchState(store, { counts, channelGuild, loading: false });
+    },
+
     async loadAll(): Promise<void> {
       patchState(store, { loading: true });
       try {
-        const responses = await service.getUnreadCounts();
-        const counts: Record<string, number> = {};
-        const channelGuild: Record<string, string> = {};
-        for (const r of responses) {
-          if (r.guildId != null) channelGuild[r.channelId] = r.guildId;
-          if (r.unreadCount > 0) counts[r.channelId] = r.unreadCount;
-        }
-        patchState(store, { counts, channelGuild, loading: false });
+        this.applyAll(await service.getUnreadCounts());
       } catch {
         patchState(store, { loading: false });
       }

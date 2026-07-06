@@ -16,7 +16,21 @@ interface MemberState {
 export const MemberStore = signalStore(
   { providedIn: 'root' },
   withState<MemberState>({ byGuild: {}, capsByGuild: {}, viewersByChannel: {}, loading: false }),
-  withMethods((store, service = inject(MemberService)) => ({
+  withMethods((store, service = inject(MemberService)) => {
+    // Dedupe concurrent loads for the same key (non-reactive — purely a stampede guard).
+    // On guild activate, shell + member-sidebar + message-input all call loadIfNeeded before
+    // the cache fills; without this each fires its own GET.
+    const inFlight = new Map<string, Promise<void>>();
+
+    const dedupe = (key: string, run: () => Promise<void>): Promise<void> => {
+      const existing = inFlight.get(key);
+      if (existing) return existing;
+      const promise = run().finally(() => inFlight.delete(key));
+      inFlight.set(key, promise);
+      return promise;
+    };
+
+    return {
     /** Returns the cached member list for a guild, or an empty array if not loaded yet. */
     membersOf(guildId: string): GuildMember[] {
       return store.byGuild()[guildId] ?? [];
@@ -27,16 +41,18 @@ export const MemberStore = signalStore(
       return store.capsByGuild()[guildId] ?? null;
     },
 
-    /** Fetches a guild's members once and caches them; a no-op if already cached. */
+    /** Fetches a guild's members once and caches them; a no-op if already cached or in flight. */
     async loadIfNeeded(guildId: string): Promise<void> {
       if (store.byGuild()[guildId]) return;
-      patchState(store, { loading: true });
-      try {
-        const members = await service.getMembers(guildId);
-        patchState(store, { byGuild: { ...store.byGuild(), [guildId]: members }, loading: false });
-      } catch {
-        patchState(store, { loading: false });
-      }
+      return dedupe(`members:${guildId}`, async () => {
+        patchState(store, { loading: true });
+        try {
+          const members = await service.getMembers(guildId);
+          patchState(store, { byGuild: { ...store.byGuild(), [guildId]: members }, loading: false });
+        } catch {
+          patchState(store, { loading: false });
+        }
+      });
     },
 
     /** Forces a refresh of a guild's members (used to reconcile after a socket reconnect). */
@@ -53,28 +69,32 @@ export const MemberStore = signalStore(
       return store.viewersByChannel()[channelId] ?? null;
     },
 
-    /** Fetches the channel's viewer id set once and caches it per channel; a no-op if cached. */
+    /** Fetches the channel's viewer id set once and caches it per channel; a no-op if cached or in flight. */
     async loadViewersIfNeeded(guildId: string, channelId: string): Promise<void> {
       if (store.viewersByChannel()[channelId]) return;
-      try {
-        const viewers = await service.getChannelViewers(guildId, channelId);
-        patchState(store, {
-          viewersByChannel: { ...store.viewersByChannel(), [channelId]: viewers },
-        });
-      } catch {
-        // Fail open — leave unset so the sidebar shows everyone rather than hiding members.
-      }
+      return dedupe(`viewers:${channelId}`, async () => {
+        try {
+          const viewers = await service.getChannelViewers(guildId, channelId);
+          patchState(store, {
+            viewersByChannel: { ...store.viewersByChannel(), [channelId]: viewers },
+          });
+        } catch {
+          // Fail open — leave unset so the sidebar shows everyone rather than hiding members.
+        }
+      });
     },
 
-    /** Fetches the caller's guild capabilities once and caches them; a no-op if already cached. */
+    /** Fetches the caller's guild capabilities once and caches them; a no-op if cached or in flight. */
     async loadCapabilitiesIfNeeded(guildId: string): Promise<void> {
       if (store.capsByGuild()[guildId]) return;
-      try {
-        const caps = await service.getCapabilities(guildId);
-        patchState(store, { capsByGuild: { ...store.capsByGuild(), [guildId]: caps } });
-      } catch {
-        // Leave unset → the UI hides moderation actions (fail-closed for management UI).
-      }
+      return dedupe(`caps:${guildId}`, async () => {
+        try {
+          const caps = await service.getCapabilities(guildId);
+          patchState(store, { capsByGuild: { ...store.capsByGuild(), [guildId]: caps } });
+        } catch {
+          // Leave unset → the UI hides moderation actions (fail-closed for management UI).
+        }
+      });
     },
 
     /** Adds a member to local state (invite redeem via SignalR). Cache-guarded + idempotent — a
@@ -172,7 +192,8 @@ export const MemberStore = signalStore(
       await service.setNickname(guildId, userId, nickname);
       this.applyMemberNickname(guildId, userId, nickname);
     },
-  })),
+    };
+  }),
   withHooks({
     // Own member moderation/role events off the gateway stream. Each apply-method cache-guards on
     // the guild being loaded, so events for unloaded guilds are ignored. `Kicked` targets only the

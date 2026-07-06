@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -9,17 +10,19 @@ import { UiModal } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { MuteStore } from '../../../core/stores/mute.store';
 import {
   DirectMessageChannel,
   dmLabel,
   dmPeer,
 } from '../../../core/models/direct-message.models';
 import { JoinServerModal } from '../../guilds/join-server-modal/join-server-modal';
+import { publicFileUrl } from '../../../shared/util/public-file-url';
 
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule, UiModal],
+  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule, DragDropModule, UiModal],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',
@@ -29,7 +32,18 @@ export class GuildSidebar {
   protected readonly guildStore = inject(GuildStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
+  protected readonly muteStore = inject(MuteStore);
   private readonly router = inject(Router);
+
+  /** Resolves a guild icon storage key to its public URL (raw keys don't load directly). */
+  protected guildIconUrl(iconKey: string): string {
+    return publicFileUrl(iconKey)!;
+  }
+
+  /** A muted guild shows no unread emphasis (dimmed icon, no count badge) in the rail. */
+  protected isGuildMuted(guildId: string): boolean {
+    return this.muteStore.isMuted('guild', guildId);
+  }
 
   // Reactive current URL — drives which rail icon shows as selected. We derive the active guild
   // from the URL (not GuildStore.selectedGuildId, which stays stale on /friends), so that entering
@@ -109,6 +123,11 @@ export class GuildSidebar {
     ),
   );
 
+  /** Drag-reorder the rail — optimistic store move + persisted order (reverts on failure). */
+  protected onGuildDrop(event: CdkDragDrop<unknown>): void {
+    void this.guildStore.reorderGuilds(event.previousIndex, event.currentIndex);
+  }
+
   navigateToGuild(guildId: string): void {
     // Already viewing this guild → do nothing (re-navigating would blank the open
     // channel). Check the URL, not selectedGuildId (which stays stale on /friends).
@@ -126,6 +145,11 @@ export class GuildSidebar {
   chooseJoin(): void {
     this.showAddMenu.set(false);
     this.showJoinModal.set(true);
+  }
+
+  chooseDiscover(): void {
+    this.showAddMenu.set(false);
+    void this.router.navigate(['/app/discover']);
   }
 
   openCreateModal(): void {

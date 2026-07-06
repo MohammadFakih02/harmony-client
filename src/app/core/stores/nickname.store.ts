@@ -21,6 +21,11 @@ export const NicknameStore = signalStore(
       return store.byUser()[userId] ?? null;
     },
 
+    /** Distributes the bootstrap payload's nickname map and marks the store loaded (no fetch). */
+    setAll(byUser: Record<string, string>): void {
+      patchState(store, { byUser, loaded: true });
+    },
+
     /** Loads the caller's whole nickname map once; a no-op if already loaded. */
     async load(): Promise<void> {
       if (store.loaded()) return;
