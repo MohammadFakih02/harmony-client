@@ -9,7 +9,10 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
     <button
       type="button"
       class="flex w-full items-center gap-4 py-3 text-left"
-      (click)="toggled.emit(!checked())"
+      [disabled]="disabled()"
+      [class.opacity-50]="disabled()"
+      [class.cursor-not-allowed]="disabled()"
+      (click)="!disabled() && toggled.emit(!checked())"
     >
       <span class="flex-1 min-w-0">
         <span class="block text-sm font-semibold text-primary">{{ label() }}</span>
@@ -34,5 +37,6 @@ export class SettingsToggle {
   readonly label = input.required<string>();
   readonly description = input<string>('');
   readonly checked = input.required<boolean>();
+  readonly disabled = input(false);
   readonly toggled = output<boolean>();
 }

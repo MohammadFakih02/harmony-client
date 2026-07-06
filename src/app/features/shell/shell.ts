@@ -8,6 +8,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { GatewayEvents } from '../../core/hub/gateway-events';
 import { IdleService } from '../../core/services/idle.service';
 import { BootstrapService } from '../../core/services/bootstrap.service';
+import { PushService } from '../../core/services/push.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
@@ -168,6 +169,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly muteStore = inject(MuteStore);
   private readonly profileStore = inject(ProfileStore);
   private readonly bootstrap = inject(BootstrapService);
+  private readonly pushService = inject(PushService);
   private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
@@ -313,6 +315,10 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Record desired membership in every guild so channel CRUD events arrive for all servers; the
     // service joins them now if connected and re-flushes them automatically on each reconnect.
     await this.joinAllGuilds();
+
+    // Silent push re-sync: browser push subscriptions rotate, so refresh the server's copy
+    // for users who already granted permission. Never prompts; fire-and-forget.
+    void this.pushService.syncIfGranted();
   }
 
   /**
