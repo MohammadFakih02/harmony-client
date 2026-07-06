@@ -1,13 +1,16 @@
 import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AccountSettings } from './pages/account-settings';
+import { ProfileSettings } from './pages/profile-settings';
 import { AppearanceSettings } from './pages/appearance-settings';
 import { AccessibilitySettings } from './pages/accessibility-settings';
 import { NotificationSettings } from './pages/notification-settings';
 import { PrivacySettings } from './pages/privacy-settings';
 
-type Tab = 'account' | 'privacy' | 'notifications' | 'appearance' | 'accessibility';
+type Tab = 'account' | 'profile' | 'privacy' | 'notifications' | 'appearance' | 'accessibility';
+
+const TABS: readonly Tab[] = ['account', 'profile', 'privacy', 'notifications', 'appearance', 'accessibility'];
 
 interface NavGroup {
   title: string;
@@ -26,6 +29,7 @@ interface NavGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AccountSettings,
+    ProfileSettings,
     AppearanceSettings,
     AccessibilitySettings,
     NotificationSettings,
@@ -37,13 +41,20 @@ export class Settings {
   private readonly location = inject(Location);
   private readonly router = inject(Router);
 
-  protected readonly activeTab = signal<Tab>('account');
+  // Deep-linkable pane (`/app/settings?tab=profile`) — how "Edit Profile" buttons land here.
+  protected readonly activeTab = signal<Tab>(
+    (() => {
+      const tab = inject(ActivatedRoute).snapshot.queryParamMap.get('tab') as Tab | null;
+      return tab && TABS.includes(tab) ? tab : 'account';
+    })(),
+  );
 
   protected readonly groups: NavGroup[] = [
     {
       title: 'User Settings',
       items: [
         { id: 'account', label: 'My Account', icon: 'fa-user' },
+        { id: 'profile', label: 'Profile', icon: 'fa-id-badge' },
         { id: 'privacy', label: 'Privacy & Safety', icon: 'fa-shield-halved' },
         { id: 'notifications', label: 'Notifications', icon: 'fa-bell' },
       ],

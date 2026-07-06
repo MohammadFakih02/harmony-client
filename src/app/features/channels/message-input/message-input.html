@@ -115,7 +115,7 @@
       class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm py-2.5 pr-4 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
       [class.pl-4]="!canAttach()"
       [class.pl-1]="canAttach()"
-      [placeholder]="'Message #' + channelName()"
+      [placeholder]="cooldownRemaining() > 0 ? 'Slowmode active — wait ' + cooldownRemaining() + 's' : 'Message #' + channelName()"
       [ngModel]="draft()"
       (ngModelChange)="onDraftInput($event)"
       (keydown)="onKeydown($event)"

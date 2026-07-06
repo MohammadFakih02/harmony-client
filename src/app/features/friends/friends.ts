@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { BlockStore } from '../../core/stores/block.store';
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { NicknameStore } from '../../core/stores/nickname.store';
@@ -41,6 +42,7 @@ export class Friends {
     roleStore: inject(RoleStore),
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    blockStore: inject(BlockStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: this.router,

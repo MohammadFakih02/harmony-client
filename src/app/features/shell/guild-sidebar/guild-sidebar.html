@@ -45,23 +45,31 @@
     <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
   </div>
 
-  <!-- Guild list -->
-  <div class="flex flex-col items-center gap-2 w-full flex-1">
+  <!-- Guild list — drag to reorder (persisted as a personal preference) -->
+  <div
+    class="flex flex-col items-center gap-2 w-full flex-1"
+    cdkDropList
+    (cdkDropListDropped)="onGuildDrop($event)"
+  >
     @for (guild of guildStore.guilds(); track guild.id) {
-    @let guildUnread = unreadStore.guildUnreadCount(guild.id);
+    @let muted = isGuildMuted(guild.id);
+    @let guildUnread = muted ? 0 : unreadStore.guildUnreadCount(guild.id);
     <button
+      cdkDrag
+      cdkDragLockAxis="y"
       class="guild-icon text-muted hover:text-primary transition-micro relative"
       [class.active]="activeRailGuildId() === guild.id"
       [class.unread]="guildUnread > 0"
       [class.bg-accent]="activeRailGuildId() === guild.id"
       [class.text-white]="activeRailGuildId() === guild.id"
       [class.bg-surface-2]="activeRailGuildId() !== guild.id"
+      [class.opacity-45]="muted && activeRailGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"
     >
       @if (guild.iconKey) {
         <img
-          [src]="guild.iconKey"
+          [src]="guildIconUrl(guild.iconKey)"
           [alt]="guild.name"
           class="w-full h-full object-cover rounded-[inherit]"
         />
@@ -116,6 +124,12 @@
           (click)="chooseJoin()"
         >
           <i class="fas fa-right-to-bracket text-accent w-4"></i> Join a Server
+        </button>
+        <button
+          class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
+          (click)="chooseDiscover()"
+        >
+          <i class="fas fa-compass text-warning w-4"></i> Discover Servers
         </button>
       </div>
     </ng-template>

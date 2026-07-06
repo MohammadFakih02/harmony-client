@@ -56,6 +56,23 @@
       >
         <i class="fas fa-gear w-4 text-center text-faint"></i> Server Settings
       </button>
+      @if (selectedGuildMuted()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="unmuteServer()"
+      >
+        <i class="fas fa-bell w-4 text-center text-faint"></i> Unmute Server
+      </button>
+      } @else {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="muteServer()"
+      >
+        <i class="fas fa-bell-slash w-4 text-center text-faint"></i> Mute Server
+      </button>
+      }
       <div class="h-px bg-border-subtle my-1"></div>
       <button
         type="button"
@@ -120,19 +137,30 @@
       </div>
       }
 
-      <!-- Channels -->
+      <!-- Channels — drag to reorder when you have ManageChannels -->
       @if (!category.collapsed) {
-      <div class="flex flex-col gap-0.5 px-2 animate-slide-down">
+      <div
+        class="flex flex-col gap-0.5 px-2 animate-slide-down"
+        cdkDropList
+        [cdkDropListDisabled]="!canManageChannels()"
+        (cdkDropListDropped)="onChannelDrop($event, category)"
+      >
         @for (channel of category.channels; track channel.id) {
         <!-- The channel you're viewing never shows an unread badge (you're reading it). -->
-        @let unread = channelStore.selectedChannelId() === channel.id ? 0 : (unreadStore.counts()[channel.id] || 0);
+        @let muted = muteStore.isMuted('channel', channel.id);
+        <!-- A muted channel shows no unread emphasis (dimmed, no pill/badge), Discord-style. -->
+        @let unread = channelStore.selectedChannelId() === channel.id || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
         <a
+          cdkDrag
+          cdkDragLockAxis="y"
           [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
           routerLinkActive="bg-surface-3 text-primary"
           class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
           [class.font-semibold]="unread > 0"
           [class.text-primary]="unread > 0"
+          [class.opacity-45]="muted"
           [attr.aria-label]="'Open ' + channel.name"
+          (contextmenu)="openChannelMenu($event, channel)"
         >
           <!-- Unread pill at the sidebar edge (Discord's unread marker) -->
           @if (unread > 0) {
@@ -499,6 +527,11 @@
 <!-- Invite People (from the Server dropdown) -->
 @if (showInviteModal() && guildStore.selectedGuildId(); as guildId) {
 <app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
+}
+
+<!-- Edit Channel (from the channel right-click menu) -->
+@if (editingChannel(); as channel) {
+<app-channel-settings-modal [channel]="channel" (close)="editingChannel.set(null)" />
 }
 
 <!-- New Group DM Modal -->

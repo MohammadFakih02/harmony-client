@@ -7,6 +7,7 @@ import {
   inject,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -129,10 +130,35 @@ export class MessageInput implements OnDestroy {
   // MemberUpdated only when set / manually cleared — never on natural expiry — so we re-evaluate
   // against the clock. Gated on an active self-timeout so it idles once the timeout is gone.
   private readonly now = signal(Date.now());
+  // 1s so the slowmode countdown ticks smoothly; gated on an active timeout OR cooldown so it idles.
   private readonly ticker = setInterval(() => {
-    const until = this.myTimeoutUntil();
-    if (until != null && until > this.now()) this.now.set(Date.now());
-  }, 5000);
+    const timeout = this.myTimeoutUntil();
+    const cooldown = this.cooldownUntil();
+    if ((timeout != null && timeout > this.now()) || (cooldown != null && cooldown > this.now())) {
+      this.now.set(Date.now());
+    }
+  }, 1000);
+
+  // Slowmode — the active channel's per-user cooldown (0 = off / DM / moderator). Moderators
+  // (ManageMessages or ManageChannels) are exempt, matching the server gate.
+  private readonly slowmodeSeconds = computed(() => {
+    const channel = this.channelStore.selectedChannel();
+    if (!channel || this.isDm()) return 0;
+    const caps = this.channelStore.currentCapabilities();
+    if (caps?.canManageMessages || caps?.canManageChannels) return 0;
+    return channel.slowmodeSeconds ?? 0;
+  });
+
+  // When the current cooldown ends (unix-ms), or null. Set after each successful send; reset on
+  // channel switch (the effect in the constructor).
+  private readonly cooldownUntil = signal<number | null>(null);
+
+  /** Remaining whole seconds of the slowmode cooldown, or 0 when not cooling down. */
+  protected readonly cooldownRemaining = computed(() => {
+    const until = this.cooldownUntil();
+    if (until == null) return 0;
+    return Math.max(0, Math.ceil((until - this.now()) / 1000));
+  });
 
   // The caller's own member record in the active guild (null in a DM, or before members load).
   // `communicationDisabledUntil` here tracks live via the MemberUpdated gateway event, so a timeout
@@ -198,7 +224,8 @@ export class MessageInput implements OnDestroy {
       (this.draft().trim().length > 0 || this.hasConfirmedAttachments()) &&
       !this.sending() &&
       !this.uploading() &&
-      this.canSendInChannel(),
+      this.canSendInChannel() &&
+      this.cooldownRemaining() === 0,
   );
 
   constructor() {
@@ -214,6 +241,13 @@ export class MessageInput implements OnDestroy {
       if (this.messageStore.replyTarget()) {
         queueMicrotask(() => this.draftInput()?.nativeElement.focus());
       }
+    });
+
+    // A slowmode cooldown is per-channel — clear it when switching channels so a new channel
+    // isn't blocked by the previous one's countdown.
+    effect(() => {
+      this.messageStore.activeChannelId();
+      untracked(() => this.cooldownUntil.set(null));
     });
   }
 
@@ -337,6 +371,13 @@ export class MessageInput implements OnDestroy {
 
     try {
       await this.messageStore.sendMessage(content, fileIds, replyToId);
+      // Start the slowmode cooldown optimistically (the server enforces the real gate; this just
+      // reflects it in the UI). Moderators/DMs have slowmodeSeconds() === 0, so no cooldown.
+      const cooldown = this.slowmodeSeconds();
+      if (cooldown > 0) {
+        this.now.set(Date.now());
+        this.cooldownUntil.set(Date.now() + cooldown * 1000);
+      }
     } finally {
       this.sending.set(false);
       toRevoke.forEach((s) => URL.revokeObjectURL(s.previewUrl));

@@ -19,10 +19,18 @@ const makeChannel = (overrides: Partial<Channel> & { id: string; name: string })
 describe('ChannelStore', () => {
   let store: InstanceType<typeof ChannelStore>;
   let guildStore: InstanceType<typeof GuildStore>;
-  let service: { getGuildChannels: ReturnType<typeof vi.fn> };
+  let service: {
+    getGuildChannels: ReturnType<typeof vi.fn>;
+    getCapabilities: ReturnType<typeof vi.fn>;
+    reorder: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
-    service = { getGuildChannels: vi.fn() };
+    service = {
+      getGuildChannels: vi.fn(),
+      getCapabilities: vi.fn(),
+      reorder: vi.fn().mockResolvedValue([]),
+    };
     TestBed.configureTestingModule({
       providers: [
         ChannelStore,
@@ -39,6 +47,60 @@ describe('ChannelStore', () => {
   it('starts with no channels and no selection', () => {
     expect(store.currentCategories()).toEqual([]);
     expect(store.selectedChannelId()).toBeNull();
+  });
+
+  it('loadCapabilities() applies a cached value instantly on re-open, then the fetch refreshes it', async () => {
+    const caps = {
+      canView: true, canSend: true, canAttach: true, canManageMessages: false,
+      canManageChannels: false, canPin: false, timedOut: false,
+    };
+    service.getCapabilities.mockResolvedValue(caps);
+    store.selectChannel('c1');
+    await TestBed.runInInjectionContext(() => store.loadCapabilities('1', 'c1'));
+    expect(store.currentCapabilities()).toEqual(caps);
+
+    // Re-open: the cached value is applied synchronously (no null flash → no composer
+    // flicker) while the fresh fetch is still in flight.
+    let resolveFetch!: (v: unknown) => void;
+    service.getCapabilities.mockImplementationOnce(() => new Promise((res) => (resolveFetch = res)));
+    const load = TestBed.runInInjectionContext(() => store.loadCapabilities('1', 'c1'));
+    expect(store.currentCapabilities()).toEqual(caps);
+
+    const fresh = { ...caps, canSend: false };
+    resolveFetch(fresh);
+    await load;
+    expect(store.currentCapabilities()).toEqual(fresh);
+  });
+
+  it('reorderChannels() re-sorts optimistically and persists 0..n positions', async () => {
+    service.getGuildChannels.mockResolvedValue([
+      makeChannel({ id: '10', name: 'general', guildId: '1', position: 0 }),
+      makeChannel({ id: '11', name: 'random', guildId: '1', position: 1 }),
+      makeChannel({ id: '12', name: 'dev', guildId: '1', position: 2 }),
+    ]);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+
+    await TestBed.runInInjectionContext(() => store.reorderChannels('1', ['12', '10', '11']));
+
+    expect(store.channelsByGuild()['1'].map((c) => c.id)).toEqual(['12', '10', '11']);
+    expect(service.reorder).toHaveBeenCalledWith('1', [
+      { channelId: '12', position: 0 },
+      { channelId: '10', position: 1 },
+      { channelId: '11', position: 2 },
+    ]);
+  });
+
+  it('reorderChannels() reverts the move when persisting fails', async () => {
+    service.getGuildChannels.mockResolvedValue([
+      makeChannel({ id: '10', name: 'general', guildId: '1', position: 0 }),
+      makeChannel({ id: '11', name: 'random', guildId: '1', position: 1 }),
+    ]);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    service.reorder.mockRejectedValue(new Error('403'));
+
+    await TestBed.runInInjectionContext(() => store.reorderChannels('1', ['11', '10']));
+
+    expect(store.channelsByGuild()['1'].map((c) => c.id)).toEqual(['10', '11']);
   });
 
   it('loadChannels() stores channels keyed by guildId', async () => {

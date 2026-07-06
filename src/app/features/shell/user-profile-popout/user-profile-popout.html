@@ -1,6 +1,12 @@
 <div class="w-72 rounded-xl bg-surface shadow-modal border border-border overflow-hidden animate-slide-up">
-  <!-- Banner — top role colour (or accent) gradient -->
-  <div class="h-20" [style.background]="bannerStyle()"></div>
+  <!-- Banner: image > picked colour > top-role (or accent) gradient -->
+  <ui-profile-banner
+    class="h-20"
+    [bannerKey]="profile()?.bannerKey ?? null"
+    [bannerColor]="profile()?.bannerColor ?? null"
+    [fallback]="bannerStyle()"
+    [alt]="displayName()"
+  />
 
   <div class="px-4">
     <!-- Avatar overlapping the banner + owner badge (relative z-10 keeps it above the banner) -->
@@ -41,6 +47,14 @@
     }
 
     <div class="my-3 h-px bg-border-subtle"></div>
+
+    <!-- About me (from the shared profile cache) -->
+    @if (profile()?.bio; as bio) {
+    <div class="mb-3">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">About Me</p>
+      <p class="text-xs text-muted whitespace-pre-wrap wrap-break-word line-clamp-6">{{ bio }}</p>
+    </div>
+    }
 
     <!-- Roles -->
     @if (roleChips().length) {

@@ -1,11 +1,13 @@
-import { Component, computed, effect, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnDestroy, OnInit, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith, Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GatewayEvents } from '../../core/hub/gateway-events';
 import { IdleService } from '../../core/services/idle.service';
+import { BootstrapService } from '../../core/services/bootstrap.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { ChannelStore } from '../../core/stores/channel.store';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
@@ -22,23 +24,35 @@ import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
 import { NicknameStore } from '../../core/stores/nickname.store';
 import { NotificationStore } from '../../core/stores/notification.store';
+import { BlockStore } from '../../core/stores/block.store';
+import { MuteStore } from '../../core/stores/mute.store';
+import { ProfileStore } from '../../core/stores/profile.store';
 import { GuildSidebar } from './guild-sidebar/guild-sidebar';
 import { ChannelSidebar } from './channel-sidebar/channel-sidebar';
 import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
-import { InvitePeopleModal } from '../guilds/invite-people-modal/invite-people-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
-import { UiAvatar, UiIconButton, Lightbox, ContextMenu } from '../../shared/ui';
+import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
+  DirectMessageChannel,
   DmParticipant,
   dmLabel,
   dmPeer as oneToOnePeer,
 } from '../../core/models/direct-message.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
+import { ProfileModalService } from '../../core/services/profile-modal.service';
+import { LocalSettingsStore } from '../../core/stores/local-settings.store';
+import { ResizeHandle } from '../../shared/directives/resize-handle.directive';
+import {
+  CHANNEL_SIDEBAR_MAX,
+  CHANNEL_SIDEBAR_MIN,
+  RIGHT_SIDEBAR_MAX,
+  RIGHT_SIDEBAR_MIN,
+} from '../../core/models/settings.models';
 
 @Component({
   selector: 'app-shell',
@@ -49,23 +63,31 @@ import { ToastService } from '../../core/services/toast.service';
     ChannelSidebar,
     MemberSidebar,
     NotificationBell,
-    InvitePeopleModal,
     GroupDmModal,
     UiAvatar,
     UiIconButton,
+    UiProfileBanner,
     Lightbox,
     ToastContainer,
     UserProfileModal,
     ContextMenu,
     OverlayModule,
+    FormsModule,
     PinsPanel,
     SearchPanel,
+    ResizeHandle,
   ],
   templateUrl: './shell.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {
   protected readonly signalR = inject(SignalRService);
   private readonly auth = inject(AuthService);
+  // Drag-resizable panel widths (persisted).
+  protected readonly settings = inject(LocalSettingsStore);
+  protected readonly channelSidebarMin = CHANNEL_SIDEBAR_MIN;
+  protected readonly channelSidebarMax = CHANNEL_SIDEBAR_MAX;
+  protected readonly rightSidebarMin = RIGHT_SIDEBAR_MIN;
+  protected readonly rightSidebarMax = RIGHT_SIDEBAR_MAX;
   private readonly gateway = inject(GatewayEvents);
   protected readonly showMembers = signal(true);
   private readonly router = inject(Router);
@@ -81,8 +103,6 @@ export class ShellComponent implements OnInit, OnDestroy {
   );
   protected readonly inGuild = computed(() => this.url().includes('/guilds/'));
   protected readonly inDm = computed(() => this.url().includes('/dm/'));
-  // Invite People modal (guild header) — keyed to the currently-selected guild.
-  protected readonly showInviteModal = signal(false);
   // Pinned-messages panel (header, guild + DM) — anchored under the pin button.
   protected readonly showPins = signal(false);
   protected readonly pinsPanelPositions: ConnectionPositionPair[] = [
@@ -94,11 +114,6 @@ export class ShellComponent implements OnInit, OnDestroy {
     { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
   ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
-  // Invite People is gated on CreateInvite (every member has it by default, but a role can deny it).
-  protected readonly canCreateInvite = computed(() => {
-    const guildId = this.activeGuildId();
-    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canCreateInvite;
-  });
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
   protected readonly showDmProfile = signal(true);
   private readonly guildStore = inject(GuildStore);
@@ -125,6 +140,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly dmIsGroup = computed(() => this.dmChannel()?.isGroup ?? false);
   // The single peer of a 1:1 DM (undefined for a group — drives status dot + profile panel).
   protected readonly dmPeer = computed(() => oneToOnePeer(this.dmChannel()));
+  /** The peer's cached profile — real banner (image/colour) for the DM panel. */
+  protected readonly dmPeerProfile = computed(() => {
+    const peer = this.dmPeer();
+    return peer ? this.profileStore.profileOf(peer.userId) : undefined;
+  });
   protected readonly dmPeerStatus = computed(() => {
     const peer = this.dmPeer();
     return peer ? toAvatarStatus(this.presenceStore.statusOf(peer.userId)) : null;
@@ -144,6 +164,10 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly notificationStore = inject(NotificationStore);
+  private readonly blockStore = inject(BlockStore);
+  private readonly muteStore = inject(MuteStore);
+  private readonly profileStore = inject(ProfileStore);
+  private readonly bootstrap = inject(BootstrapService);
   private readonly idle = inject(IdleService);
 
   private readonly subs = new Subscription();
@@ -154,6 +178,12 @@ export class ShellComponent implements OnInit, OnDestroy {
     effect(() => {
       const channelId = this.messageStore.activeChannelId();
       if (channelId) this.notificationStore.markChannelMentionsRead(channelId);
+    });
+
+    // Keep the DM panel's peer profile (banner/bio) fresh for whichever conversation is open.
+    effect(() => {
+      const peer = this.dmPeer();
+      if (peer) untracked(() => void this.profileStore.refresh(peer.userId));
     });
 
     // Ensure guild-level capabilities + roles are loaded for the active guild (the header's Roles
@@ -202,12 +232,19 @@ export class ShellComponent implements OnInit, OnDestroy {
     return date ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   }
 
-  /** Opens the full-screen guild settings overlay for the active guild (open to every member). */
-  protected openGuildSettings(): void {
-    const guildId = this.activeGuildId();
-    if (guildId) void this.router.navigate(['/app/guilds', guildId, 'settings']);
+  private readonly profileModal = inject(ProfileModalService);
+
+  /** Opens the full-profile modal for a DM peer / group member. */
+  protected openUserProfile(userId: string): void {
+    this.profileModal.open(userId, null);
   }
 
+  /** Presence dot for a group-DM member row. */
+  protected participantStatus(userId: string): ReturnType<typeof toAvatarStatus> {
+    return toAvatarStatus(this.presenceStore.statusOf(userId));
+  }
+
+  /** Opens the full-screen guild settings overlay for the active guild (open to every member). */
   // Add-people modal for the active group DM (opened from the profile panel).
   protected readonly showAddPeople = signal(false);
   // Ids already in the group — passed to the modal so they're filtered from the pick list.
@@ -215,6 +252,20 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   protected openAddPeople(): void {
     this.showAddPeople.set(true);
+  }
+
+  // Group-DM rename (any participant) — inline editor in the members panel header.
+  protected readonly editingGroupName = signal(false);
+  protected readonly groupNameDraft = signal('');
+
+  protected startGroupRename(dm: DirectMessageChannel): void {
+    this.groupNameDraft.set(dm.name ?? '');
+    this.editingGroupName.set(true);
+  }
+
+  protected saveGroupName(channelId: string): void {
+    void this.dmStore.rename(channelId, this.groupNameDraft());
+    this.editingGroupName.set(false);
   }
 
   /** Leaves the active group DM and returns to the friends screen. */
@@ -233,17 +284,28 @@ export class ShellComponent implements OnInit, OnDestroy {
     const client = this.signalR.getOrCreateClient();
     this.wireResidualEvents();
 
-    // Start the socket (self-retrying inside the service) and load guilds in parallel.
-    await Promise.all([
+    // Start the socket (self-retrying inside the service) and fetch the aggregated boot
+    // payload (the 9 individual startup requests collapsed into one) in parallel.
+    const [, booted] = await Promise.all([
       this.signalR.connect().catch(() => {}),
-      this.guildStore.loadGuilds(),
+      this.bootstrap.load(),
     ]);
-    this.unreadStore.loadAll();
-    this.presenceStore.initMyStatus();
-    this.friendStore.load();
-    this.dmStore.load();
-    this.nicknameStore.load();
-    this.notificationStore.load();
+    if (!booted) {
+      // Fallback (transient failure / older API): the individual per-store loads.
+      await this.guildStore.loadGuilds();
+      this.unreadStore.loadAll();
+      this.presenceStore.initMyStatus();
+      this.friendStore.load();
+      this.dmStore.load();
+      this.nicknameStore.load();
+      this.notificationStore.load();
+    }
+
+    // Blocked-user ids feed the chat/typing filters — small list, loaded outside bootstrap.
+    void this.blockStore.load().catch(() => {});
+
+    // Mutes feed the channel/guild dimming + badge suppression.
+    void this.muteStore.load().catch(() => {});
 
     // Start reporting inactivity (auto-away). The idle service tolerates a not-yet-live client.
     this.idle.start(client);
@@ -279,19 +341,22 @@ export class ShellComponent implements OnInit, OnDestroy {
           break;
 
         case 'NotificationReceived':
-          // The store already persisted it (its onInit). Here we only decide the mention's UX:
+          // The store already persisted it (its onInit). Here we only decide the mention/reply UX:
           // suppress+mark-read if it's for the channel you're viewing, else raise a jump toast.
-          if (e.payload.type === 'mention' && e.payload.channelId) {
+          if ((e.payload.type === 'mention' || e.payload.type === 'reply') && e.payload.channelId) {
             if (e.payload.channelId === this.messageStore.activeChannelId()) {
               this.notificationStore.markRead(e.payload.id);
             } else {
               const route = e.payload.guildId
                 ? ['/app/guilds', e.payload.guildId, 'channels', e.payload.channelId]
                 : ['/app/dm', e.payload.channelId];
-              this.toast.pushMention(
-                this.resolveChannelName(e.payload.guildId, e.payload.channelId),
-                route,
-              );
+              const channelName = this.resolveChannelName(e.payload.guildId, e.payload.channelId);
+              if (e.payload.type === 'reply') {
+                const actor = this.notificationStore.actors()[e.payload.actorId];
+                this.toast.pushReply(actor?.username ?? 'Someone', channelName, route);
+              } else {
+                this.toast.pushMention(channelName, route);
+              }
             }
           }
           break;
@@ -349,7 +414,17 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     const guildId = this.activeGuildId();
     if (guildId) {
-      this.memberStore.reload(guildId).catch(() => {});
+      this.memberStore
+        .reload(guildId)
+        .then(() =>
+          // Presence fetches are deduped per user id, so a forced refresh here is what
+          // recovers statuses that changed while the socket was down.
+          this.presenceStore.loadStatuses(
+            this.memberStore.membersOf(guildId).map((m) => m.userId),
+            { force: true },
+          ),
+        )
+        .catch(() => {});
       this.roleStore.reload(guildId).catch(() => {});
     }
 

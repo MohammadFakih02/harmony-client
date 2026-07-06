@@ -21,6 +21,11 @@ export const NotificationStore = signalStore(
     const pendingActors = new Set<string>();
 
     return {
+      /** Distributes the bootstrap payload's notification page + badge count (no fetch). */
+      set(notifications: AppNotification[], unreadCount: number): void {
+        patchState(store, { notifications, unreadCount, loading: false });
+      },
+
       async load(): Promise<void> {
         patchState(store, { loading: true });
         try {
@@ -59,11 +64,16 @@ export const NotificationStore = signalStore(
         await service.clearAll().catch(() => {});
       },
 
-      /** Marks every unread `mention` for a channel read — used when the user opens it. */
+      /** Marks every unread `mention`/`reply` for a channel read — used when the user opens it. */
       async markChannelMentionsRead(channelId: string): Promise<void> {
         const targets = store
           .notifications()
-          .filter((n) => !n.isRead && n.type === 'mention' && n.channelId === channelId);
+          .filter(
+            (n) =>
+              !n.isRead &&
+              (n.type === 'mention' || n.type === 'reply') &&
+              n.channelId === channelId,
+          );
         if (targets.length === 0) return;
         patchState(store, {
           notifications: store

@@ -8,6 +8,7 @@ import { PresenceStore } from '../../../core/stores/presence.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { BlockStore } from '../../../core/stores/block.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoleService } from '../../../core/services/role.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
@@ -55,6 +56,7 @@ export class MemberSidebar implements OnDestroy {
     roleStore: this.roleStore,
     roleService: inject(RoleService),
     dmStore: inject(DmStore),
+    blockStore: inject(BlockStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: inject(Router),

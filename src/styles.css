@@ -611,6 +611,21 @@ a,
     transform var(--transition-micro);
 }
 
+/* CDK drag-and-drop previews clone the dragged element's classes, and the multi-property
+   transition above breaks CDK's drop animation in Firefox: the computed transition-duration
+   list isn't padded to the property count, and CDK indexes durations by transform's property
+   index → TypeError mid-drop (stuck preview, frozen drag registry, `dropped` never fires).
+   No transition on previews → CDK short-circuits to a 0ms drop animation and cleans up
+   synchronously; this also removes the preview's pointer-follow lag while dragging. */
+.cdk-drag-preview {
+  transition: none !important;
+}
+
+/* Dim the placeholder (the element left at the origin slot) while dragging. */
+.cdk-drag-placeholder {
+  opacity: 0.35;
+}
+
 button:active:not(:disabled),
 [role="button"]:active {
   transform: scale(0.97);

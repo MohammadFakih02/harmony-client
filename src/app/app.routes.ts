@@ -37,6 +37,12 @@ export const routes: Routes = [
           import('./features/settings/settings').then(m => m.Settings),
       },
       {
+        // Public-server discovery — browse + join discoverable guilds.
+        path: 'discover',
+        loadComponent: () =>
+          import('./features/guilds/discover/discover').then(m => m.Discover),
+      },
+      {
         // Direct messages reuse the Channel view with no parent guildId (DM mode).
         path: 'dm/:channelId',
         loadComponent: () =>

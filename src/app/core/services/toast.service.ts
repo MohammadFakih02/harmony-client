@@ -51,6 +51,16 @@ export class ToastService {
     }
   }
 
+  /** A reply arrived for a channel you're not viewing — a routed toast (not aggregated). */
+  pushReply(actorName: string, channelName: string | null, route: unknown[]): void {
+    this.push({
+      icon: 'fa-reply',
+      title: `${actorName} replied to you`,
+      body: channelName ? `in ${channelName}` : null,
+      route,
+    });
+  }
+
   /** A transient, non-routed confirmation toast (e.g. "Copied to clipboard"). */
   info(title: string, icon = 'fa-check'): void {
     this.push({ icon, title, body: null, route: null });

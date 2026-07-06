@@ -76,6 +76,33 @@ describe('MemberStore', () => {
     expect(service.getMembers).toHaveBeenCalledTimes(1);
   });
 
+  it('loadIfNeeded() dedupes concurrent calls for the same guild (stampede guard)', async () => {
+    let resolveFetch!: (members: GuildMember[]) => void;
+    service.getMembers.mockReturnValue(new Promise((res) => (resolveFetch = res)));
+
+    // Shell + member-sidebar + message-input all fire on guild activate, before the cache fills.
+    const a = store.loadIfNeeded('1');
+    const b = store.loadIfNeeded('1');
+    const c = store.loadIfNeeded('1');
+    resolveFetch([makeMember({ userId: '10', username: 'alice' })]);
+    await Promise.all([a, b, c]);
+
+    expect(service.getMembers).toHaveBeenCalledTimes(1);
+    expect(store.membersOf('1')).toHaveLength(1);
+  });
+
+  it('loadIfNeeded() can retry after a failed fetch (in-flight guard is cleared)', async () => {
+    service.getMembers.mockRejectedValueOnce(new Error('network error'));
+    await store.loadIfNeeded('1');
+    expect(store.membersOf('1')).toEqual([]);
+
+    service.getMembers.mockResolvedValue([makeMember({ userId: '10', username: 'alice' })]);
+    await store.loadIfNeeded('1');
+
+    expect(store.membersOf('1')).toHaveLength(1);
+    expect(service.getMembers).toHaveBeenCalledTimes(2);
+  });
+
   it('caches separate guilds independently', async () => {
     service.getMembers.mockImplementation((guildId: string) =>
       Promise.resolve([makeMember({ userId: guildId, username: `user-${guildId}` })]),

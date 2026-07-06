@@ -14,6 +14,13 @@ export class MuteService {
     return firstValueFrom(this.http.get<Mute[]>(`${this.base}/mutes`));
   }
 
+  /** Mutes a guild/channel/user. `mutedUntil` is absolute unix-ms; null = until manual unmute. */
+  create(targetType: MuteTargetType, targetId: string, mutedUntil: number | null): Promise<Mute> {
+    return firstValueFrom(
+      this.http.post<Mute>(`${this.base}/mutes`, { targetType, targetId, mutedUntil }),
+    );
+  }
+
   remove(targetType: MuteTargetType, targetId: string): Promise<void> {
     return firstValueFrom(
       this.http.delete<void>(`${this.base}/mutes/${targetType}/${targetId}`),

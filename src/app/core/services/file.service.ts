@@ -44,8 +44,17 @@ export class FileService {
       xhr.setRequestHeader('Content-Type', file.type);
 
       if (onProgress) {
+        // Progress events fire far more often than the bar can meaningfully move; only
+        // propagate whole-percent changes so each upload costs at most ~100 signal writes
+        // (each write schedules a change-detection pass in this zoneless app).
+        let lastPct = -1;
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+          if (!e.lengthComputable) return;
+          const pct = Math.round((e.loaded / e.total) * 100);
+          if (pct !== lastPct) {
+            lastPct = pct;
+            onProgress(pct);
+          }
         };
       }
 
