@@ -48,6 +48,13 @@
       >
         <i class="fas fa-plus w-4 text-center text-faint"></i> Create Channel
       </button>
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openCreateCategory()"
+      >
+        <i class="fas fa-folder-plus w-4 text-center text-faint"></i> Create Category
+      </button>
       }
       <button
         type="button"
@@ -89,7 +96,10 @@
   </ng-template>
 
   <!-- Channel list -->
-  <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
+  <div
+    class="flex-1 overflow-y-auto overflow-x-hidden py-2"
+    (contextmenu)="openChannelListMenu($event)"
+  >
     @if (showLoading()) {
     <div class="flex justify-center pt-8">
       <i class="fas fa-yin-yang animate-spin text-faint"></i>
@@ -116,7 +126,10 @@
     <div class="mb-1">
       <!-- Category header (only shown when the category has a name) -->
       @if (category.name) {
-      <div class="channel-category-header group flex items-center w-full px-2 pl-4 py-1">
+      <div
+        class="channel-category-header group flex items-center w-full px-2 pl-4 py-1"
+        (contextmenu)="openCategoryMenu($event, category)"
+      >
         <button
           class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
           (click)="toggleCategory(category.id)"
@@ -142,8 +155,11 @@
       <div
         class="flex flex-col gap-0.5 px-2 animate-slide-down"
         cdkDropList
+        [id]="categoryDropListId(category.id)"
+        [cdkDropListData]="category.channels"
+        [cdkDropListConnectedTo]="categoryDropListIds()"
         [cdkDropListDisabled]="!canManageChannels()"
-        (cdkDropListDropped)="onChannelDrop($event, category)"
+        (cdkDropListDropped)="onChannelDropAcross($event, category)"
       >
         @for (channel of category.channels; track channel.id) {
         <!-- The channel you're viewing never shows an unread badge (you're reading it). -->
@@ -185,10 +201,10 @@
             <ui-icon-button
               size="xs"
               hover="surface-3"
-              label="Notification Settings"
+              [label]="canManageChannels() ? 'Edit Channel' : 'Notification Settings'"
               cdkOverlayOrigin
               #notifOrigin="cdkOverlayOrigin"
-              (click)="openChannelNotif(channel.id, $event)"
+              (click)="openChannelGear(channel, $event)"
             >
               <i class="fas fa-gear"></i>
             </ui-icon-button>
@@ -251,7 +267,10 @@
   <div class="flex items-center px-4 h-12 min-h-12 border-b border-border-subtle shrink-0">
     <span class="font-semibold text-primary">Direct Messages</span>
   </div>
-  <div class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2">
+  <div
+    class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2"
+    (contextmenu)="openDmListMenu($event)"
+  >
     <a
       routerLink="/app/friends"
       routerLinkActive="bg-surface-3 text-primary"
@@ -285,6 +304,7 @@
         class="dm-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
         [class.font-semibold]="unread > 0"
         [class.text-primary]="unread > 0"
+        (contextmenu)="openDmMenu($event, dm)"
       >
         @if (dm.isGroup) {
         <span
@@ -553,7 +573,9 @@
     (click)="$event.stopPropagation()"
   >
     <div class="flex flex-col gap-1">
-      <h2 class="text-lg font-bold text-primary text-center">Create a Channel</h2>
+      <h2 class="text-lg font-bold text-primary text-center">
+        {{ channelType() === 'category' ? 'Create a Category' : 'Create a Channel' }}
+      </h2>
       <p class="text-sm text-muted text-center">in {{ guildStore.selectedGuild()?.name }}</p>
     </div>
 
@@ -583,17 +605,29 @@
       >
         <i class="fas fa-volume-high w-4 text-center"></i> Voice
       </button>
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-micro"
+        [class.border-accent]="channelType() === 'category'"
+        [class.bg-accent-muted]="channelType() === 'category'"
+        [class.text-accent]="channelType() === 'category'"
+        [class.border-border-subtle]="channelType() !== 'category'"
+        [class.text-muted]="channelType() !== 'category'"
+        (click)="channelType.set('category')"
+      >
+        <i class="fas fa-folder w-4 text-center"></i> Category
+      </button>
     </div>
 
     <div class="flex flex-col gap-1.5">
       <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="channel-name">
-        Channel Name
+        {{ channelType() === 'category' ? 'Category Name' : 'Channel Name' }}
       </label>
       <input
         id="channel-name"
         type="text"
         class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
-        [placeholder]="channelType() === 'text' ? 'new-channel' : 'General'"
+        [placeholder]="channelType() === 'text' ? 'new-channel' : channelType() === 'voice' ? 'General' : 'TEXT CHANNELS'"
         maxlength="100"
         [ngModel]="channelName()"
         (ngModelChange)="channelName.set($event)"
@@ -621,7 +655,7 @@
         @if (submitting()) {
           <i class="fas fa-yin-yang animate-spin mr-1.5"></i>
         }
-        Create Channel
+        {{ channelType() === 'category' ? 'Create Category' : 'Create Channel' }}
       </button>
     </div>
   </div>

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { NotificationActor } from '../models/notification.models';
-import { DmPrivacy, MyEditableProfile, PublicUserProfile } from '../models/user.models';
+import { DmAudience, MyEditableProfile, PublicUserProfile } from '../models/user.models';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
@@ -59,10 +59,10 @@ export class UserService {
     return firstValueFrom(this.http.delete(`${this.base}/users/me/${kind}`));
   }
 
-  /** Sets who may open a new DM with the current user. */
-  updateDmPrivacy(dmPrivacy: DmPrivacy): Promise<MyEditableProfile> {
+  /** Sets the checklist of who may open a new DM with the current user. */
+  updateDmPrivacy(audiences: DmAudience[]): Promise<MyEditableProfile> {
     return firstValueFrom(
-      this.http.patch<MyEditableProfile>(`${this.base}/users/me/dm-privacy`, { dmPrivacy }),
+      this.http.patch<MyEditableProfile>(`${this.base}/users/me/dm-privacy`, { audiences }),
     );
   }
 }

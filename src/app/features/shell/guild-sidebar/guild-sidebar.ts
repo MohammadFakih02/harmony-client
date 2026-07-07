@@ -11,6 +11,10 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MuteStore } from '../../../core/stores/mute.store';
+import { MUTE_DURATIONS } from '../../../core/models/mute.models';
+import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ContextMenuEntry } from '../../../core/models/context-menu.models';
+import { GuildSummary } from '../../../core/models/guild.models';
 import {
   DirectMessageChannel,
   dmLabel,
@@ -33,7 +37,70 @@ export class GuildSidebar {
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
   protected readonly muteStore = inject(MuteStore);
+  private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
+
+  /** Right-click a rail icon — the server dropdown's actions, reachable without opening the server. */
+  protected openGuildMenu(event: MouseEvent, guild: GuildSummary): void {
+    const owner = guild.ownerId === this.auth.currentUser()?.id;
+    const muted = this.muteStore.isMuted('guild', guild.id);
+    const entries: ContextMenuEntry[] = [
+      muted
+        ? {
+            label: 'Unmute Server',
+            icon: 'fa-bell',
+            action: () => void this.muteStore.remove('guild', guild.id),
+          }
+        : {
+            label: 'Mute Server',
+            icon: 'fa-bell-slash',
+            children: MUTE_DURATIONS.map((d) => ({
+              label: d.label,
+              action: () => void this.muteStore.mute('guild', guild.id, d.minutes),
+            })),
+          },
+      { separator: true },
+      {
+        label: 'Server Settings',
+        icon: 'fa-gear',
+        action: () => void this.router.navigate(['/app/guilds', guild.id, 'settings']),
+      },
+      {
+        label: 'Copy Server ID',
+        icon: 'fa-hashtag',
+        action: () => void navigator.clipboard?.writeText(guild.id),
+      },
+      { separator: true },
+      owner
+        ? {
+            label: 'Delete Server',
+            icon: 'fa-trash',
+            danger: true,
+            action: () => this.leaveOrDeleteGuild(guild, true),
+          }
+        : {
+            label: 'Leave Server',
+            icon: 'fa-arrow-right-from-bracket',
+            danger: true,
+            action: () => this.leaveOrDeleteGuild(guild, false),
+          },
+    ];
+    this.contextMenu.open(event, entries);
+  }
+
+  private async leaveOrDeleteGuild(guild: GuildSummary, owner: boolean): Promise<void> {
+    const message = owner
+      ? `Delete “${guild.name}”? This permanently removes the server for everyone.`
+      : `Leave “${guild.name}”?`;
+    if (!window.confirm(message)) return;
+    try {
+      if (owner) await this.guildStore.deleteGuild(guild.id);
+      else await this.guildStore.leaveGuild(guild.id);
+      if (this.activeRailGuildId() === guild.id) void this.router.navigate(['/app/friends']);
+    } catch {
+      // Best-effort — the API may reject (e.g. owner-can't-leave); leave local state untouched.
+    }
+  }
 
   /** Resolves a guild icon storage key to its public URL (raw keys don't load directly). */
   protected guildIconUrl(iconKey: string): string {
@@ -150,6 +217,17 @@ export class GuildSidebar {
   chooseDiscover(): void {
     this.showAddMenu.set(false);
     void this.router.navigate(['/app/discover']);
+  }
+
+  /** Right-click empty space in the rail (below/between icons) — the same chooser as the "+"
+   *  button, reachable without hunting for it. Icon-specific menus stopPropagation, so this only
+   *  fires when nothing more specific handled the click. */
+  protected openRailMenu(event: MouseEvent): void {
+    this.contextMenu.open(event, [
+      { label: 'Create a Server', icon: 'fa-plus', action: () => this.chooseCreate() },
+      { label: 'Join a Server', icon: 'fa-right-to-bracket', action: () => this.chooseJoin() },
+      { label: 'Discover Servers', icon: 'fa-compass', action: () => this.chooseDiscover() },
+    ]);
   }
 
   openCreateModal(): void {

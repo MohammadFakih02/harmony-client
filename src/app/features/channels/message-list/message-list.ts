@@ -13,6 +13,7 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { BlockStore } from '../../../core/stores/block.store';
+import { MuteStore } from '../../../core/stores/mute.store';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { Router } from '@angular/router';
 import { UnreadStore } from '../../../core/stores/unread.store';
@@ -151,6 +152,7 @@ export class MessageList {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly blockStore = inject(BlockStore);
+  private readonly muteStore = inject(MuteStore);
   private readonly messageService = inject(MessageService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -163,6 +165,7 @@ export class MessageList {
     roleService: inject(RoleService),
     dmStore: this.dmStore,
     blockStore: this.blockStore,
+    muteStore: this.muteStore,
     profileModal: inject(ProfileModalService),
     toast: this.toast,
     router: inject(Router),
@@ -484,6 +487,9 @@ export class MessageList {
   // -------------------------------------------------------------------------
   protected readonly newDividerId = signal<string | null>(null);
   private dividerCapturedFor: string | null = null;
+  // Sending a message dismisses the divider for the rest of the visit (Discord behavior) — the
+  // flag stops the snapshot effect from re-capturing it; reset on channel change.
+  private dividerDismissed = false;
 
   // -------------------------------------------------------------------------
   // "X new messages" jump banner — driven by the unread count captured when the
@@ -814,9 +820,23 @@ export class MessageList {
       const msgs = this.messageStore.messages();
       if (channelId !== this.dividerCapturedFor) {
         this.dividerCapturedFor = channelId;
+        this.dividerDismissed = false;
         this.newDividerId.set(null);
       }
-      if (untracked(this.newDividerId) === null && count > 0 && msgs.length > 0) {
+      // Sending your own message means you've caught up — drop the divider instead of leaving it
+      // pinned above your reply until you leave and rejoin. Own sends are the only messages that
+      // ever appear with `pending`, so a pending tail reliably identifies one.
+      if (!this.dividerDismissed && msgs[msgs.length - 1]?.pending) {
+        this.dividerDismissed = true;
+        this.newDividerId.set(null);
+        return;
+      }
+      if (
+        !this.dividerDismissed &&
+        untracked(this.newDividerId) === null &&
+        count > 0 &&
+        msgs.length > 0
+      ) {
         const idx = Math.max(0, msgs.length - count);
         this.newDividerId.set(msgs[idx].messageId);
       }

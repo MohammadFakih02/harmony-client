@@ -1,5 +1,6 @@
 <nav
   class="flex flex-col items-center w-full h-full py-3 gap-1 overflow-y-auto overflow-x-hidden scrollbar-none"
+  (contextmenu)="openRailMenu($event)"
 >
   <!-- Home / DM -->
   <div class="flex flex-col items-center gap-1 w-full">
@@ -66,6 +67,7 @@
       [class.opacity-45]="muted && activeRailGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"
+      (contextmenu)="openGuildMenu($event, guild)"
     >
       @if (guild.iconKey) {
         <img

@@ -75,7 +75,8 @@ export type GatewayEvent =
   | { type: 'RoleDeleted'; payload: RoleDeletedPayload }
   | { type: 'MemberRoleUpdated'; payload: MemberRoleUpdatedPayload }
   | { type: 'DmChannelUpdated'; channelId: string }
-  | { type: 'ProfileUpdated'; payload: ProfileUpdatedPayload };
+  | { type: 'ProfileUpdated'; payload: ProfileUpdatedPayload }
+  | { type: 'GuildInvitesChanged'; guildId: string };
 
 /** The `type` discriminants — handy for filtering. */
 export type GatewayEventType = GatewayEvent['type'];

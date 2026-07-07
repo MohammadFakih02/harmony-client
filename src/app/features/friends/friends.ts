@@ -5,6 +5,7 @@ import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angula
 import { FriendStore } from '../../core/stores/friend.store';
 import { DmStore } from '../../core/stores/dm.store';
 import { BlockStore } from '../../core/stores/block.store';
+import { MuteStore } from '../../core/stores/mute.store';
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { NicknameStore } from '../../core/stores/nickname.store';
@@ -43,6 +44,7 @@ export class Friends {
     roleService: inject(RoleService),
     dmStore: this.dmStore,
     blockStore: inject(BlockStore),
+    muteStore: inject(MuteStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: this.router,

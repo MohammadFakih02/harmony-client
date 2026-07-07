@@ -5,6 +5,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { BlockStore } from '../../../core/stores/block.store';
+import { MuteStore } from '../../../core/stores/mute.store';
 
 /**
  * "X is typing…" bar for the active channel. Resolves each typing user's display name from the
@@ -36,15 +37,19 @@ export class TypingIndicator {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly blockStore = inject(BlockStore);
+  private readonly muteStore = inject(MuteStore);
 
   private readonly names = computed<string[]>(() => {
     const channelId = this.messageStore.activeChannelId();
     if (!channelId) return [];
     const guildId = this.messageStore.activeGuildId();
+    // Blocked AND user-muted typers are hidden — a user mute suppresses their activity signals
+    // (flow #22), while their messages stay visible (unlike a block).
     const blocked = this.blockStore.blockedIds();
+    const muted = this.muteStore.mutedUserIds();
     return this.typingStore
       .typersOf(channelId)
-      .filter((userId) => !blocked.has(userId))
+      .filter((userId) => !blocked.has(userId) && !muted.has(userId))
       .map((userId) => this.displayName(userId, guildId));
   });
 

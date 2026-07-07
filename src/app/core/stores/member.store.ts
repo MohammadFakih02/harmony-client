@@ -107,6 +107,19 @@ export const MemberStore = signalStore(
       });
     },
 
+    /**
+     * Drops every cache for a guild — used when *we* are kicked/banned, so a later rejoin refetches
+     * fresh state instead of reviving the stale pre-kick lists (which no longer contain us; the
+     * MemberJoined broadcast can't fix that, since we aren't in the guild's SignalR group at redeem
+     * time). Viewer sets are keyed by channel and can't be mapped back to a guild here, so they're
+     * all dropped — they refetch on channel open.
+     */
+    clearGuild(guildId: string): void {
+      const { [guildId]: _members, ...byGuild } = store.byGuild();
+      const { [guildId]: _caps, ...capsByGuild } = store.capsByGuild();
+      patchState(store, { byGuild, capsByGuild, viewersByChannel: {} });
+    },
+
     /** Removes a member from local state (kick / ban / leave — own action or SignalR event). */
     removeMember(guildId: string, userId: string): void {
       const list = store.byGuild()[guildId];
