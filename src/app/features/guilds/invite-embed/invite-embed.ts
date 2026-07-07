@@ -8,8 +8,9 @@ import { extractApiError } from '../../../shared/util/api-error';
 
 /**
  * Inline card rendered for an invite link found in a message (see {@link extractInviteCodes}).
- * Previews the code and offers a one-click Join — already-member (or a 409 on redeem) just
- * navigates into the guild; an invalid/expired code (404/410) shows a greyed "unavailable" card.
+ * Previews the code (via the soft always-200 embed endpoint) and offers a one-click Join —
+ * already-member (or a 409 on redeem) just navigates into the guild; an invalid/expired code
+ * shows a greyed "unavailable" card.
  * The `/invite/:code` landing page stays for out-of-app links; inside the app you only see this.
  */
 @Component({
@@ -48,7 +49,11 @@ export class InviteEmbed implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      this.preview.set(await this.invites.preview(this.code()));
+      // Soft endpoint: a dead code answers 200 {status} instead of 404/410, so old
+      // messages full of expired invites don't spam the browser console.
+      const res = await this.invites.previewEmbed(this.code());
+      if (res.status === 'ok' && res.invite) this.preview.set(res.invite);
+      else this.unavailable.set(true);
     } catch {
       this.unavailable.set(true);
     } finally {
