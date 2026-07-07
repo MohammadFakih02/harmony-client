@@ -19,6 +19,12 @@ export interface InvitePreview {
   channelId: string | null;
 }
 
+/** Soft embed preview — always a 200; a dead code is a state, not an error. */
+export interface InviteEmbedPreview {
+  status: 'ok' | 'expired' | 'invalid';
+  invite: InvitePreview | null;
+}
+
 /** Options for minting an invite. All optional — the default is a guild-level, unlimited, never-expiring code. */
 export interface CreateInviteOptions {
   channelId?: string;
