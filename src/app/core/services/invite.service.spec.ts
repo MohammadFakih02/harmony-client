@@ -104,6 +104,16 @@ describe('InviteService', () => {
     expect(preview.guildName).toBe('G');
   });
 
+  it('previewEmbed() GETs the soft embed route and surfaces the status', async () => {
+    const promise = service.previewEmbed('dead');
+    const req = httpMock.expectOne(`${base}/invites/dead/embed`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ status: 'expired', invite: null });
+    const res = await promise;
+    expect(res.status).toBe('expired');
+    expect(res.invite).toBeNull();
+  });
+
   it('join() POSTs to the redeem route and returns the guild', async () => {
     const promise = service.join('aBc');
     const req = httpMock.expectOne(`${base}/invites/aBc/join`);

@@ -52,6 +52,7 @@ import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notif
         <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ ch.name }}</span>
         <select
           class="rounded bg-surface-3 px-2 py-1 text-sm text-primary outline-none"
+          [attr.aria-label]="'Notification level for #' + ch.name"
           [value]="channelLevel(ch.id) ?? 'default'"
           (change)="onChannelChange(ch.id, $any($event.target).value)"
         >

@@ -1,4 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+/* Inter is loaded from index.html (<link> + preconnect) — a CSS @import here
+   would serialize the font CSS behind this stylesheet's download. */
 @import "tailwindcss";
 
 /* ============================================================
@@ -289,7 +290,7 @@ html.palette-violet.mode-dark {
 
   --color-text: #f4f3f7;
   --color-text-muted: #a29fb1;
-  --color-text-faint: #6f6b80;
+  --color-text-faint: #9490a2; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #8b5cf6;
   --color-accent-hover: #7c3aed;
@@ -324,7 +325,7 @@ html.palette-violet.mode-light {
 
   --color-text: #17151f;
   --color-text-muted: #5b5768;
-  --color-text-faint: #918d9f;
+  --color-text-faint: #676375; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #6d28d9;
   --color-accent-hover: #5b21b6;
@@ -359,7 +360,7 @@ html.palette-midnight.mode-dark {
 
   --color-text: #f7f7f8;
   --color-text-muted: #9b9ba4;
-  --color-text-faint: #63636d;
+  --color-text-faint: #84848f; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #0ea5e9;
   --color-accent-hover: #0284c7;
@@ -394,7 +395,7 @@ html.palette-midnight.mode-light {
 
   --color-text: #101318;
   --color-text-muted: #545b66;
-  --color-text-faint: #8c93a0;
+  --color-text-faint: #606774; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #0284c7;
   --color-accent-hover: #0369a1;
@@ -429,7 +430,7 @@ html.palette-forest.mode-dark {
 
   --color-text: #edf5ef;
   --color-text-muted: #9db5a4;
-  --color-text-faint: #64796b;
+  --color-text-faint: #83998b; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #10b981;
   --color-accent-hover: #059669;
@@ -464,7 +465,7 @@ html.palette-forest.mode-light {
 
   --color-text: #131a15;
   --color-text-muted: #4e6355;
-  --color-text-faint: #84988a;
+  --color-text-faint: #5a6c60; /* min 4.5:1 on surface-3 (WCAG AA) */
 
   --color-accent: #059669;
   --color-accent-hover: #047857;
