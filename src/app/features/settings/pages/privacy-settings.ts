@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { UserService } from '../../../core/services/user.service';
 import { BlockStore } from '../../../core/stores/block.store';
 import { MuteStore } from '../../../core/stores/mute.store';
-import { DmPrivacy } from '../../../core/models/user.models';
+import { DM_AUDIENCE_OPTIONS, DmAudience, parseDmAudiences } from '../../../core/models/user.models';
 import { Mute } from '../../../core/models/mute.models';
 import { UiAvatar, UiButton } from '../../../shared/ui';
 
@@ -14,23 +14,35 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
   template: `
     <h2 class="text-xl font-bold text-primary mb-5">Privacy &amp; Safety</h2>
 
-    <!-- DM privacy -->
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">Direct Messages</p>
+    <!-- DM privacy — a checklist, not a radio: any combination of audiences may DM you.
+         "Everyone" subsumes the other two, so picking it visually checks + locks them. -->
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">Who Can Send You a DM</p>
+    <p class="text-xs text-muted mb-2">
+      Existing conversations always stay open, regardless of this setting.
+    </p>
     <div class="space-y-2 mb-8">
       @for (opt of dmOptions; track opt.value) {
+      @let checked = isChecked(opt.value);
+      @let locked = opt.value !== 'everyone' && audiences().has('everyone');
       <button
         type="button"
         class="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors"
-        [class.border-accent]="dmPrivacy() === opt.value"
-        [class.border-border-subtle]="dmPrivacy() !== opt.value"
-        (click)="setDmPrivacy(opt.value)"
+        [class.border-accent]="checked"
+        [class.border-border-subtle]="!checked"
+        [class.opacity-60]="locked"
+        [disabled]="locked"
+        (click)="toggle(opt.value)"
       >
         <span
-          class="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2"
-          [class.border-accent]="dmPrivacy() === opt.value"
-          [class.bg-accent]="dmPrivacy() === opt.value"
-          [class.border-faint]="dmPrivacy() !== opt.value"
-        ></span>
+          class="mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center"
+          [class.border-accent]="checked"
+          [class.bg-accent]="checked"
+          [class.border-faint]="!checked"
+        >
+          @if (checked) {
+          <i class="fas fa-check text-3xs text-white"></i>
+          }
+        </span>
         <span class="min-w-0">
           <span class="block text-sm font-semibold text-primary">{{ opt.label }}</span>
           <span class="block text-xs text-muted mt-0.5">{{ opt.description }}</span>
@@ -86,31 +98,37 @@ export class PrivacySettings implements OnInit {
   protected readonly blocks = inject(BlockStore);
   protected readonly mutes = inject(MuteStore);
 
-  protected readonly dmPrivacy = signal<DmPrivacy>('everyone');
-
-  protected readonly dmOptions: { value: DmPrivacy; label: string; description: string }[] = [
-    { value: 'everyone', label: 'Everyone', description: 'Anyone can send you a direct message.' },
-    {
-      value: 'friends_only',
-      label: 'Friends Only',
-      description: 'Only friends can start a new conversation. Existing chats stay open.',
-    },
-  ];
+  protected readonly audiences = signal<Set<DmAudience>>(new Set(['everyone']));
+  protected readonly dmOptions = DM_AUDIENCE_OPTIONS;
 
   ngOnInit(): void {
-    void this.users.getMe().then((me) => this.dmPrivacy.set(me.dmPrivacy));
+    void this.users.getMe().then((me) => this.audiences.set(parseDmAudiences(me.dmPrivacy)));
     void this.blocks.load();
     void this.mutes.load();
   }
 
-  protected async setDmPrivacy(value: DmPrivacy): Promise<void> {
-    if (this.dmPrivacy() === value) return;
-    const previous = this.dmPrivacy();
-    this.dmPrivacy.set(value);
+  protected isChecked(value: DmAudience): boolean {
+    const set = this.audiences();
+    return set.has(value) || (value !== 'everyone' && set.has('everyone'));
+  }
+
+  protected async toggle(value: DmAudience): Promise<void> {
+    const previous = this.audiences();
+    // "Everyone" subsumes friends/guild_members — locked while it's checked (click Everyone
+    // itself to uncheck it first, mirroring the disabled state shown on the other two rows).
+    if (value !== 'everyone' && previous.has('everyone')) return;
+
+    // An empty result is a legitimate (if extreme) choice — "no one may start a new
+    // conversation with me"; existing conversations are unaffected regardless.
+    const next = new Set(previous);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+
+    this.audiences.set(next);
     try {
-      await this.users.updateDmPrivacy(value);
+      await this.users.updateDmPrivacy([...next]);
     } catch {
-      this.dmPrivacy.set(previous);
+      this.audiences.set(previous);
     }
   }
 

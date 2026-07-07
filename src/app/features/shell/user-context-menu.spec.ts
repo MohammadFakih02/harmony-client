@@ -14,6 +14,7 @@ function deps(overrides: Partial<Record<string, unknown>> = {}): UserMenuDeps {
     roleService: {},
     dmStore: {},
     blockStore: { isBlocked: () => false, block: () => Promise.resolve(), unblock: () => Promise.resolve() },
+    muteStore: { isMuted: () => false, mute: () => Promise.resolve(), remove: () => Promise.resolve() },
     profileModal: {},
     toast: {},
     router: {},
@@ -31,7 +32,7 @@ function target(over: Partial<UserMenuTarget> = {}): UserMenuTarget {
 describe('buildUserMenu', () => {
   it('offers Profile + Message + Copy + Block for another user with no moderation context', () => {
     const entries = buildUserMenu(deps(), target({ guildId: null }));
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Mute @bob', 'Block']);
   });
 
   it('hides Message and Block for yourself', () => {
@@ -42,7 +43,7 @@ describe('buildUserMenu', () => {
   it('offers Unblock instead of Block for an already-blocked user', () => {
     const d = deps({ blockStore: { isBlocked: () => true } });
     const entries = buildUserMenu(d, target({ guildId: null }));
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Unblock']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Mute @bob', 'Unblock']);
   });
 
   it('appends moderation for a non-owner member the caller can moderate', () => {
@@ -51,7 +52,7 @@ describe('buildUserMenu', () => {
       d,
       target({ member: { userId: 'u1', username: 'bob', isOwner: false, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Roles', 'Timeout', 'Kick', 'Ban', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Roles', 'Timeout', 'Kick', 'Ban', 'Mute @bob', 'Block']);
     expect(entries.some(isSeparator)).toBe(true);
   });
 
@@ -69,6 +70,13 @@ describe('buildUserMenu', () => {
       deps(),
       target({ member: { userId: 'u1', username: 'bob', isOwner: true, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Message', 'Copy User ID', 'Mute @bob', 'Block']);
+  });
+
+  it('offers Unmute instead of Mute for an already-muted user', () => {
+    const d = deps({ muteStore: { isMuted: () => true, remove: () => Promise.resolve() } });
+    const entries = buildUserMenu(d, target({ guildId: null }));
+    expect(labels(entries)).toContain('Unmute @bob');
+    expect(labels(entries)).not.toContain('Mute @bob');
   });
 });

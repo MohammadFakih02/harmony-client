@@ -227,6 +227,9 @@ export class HarmonyHubClient {
           avatarKey: p.avatarKey != null ? String(p.avatarKey) : null,
         },
       }));
+
+    this.connection.on('GuildInvitesChanged', (p: { guildId: unknown }) =>
+      this.emit({ type: 'GuildInvitesChanged', guildId: String(p.guildId) }));
   }
 
   /** Coerce a member pushed over SignalR: Snowflake ids → strings, timestamps → numbers. */

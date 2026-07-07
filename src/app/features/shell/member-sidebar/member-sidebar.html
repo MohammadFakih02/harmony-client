@@ -5,7 +5,7 @@
     </span>
   </div>
 
-  <div class="flex-1 overflow-y-auto py-2 px-2">
+  <div class="flex-1 overflow-y-auto py-2 px-2" (contextmenu)="openEmptySpaceMenu($event)">
     @if (memberStore.loading()) {
     <div class="flex justify-center pt-6">
       <i class="fas fa-yin-yang animate-spin text-faint"></i>

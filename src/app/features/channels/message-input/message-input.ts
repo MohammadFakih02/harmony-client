@@ -350,7 +350,10 @@ export class MessageInput implements OnDestroy {
       (!content && fileIds.length === 0) ||
       this.sending() ||
       this.uploading() ||
-      !this.canSendInChannel()
+      !this.canSendInChannel() ||
+      // Enter calls send() directly, so the slowmode cooldown must be enforced here too —
+      // the disabled send button (canSend) alone doesn't cover the keyboard path.
+      this.cooldownRemaining() > 0
     )
       return;
 

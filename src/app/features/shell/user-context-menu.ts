@@ -5,6 +5,8 @@ import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { DmStore } from '../../core/stores/dm.store';
 import { BlockStore } from '../../core/stores/block.store';
+import { MuteStore } from '../../core/stores/mute.store';
+import { MUTE_DURATIONS } from '../../core/models/mute.models';
 import { RoleService } from '../../core/services/role.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -17,6 +19,7 @@ export interface UserMenuDeps {
   roleService: RoleService;
   dmStore: InstanceType<typeof DmStore>;
   blockStore: InstanceType<typeof BlockStore>;
+  muteStore: InstanceType<typeof MuteStore>;
   profileModal: ProfileModalService;
   toast: ToastService;
   router: Router;
@@ -89,6 +92,7 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   const moderatable =
     !!guildId && !!member && !isSelf && !member.isOwner && !!caps;
   if (!moderatable) {
+    appendMuteEntry(deps, target, entries, isSelf);
     appendBlockEntry(deps, target, entries, isSelf);
     return entries;
   }
@@ -159,8 +163,41 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   }
 
   if (mod.length > 0) entries.push({ separator: true }, ...mod);
+  appendMuteEntry(deps, target, entries, isSelf);
   appendBlockEntry(deps, target, entries, isSelf);
   return entries;
+}
+
+/**
+ * Mute / Unmute — offered for any other user, just above the Block section. A user mute is a
+ * personal notification preference (suppresses their mentions/replies + hides their typing),
+ * softer than a block: their messages stay visible.
+ */
+function appendMuteEntry(
+  deps: UserMenuDeps,
+  target: UserMenuTarget,
+  entries: ContextMenuEntry[],
+  isSelf: boolean,
+): void {
+  if (isSelf) return;
+  const muted = deps.muteStore.isMuted('user', target.userId);
+  entries.push(
+    { separator: true },
+    muted
+      ? {
+          label: `Unmute @${target.username}`,
+          icon: 'fa-bell',
+          action: () => void deps.muteStore.remove('user', target.userId),
+        }
+      : {
+          label: `Mute @${target.username}`,
+          icon: 'fa-bell-slash',
+          children: MUTE_DURATIONS.map((d) => ({
+            label: d.label,
+            action: () => void deps.muteStore.mute('user', target.userId, d.minutes),
+          })),
+        },
+  );
 }
 
 /** Block / Unblock — offered for any other user, always as the last section (Discord-style). */

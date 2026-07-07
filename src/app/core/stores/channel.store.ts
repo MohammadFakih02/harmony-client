@@ -205,7 +205,11 @@ export const ChannelStore = signalStore(
       }
     },
 
-    async createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
+    async createChannel(
+      guildId: string,
+      name: string,
+      type: 'text' | 'voice' | 'category',
+    ): Promise<Channel> {
       const channel = await service.createChannel(guildId, name, type);
       const existing = store.channelsByGuild()[guildId] ?? [];
       patchState(store, {
@@ -215,6 +219,33 @@ export const ChannelStore = signalStore(
         },
       });
       return channel;
+    },
+
+    /** Moves a channel into a category (or out to top-level when categoryId is null).
+     *  Optimistic; reverts on failure. Used by both the right-click submenu and cross-category drag. */
+    async moveToCategory(
+      guildId: string,
+      channelId: string,
+      categoryId: string | null,
+    ): Promise<void> {
+      const previous = store.channelsByGuild()[guildId] ?? [];
+      const optimistic = previous.map((c) => (c.id === channelId ? { ...c, categoryId } : c));
+      patchState(store, { channelsByGuild: { ...store.channelsByGuild(), [guildId]: optimistic } });
+      try {
+        const updated = await service.moveToCategory(guildId, channelId, categoryId);
+        const list = store.channelsByGuild()[guildId] ?? [];
+        patchState(store, {
+          channelsByGuild: {
+            ...store.channelsByGuild(),
+            [guildId]: sortChannels(list.map((c) => (c.id === channelId ? updated : c))),
+          },
+        });
+      } catch (err) {
+        patchState(store, {
+          channelsByGuild: { ...store.channelsByGuild(), [guildId]: previous },
+        });
+        throw err;
+      }
     },
 
     /** Saves channel settings (name/topic/NSFW/slowmode). The ChannelUpdated broadcast also

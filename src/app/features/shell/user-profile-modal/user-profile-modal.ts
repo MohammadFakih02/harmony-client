@@ -9,7 +9,6 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { ProfileStore } from '../../../core/stores/profile.store';
 import { DmStore } from '../../../core/stores/dm.store';
-import { FriendStore } from '../../../core/stores/friend.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { ToastService } from '../../../core/services/toast.service';
 import { roleColorHex } from '../../../core/models/role.models';
@@ -40,7 +39,6 @@ export class UserProfileModal {
   private readonly roleStore = inject(RoleStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
-  private readonly friendStore = inject(FriendStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -58,17 +56,11 @@ export class UserProfileModal {
     return id ? (this.profileStore.profileOf(id) ?? null) : null;
   });
 
-  private readonly isFriend = computed(() => {
-    const id = this.userId();
-    return !!id && this.friendStore.friends().some((f) => f.id === id);
-  });
-
-  /** Whether the Message action should be offered: not yourself, and not a "friends_only" stranger. */
+  /** Whether the Message action should be offered — server-resolved against the target's whole
+   *  DM-privacy checklist (friends / shared guild / everyone), not just yourself. */
   protected readonly canMessage = computed(() => {
     if (this.isSelf() || !this.userId()) return false;
-    const v = this.view();
-    if (!v) return false;
-    return v.dmPrivacy !== 'friends_only' || this.isFriend();
+    return this.view()?.canMessage ?? false;
   });
 
   private readonly member = computed(() => {
