@@ -1,5 +1,7 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { GatewayEvents } from '../../../core/hub/gateway-events';
 import { InviteService } from '../../../core/services/invite.service';
 import { MessageService } from '../../../core/services/message.service';
 import { FriendStore } from '../../../core/stores/friend.store';
@@ -79,6 +81,14 @@ export class InvitePeopleModal implements OnInit {
     return q ? friends.filter((f) => f.username.toLowerCase().includes(q)) : friends;
   });
 
+  constructor(gateway: GatewayEvents) {
+    // Another member created/revoked/redeemed an invite while this modal is open — refetch so the
+    // list stays live. The event is a coarse nudge (no invite data); the GET re-applies permissions.
+    gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+      if (e.type === 'GuildInvitesChanged' && e.guildId === this.guildId()) void this.reload();
+    });
+  }
+
   async ngOnInit(): Promise<void> {
     this.friendStore.load(); // ensure the friend list is available (cheap; shell usually warmed it)
     this.memberStore.loadIfNeeded(this.guildId()); // needed to hide friends already in the guild
@@ -88,6 +98,15 @@ export class InvitePeopleModal implements OnInit {
       this.error.set('Could not load existing invites.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /** Silent refetch (no loading flip) — used by the live GuildInvitesChanged nudge. */
+  private async reload(): Promise<void> {
+    try {
+      this.list.set(await this.invites.listInvites(this.guildId()));
+    } catch {
+      // Keep the current list — the nudge is best-effort; the next open refetches anyway.
     }
   }
 

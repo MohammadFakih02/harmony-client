@@ -48,7 +48,11 @@ export class ChannelService {
     );
   }
 
-  createChannel(guildId: string, name: string, type: 'text' | 'voice'): Promise<Channel> {
+  createChannel(
+    guildId: string,
+    name: string,
+    type: 'text' | 'voice' | 'category',
+  ): Promise<Channel> {
     return firstValueFrom(
       this.http.post<Channel>(`${this.base}/guilds/${guildId}/channels`, {
         name,
@@ -59,6 +63,16 @@ export class ChannelService {
         isNsfw: false,
         slowmodeSeconds: 0,
       }),
+    );
+  }
+
+  /** Moves a channel into a category, or clears it (categoryId null = top-level). */
+  moveToCategory(guildId: string, channelId: string, categoryId: string | null): Promise<Channel> {
+    return firstValueFrom(
+      this.http.patch<Channel>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/category`,
+        { categoryId },
+      ),
     );
   }
 }

@@ -402,6 +402,9 @@ export class ShellComponent implements OnInit, OnDestroy {
     const wasViewing = this.router.url.includes(`/guilds/${guildId}`);
     await this.signalR.leaveGuild(guildId);
     this.guildStore.removeGuild(guildId);
+    // Purge the guild's member/caps/viewer caches — on a rejoin, loadIfNeeded would otherwise
+    // serve the stale pre-kick lists (which no longer include us) until a manual refresh.
+    this.memberStore.clearGuild(guildId);
     if (wasViewing) this.router.navigate(['/friends']);
   }
 

@@ -9,11 +9,13 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { BlockStore } from '../../../core/stores/block.store';
+import { MuteStore } from '../../../core/stores/mute.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoleService } from '../../../core/services/role.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { buildUserMenu, UserMenuDeps } from '../user-context-menu';
 import { GuildMember } from '../../../core/models/member.models';
 import { memberColor, memberHoistRole } from '../../../core/models/role.models';
@@ -57,6 +59,7 @@ export class MemberSidebar implements OnDestroy {
     roleService: inject(RoleService),
     dmStore: inject(DmStore),
     blockStore: inject(BlockStore),
+    muteStore: inject(MuteStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: inject(Router),
@@ -215,6 +218,28 @@ export class MemberSidebar implements OnDestroy {
         caps: this.caps(),
       }),
     );
+  }
+
+  /** Right-click empty space in the list (below/between members) — server-level quick actions,
+   *  reachable without opening the channel-sidebar's header dropdown. */
+  protected openEmptySpaceMenu(event: MouseEvent): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    const entries: ContextMenuEntry[] = [
+      {
+        label: 'Copy Server ID',
+        icon: 'fa-hashtag',
+        action: () => void navigator.clipboard?.writeText(guildId),
+      },
+    ];
+    if (this.caps()?.canManageGuild) {
+      entries.push({
+        label: 'Server Settings',
+        icon: 'fa-gear',
+        action: () => void this.userMenuDeps.router.navigate(['/app/guilds', guildId, 'settings']),
+      });
+    }
+    this.contextMenu.open(event, entries);
   }
 
   protected openProfile(member: GuildMember, origin: CdkOverlayOrigin): void {

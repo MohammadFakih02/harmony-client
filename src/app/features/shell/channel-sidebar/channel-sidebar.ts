@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
@@ -16,6 +16,7 @@ import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MuteStore } from '../../../core/stores/mute.store';
+import { MUTE_DURATIONS } from '../../../core/models/mute.models';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { PreferredStatus, toAvatarStatus } from '../../../core/models/presence.models';
 import {
@@ -46,16 +47,6 @@ interface ExpiryOption {
   label: string;
   minutes: number | null; // null = don't clear
 }
-
-/** Mute durations offered in the channel context menu (null = until manually unmuted). */
-const MUTE_DURATIONS: { label: string; minutes: number | null }[] = [
-  { label: 'For 15 Minutes', minutes: 15 },
-  { label: 'For 1 Hour', minutes: 60 },
-  { label: 'For 3 Hours', minutes: 180 },
-  { label: 'For 8 Hours', minutes: 480 },
-  { label: 'For 24 Hours', minutes: 1440 },
-  { label: 'Until I turn it back on', minutes: null },
-];
 
 @Component({
   selector: 'app-channel-sidebar',
@@ -90,10 +81,26 @@ export class ChannelSidebar {
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
 
-  /** The channel being edited in the settings modal (right-click → Edit Channel), or null. */
+  /** The channel being edited in the settings modal (row gear, or right-click → Edit Channel), or null. */
   protected readonly editingChannel = signal<Channel | null>(null);
 
-  /** Right-click a channel row → Mute (any member) + Edit/Delete (ManageChannels). */
+  constructor() {
+    // A DM/group peer isn't guaranteed to be covered by any other presence load — the guild
+    // member-sidebar only loads guild members, and the friends list only loads friends, so a DM
+    // partner who's neither stayed permanently "offline" until something else happened to fetch
+    // them. This sidebar is mounted for the whole app session, so it's the one place that reliably
+    // sees every DM you have — load (deduped) whenever the list changes.
+    effect(() => {
+      const ids = this.dmStore.dms().flatMap((dm) => dm.participants.map((p) => p.userId));
+      if (ids.length) void this.presenceStore.loadStatuses(ids);
+    });
+  }
+
+  /**
+   * Right-click a channel row = "everything else" (Discord's split): Mute + Notification Settings
+   * (personal, every member) and Move to Category / Edit / Delete (ManageChannels). The row's
+   * hover gear is the single-purpose counterpart — see openChannelGear below.
+   */
   protected openChannelMenu(event: MouseEvent, channel: Channel): void {
     const entries: ContextMenuEntry[] = [];
 
@@ -115,9 +122,47 @@ export class ChannelSidebar {
       });
     }
 
+    entries.push({
+      label: 'Notification Settings',
+      icon: 'fa-gear',
+      children: [
+        {
+          label: 'Use Server Default',
+          checked: () => this.channelNotifLevel(channel.id) === null,
+          keepOpen: true,
+          action: () => this.setChannelNotif(channel.id, null),
+        },
+        ...this.notifLevelOptions.map((opt) => ({
+          label: opt.label,
+          checked: () => this.channelNotifLevel(channel.id) === opt.value,
+          keepOpen: true,
+          action: () => this.setChannelNotif(channel.id, opt.value),
+        })),
+      ],
+    });
+
     if (this.canManageChannels()) {
+      const categories = this.channelStore.currentCategories();
       entries.push(
         { separator: true },
+        {
+          label: 'Move to Category',
+          icon: 'fa-folder',
+          children: [
+            {
+              label: 'No Category',
+              checked: () => channel.categoryId === null,
+              action: () => void this.channelStore.moveToCategory(channel.guildId, channel.id, null),
+            },
+            ...categories
+              .filter((c) => c.id !== null)
+              .map((c) => ({
+                label: c.name,
+                checked: () => channel.categoryId === c.id,
+                action: () => void this.channelStore.moveToCategory(channel.guildId, channel.id, c.id),
+              })),
+          ],
+        },
         {
           label: 'Edit Channel',
           icon: 'fa-pen',
@@ -133,6 +178,107 @@ export class ChannelSidebar {
     }
 
     this.contextMenu.open(event, entries);
+  }
+
+  /** Row gear (hover): the single-purpose shortcut. Managers → Edit Channel directly;
+   *  everyone else → the Notification Settings popover (the only thing there is to set). */
+  protected openChannelGear(channel: Channel, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.canManageChannels()) {
+      this.editingChannel.set(channel);
+    } else {
+      this.openChannelNotif(channel.id, event);
+    }
+  }
+
+  /** Right-click a category header → Create Channel / Rename / Delete (ManageChannels only). */
+  protected openCategoryMenu(event: MouseEvent, category: ChannelCategory): void {
+    if (!this.canManageChannels() || category.id === null) return;
+    const categoryId = category.id;
+    const entries: ContextMenuEntry[] = [
+      {
+        label: 'Create Channel',
+        icon: 'fa-plus',
+        action: () => this.openCreateChannel(),
+      },
+      {
+        label: 'Rename Category',
+        icon: 'fa-pen',
+        action: () => void this.renameCategory(categoryId, category.name),
+      },
+      { separator: true },
+      {
+        label: 'Delete Category',
+        icon: 'fa-trash',
+        danger: true,
+        action: () => void this.deleteCategory(categoryId, category.name),
+      },
+    ];
+    this.contextMenu.open(event, entries);
+  }
+
+  private async renameCategory(categoryId: string, currentName: string): Promise<void> {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    const name = window.prompt('Category name', currentName)?.trim();
+    if (!name || name === currentName) return;
+    try {
+      await this.channelStore.saveChannel(guildId, categoryId, { name });
+    } catch {
+      // Best-effort — the settings modal is the fallback if this silently fails.
+    }
+  }
+
+  private async deleteCategory(categoryId: string, name: string): Promise<void> {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    if (!window.confirm(`Delete category "${name}"? Its channels move to the top level.`)) return;
+    try {
+      await this.channelStore.deleteChannel(guildId, categoryId);
+    } catch {
+      // Best-effort — the store reverts its optimistic removal on failure.
+    }
+  }
+
+  /** Cross-category drag-and-drop: dropping in a different category's list moves the channel;
+   *  dropping within the same list reorders (existing onChannelDrop behavior). */
+  protected onChannelDropAcross(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
+    if (event.previousContainer === event.container) {
+      this.onChannelDrop(event, category);
+      return;
+    }
+    const guildId = this.guildStore.selectedGuildId();
+    const moved = event.previousContainer.data[event.previousIndex];
+    if (!guildId || !moved) return;
+    void this.channelStore.moveToCategory(guildId, moved.id, category.id);
+  }
+
+  /** Every rendered category's drop-list id, so cdkDropListConnectedTo can link them all —
+   *  without this, a channel could only reorder within its own category, never move between. */
+  protected readonly categoryDropListIds = computed(() =>
+    this.channelStore.currentCategories().map((c) => this.categoryDropListId(c.id)),
+  );
+
+  protected categoryDropListId(categoryId: string | null): string {
+    return `channel-category-${categoryId ?? 'none'}`;
+  }
+
+  /** Right-click empty space below the categories/channels — Create Channel/Category
+   *  (ManageChannels only; a plain member has nothing to do here, so the native menu shows). */
+  protected openChannelListMenu(event: MouseEvent): void {
+    if (!this.canManageChannels()) return;
+    this.contextMenu.open(event, [
+      { label: 'Create Channel', icon: 'fa-plus', action: () => this.openCreateChannel() },
+      { label: 'Create Category', icon: 'fa-folder-plus', action: () => this.openCreateCategory() },
+    ]);
+  }
+
+  /** Right-click empty space in the DM list — same "New Group" affordance as the header +. */
+  protected openDmListMenu(event: MouseEvent): void {
+    this.contextMenu.open(event, [
+      { label: 'Create Group DM', icon: 'fa-user-group', action: () => this.openGroupModal() },
+    ]);
   }
 
   private async deleteChannel(channel: Channel): Promise<void> {
@@ -182,7 +328,7 @@ export class ChannelSidebar {
   );
 
   /** Drag-reorder within a category group (ManageChannels; the drop list is disabled otherwise). */
-  protected onChannelDrop(event: CdkDragDrop<unknown>, category: ChannelCategory): void {
+  protected onChannelDrop(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
     if (event.previousIndex === event.currentIndex) return;
     const guildId = this.guildStore.selectedGuildId();
     if (!guildId) return;
@@ -324,6 +470,54 @@ export class ChannelSidebar {
     if (this.activeDmChannelId() === dm.channelId) this.router.navigate(['/app/friends']);
   }
 
+  /** Right-click a DM row — Mute (a DM is a channel, so it reuses the channel mute target)
+   *  + Close/Leave, plus Copy Channel ID (everything the hover ✕ does, plus what it can't). */
+  protected openDmMenu(event: MouseEvent, dm: DirectMessageChannel): void {
+    const muted = this.muteStore.isMuted('channel', dm.channelId);
+    const entries: ContextMenuEntry[] = [
+      muted
+        ? {
+            label: 'Unmute Conversation',
+            icon: 'fa-bell',
+            action: () => void this.muteStore.remove('channel', dm.channelId),
+          }
+        : {
+            label: 'Mute Conversation',
+            icon: 'fa-bell-slash',
+            children: MUTE_DURATIONS.map((d) => ({
+              label: d.label,
+              action: () => void this.muteStore.mute('channel', dm.channelId, d.minutes),
+            })),
+          },
+      { separator: true },
+      {
+        label: 'Copy Channel ID',
+        icon: 'fa-hashtag',
+        action: () => void navigator.clipboard?.writeText(dm.channelId),
+      },
+      { separator: true },
+      dm.isGroup
+        ? {
+            label: 'Leave Group',
+            icon: 'fa-arrow-right-from-bracket',
+            danger: true,
+            action: () => this.removeDmFromMenu(dm),
+          }
+        : {
+            label: 'Close DM',
+            icon: 'fa-xmark',
+            action: () => this.removeDmFromMenu(dm),
+          },
+    ];
+    this.contextMenu.open(event, entries);
+  }
+
+  private removeDmFromMenu(dm: DirectMessageChannel): void {
+    if (dm.isGroup) this.dmStore.leave(dm.channelId);
+    else this.dmStore.hide(dm.channelId);
+    if (this.activeDmChannelId() === dm.channelId) this.router.navigate(['/app/friends']);
+  }
+
   // New-group creation modal (from the DM header +).
   protected readonly showGroupModal = signal(false);
 
@@ -337,7 +531,7 @@ export class ChannelSidebar {
 
   protected readonly showCreateModal = signal(false);
   protected readonly channelName = signal('');
-  protected readonly channelType = signal<'text' | 'voice'>('text');
+  protected readonly channelType = signal<'text' | 'voice' | 'category'>('text');
   protected readonly submitting = signal(false);
   protected readonly error = signal('');
 
@@ -463,6 +657,15 @@ export class ChannelSidebar {
     this.showCreateModal.set(true);
   }
 
+  /** Server dropdown → Create Category — same modal, pre-set to the category type. */
+  openCreateCategory(): void {
+    this.showServerMenu.set(false);
+    this.channelName.set('');
+    this.channelType.set('category');
+    this.error.set('');
+    this.showCreateModal.set(true);
+  }
+
   closeCreateModal(): void {
     this.showCreateModal.set(false);
   }
@@ -477,7 +680,10 @@ export class ChannelSidebar {
     try {
       const channel = await this.channelStore.createChannel(guildId, name, this.channelType());
       this.showCreateModal.set(false);
-      this.router.navigate(['/app/guilds', guildId, 'channels', channel.id]);
+      // A category isn't a navigable view — only text/voice channels have one.
+      if (channel.type !== 'category') {
+        this.router.navigate(['/app/guilds', guildId, 'channels', channel.id]);
+      }
     } catch {
       this.error.set('Failed to create channel. Only the server owner can create channels.');
     } finally {
