@@ -1,0 +1,98 @@
+<!-- Always-dark stage, Discord-style — deliberately independent of the app theme. -->
+<div class="relative flex-1 min-h-0 flex flex-col bg-[#0b0a0e]">
+  @if (participants().length === 0) {
+  <!-- Empty stage: invite to be the first one in -->
+  <div class="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center animate-fade-in">
+    <div class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+      <i class="fas fa-volume-high text-white/80 text-2xl"></i>
+    </div>
+    <h2 class="text-white text-xl font-bold">{{ channel()?.name ?? 'Voice' }}</h2>
+    <p class="text-white/50 text-sm -mt-1.5">No one is currently in voice. Ready to talk?</p>
+  </div>
+  } @else {
+  <!-- Participant tiles -->
+  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-6 pb-24">
+    <div class="grid gap-3 w-full max-w-4xl grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+      @for (p of participants(); track p.userId) {
+      <div
+        class="relative aspect-video rounded-xl bg-white/5 flex items-center justify-center transition-shadow duration-150 animate-fade-in"
+        [class.ring-2]="isSpeaking(p.userId)"
+        [class.ring-success]="isSpeaking(p.userId)"
+      >
+        <ui-avatar [src]="avatar(p.userId)" [alt]="name(p.userId)" size="2xl" />
+        <!-- Name pill (bottom-left, Discord-style) -->
+        <span
+          class="absolute bottom-2 left-2 max-w-[85%] flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/60 text-white text-xs font-medium"
+        >
+          <span class="truncate-text">{{ name(p.userId) }}</span>
+          @if (p.isMuted || p.isDeafened) {
+          <i class="fas fa-microphone-slash text-2xs text-white/70 shrink-0" title="Muted"></i>
+          }
+          @if (p.isDeafened) {
+          <i class="fas fa-headphones-simple text-2xs text-danger shrink-0" title="Deafened"></i>
+          }
+        </span>
+      </div>
+      }
+    </div>
+  </div>
+  }
+
+  <!-- Bottom controls: join while spectating, call controls while connected -->
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+    @if (connected()) {
+    <button
+      type="button"
+      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted()"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-microphone]="!voiceStore.selfMuted()"
+        [class.fa-microphone-slash]="voiceStore.selfMuted()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-headphones]="!voiceStore.selfDeafened()"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-12 h-12 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+      title="Disconnect"
+      aria-label="Disconnect"
+      (click)="leave()"
+    >
+      <i class="fas fa-phone-slash text-base"></i>
+    </button>
+    } @else {
+    <button
+      type="button"
+      class="h-11 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
+      [disabled]="connecting()"
+      (click)="join()"
+    >
+      @if (connecting()) {
+      <i class="fas fa-spinner fa-spin"></i> Connecting
+      } @else {
+      Join Voice
+      }
+    </button>
+    }
+  </div>
+</div>

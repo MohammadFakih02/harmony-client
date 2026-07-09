@@ -14,6 +14,8 @@ import { GuildStore } from '../../../core/stores/guild.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
+import { VoiceStore } from '../../../core/stores/voice.store';
+import { VoiceParticipant } from '../../../core/models/voice.models';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MuteStore } from '../../../core/stores/mute.store';
 import { MUTE_DURATIONS } from '../../../core/models/mute.models';
@@ -29,6 +31,7 @@ import { UiAvatar, UiIconButton } from '../../../shared/ui';
 import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
+import { VoiceBar } from '../../voice/voice-bar/voice-bar';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
@@ -63,6 +66,7 @@ interface ExpiryOption {
     GroupDmModal,
     ChannelSettingsModal,
     InvitePeopleModal,
+    VoiceBar,
   ],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
@@ -75,6 +79,7 @@ export class ChannelSidebar {
   protected readonly memberStore = inject(MemberStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
+  protected readonly voiceStore = inject(VoiceStore);
   protected readonly dmStore = inject(DmStore);
   protected readonly muteStore = inject(MuteStore);
   protected readonly nicknameStore = inject(NicknameStore);
@@ -317,6 +322,43 @@ export class ChannelSidebar {
   }
 
   protected readonly publicFileUrl = publicFileUrl;
+
+  // --- Voice channels (LiveKit Slice 2) — click to join; roster renders inline under the row. ---
+
+  /** Clicking a voice channel connects to it AND opens its stage in the main pane (Discord-style). */
+  protected joinVoice(channel: Channel): void {
+    void this.voiceStore.join(channel.id);
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.router.navigate(['/app/guilds', guildId, 'channels', channel.id]);
+  }
+
+  /** Live voice roster for a channel. */
+  protected voiceParticipants(channelId: string): VoiceParticipant[] {
+    return this.voiceStore.participantsOf(channelId);
+  }
+
+  /** A voice participant's display name: guild nickname ?? friend nickname ?? username. */
+  protected voiceName(userId: string): string {
+    const guildId = this.guildStore.selectedGuildId();
+    const member = guildId
+      ? this.memberStore.membersOf(guildId).find((m) => m.userId === userId)
+      : undefined;
+    return member?.nickname ?? this.nicknameStore.nicknameOf(userId) ?? member?.username ?? 'Unknown';
+  }
+
+  /** A voice participant's avatar key (from the guild member list), or null. */
+  protected voiceAvatar(userId: string): string | null {
+    const guildId = this.guildStore.selectedGuildId();
+    const member = guildId
+      ? this.memberStore.membersOf(guildId).find((m) => m.userId === userId)
+      : undefined;
+    return member?.avatarKey ?? null;
+  }
+
+  /** Whether a participant is currently speaking (LiveKit active-speaker detection). */
+  protected isSpeaking(userId: string): boolean {
+    return this.voiceStore.speakingUserIds().has(userId);
+  }
 
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
   // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.
