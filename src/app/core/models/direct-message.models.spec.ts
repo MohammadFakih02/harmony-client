@@ -4,6 +4,7 @@ const oneToOne: DirectMessageChannel = {
   channelId: 'c1',
   isGroup: false,
   name: null,
+  iconKey: null,
   lastReadId: '0',
   participants: [{ userId: 'u1', username: 'alice', avatarKey: null }],
 };
@@ -12,6 +13,7 @@ const namedGroup: DirectMessageChannel = {
   channelId: 'c2',
   isGroup: true,
   name: 'Squad',
+  iconKey: null,
   lastReadId: '0',
   participants: [
     { userId: 'u1', username: 'alice', avatarKey: null },

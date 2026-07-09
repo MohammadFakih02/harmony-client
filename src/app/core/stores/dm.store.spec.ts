@@ -7,6 +7,7 @@ const group: DirectMessageChannel = {
   channelId: 'g1',
   isGroup: true,
   name: 'Squad',
+  iconKey: null,
   lastReadId: '0',
   participants: [
     { userId: 'u1', username: 'alice', avatarKey: null },

@@ -24,14 +24,14 @@
       [title]="dmLabelOf(dm)"
       (click)="openDm(dm.channelId)"
     >
-      @if (dm.isGroup) {
-        <span class="text-sm select-none"><i class="fas fa-user-group"></i></span>
-      } @else if (dmAvatarOf(dm); as avatar) {
+      @if (dmAvatarOf(dm); as avatar) {
         <img
           [src]="avatar"
           [alt]="dmLabelOf(dm)"
           class="w-full h-full object-cover rounded-[inherit]"
         />
+      } @else if (dm.isGroup) {
+        <span class="text-sm select-none"><i class="fas fa-user-group"></i></span>
       } @else {
         <span class="text-sm font-semibold select-none">{{ dmInitials(dmLabelOf(dm)) }}</span>
       }

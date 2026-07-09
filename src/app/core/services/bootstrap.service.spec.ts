@@ -36,7 +36,9 @@ describe('BootstrapService', () => {
     unread: [{ channelId: '10', guildId: '1', unreadCount: 3 }],
     friends: [{ id: '2', username: 'bob' }],
     pendingFriends: [{ id: '3', username: 'carol', direction: 'incoming' }],
-    dms: [{ channelId: '20', isGroup: false, name: null, lastReadId: '0', participants: [] }],
+    dms: [
+      { channelId: '20', isGroup: false, name: null, iconKey: null, lastReadId: '0', participants: [] },
+    ],
     nicknames: { '2': 'Bee' },
     notifications: [{ id: '30', type: 'mention', isRead: false }],
     notificationUnreadCount: 1,

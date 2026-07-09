@@ -153,9 +153,10 @@ export class GuildSidebar {
     return dmLabel(dm, (p) => p.username);
   }
 
-  /** The 1:1 peer's avatar (null for a group — the pill shows a group icon instead). */
+  /** Resolved image URL for the pill: the group icon (if set) or the 1:1 peer's avatar; null → initials. */
   dmAvatarOf(dm: DirectMessageChannel): string | null {
-    return dmPeer(dm)?.avatarKey ?? null;
+    const key = dm.isGroup ? dm.iconKey : (dmPeer(dm)?.avatarKey ?? null);
+    return publicFileUrl(key);
   }
 
   openDm(channelId: string): void {

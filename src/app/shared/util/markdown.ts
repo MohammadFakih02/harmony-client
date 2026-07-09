@@ -34,6 +34,8 @@ export interface MdNode {
   mentionRole?: boolean;
   /** For a role 'mention' node: the role's hex colour, or null. */
   color?: string | null;
+  /** For a 'link' node: the resolved href (equals `text` for http(s), `https://` + text for www.). */
+  href?: string;
 }
 
 type ContainerType = 'bold' | 'italic' | 'underline' | 'strike' | 'spoiler';
@@ -58,6 +60,8 @@ function matchDelim(s: string, i: number): { open: string; type: ContainerType }
 
 // Only literal http(s):// URLs ever become links — javascript:/data: etc. can never match.
 const URL_RE = /^https?:\/\/[^\s]+/;
+// Schemeless www. links (rendered with an https:// href — never javascript:/data:).
+const WWW_RE = /^www\.[^\s]+/;
 // Sentence punctuation that shouldn't be swallowed when a message ends "…see https://x.com."
 const TRAILING_PUNCT = new Set(['.', ',', ':', ';', '!', '?', '"', "'"]);
 
@@ -67,12 +71,8 @@ function count(s: string, ch: string): number {
   return n;
 }
 
-/** Matches a URL starting at index i, with trailing sentence punctuation (and unbalanced
- *  closing brackets) trimmed off. Returns the URL text, or null. */
-function matchUrlAt(s: string, i: number): string | null {
-  const m = URL_RE.exec(s.slice(i));
-  if (!m) return null;
-  let url = m[0];
+/** Trims trailing sentence punctuation and unbalanced closing brackets off a matched URL. */
+function trimUrlTail(url: string): string {
   for (;;) {
     const last = url[url.length - 1];
     if (TRAILING_PUNCT.has(last)) {
@@ -88,8 +88,26 @@ function matchUrlAt(s: string, i: number): string | null {
     }
     break;
   }
+  return url;
+}
+
+/** Matches an http(s):// URL starting at index i, tail-trimmed. Returns the URL text, or null. */
+function matchUrlAt(s: string, i: number): string | null {
+  const m = URL_RE.exec(s.slice(i));
+  if (!m) return null;
+  const url = trimUrlTail(m[0]);
   // "https://" alone (or fully trimmed away) isn't a link.
   return /^https?:\/\/./.test(url) ? url : null;
+}
+
+/** Matches a schemeless `www.` link at index i — requires a plausible domain (another dot before
+ *  the first slash/end, e.g. www.foo.com) so bare `www.` or `www.foo` never links. Tail-trimmed. */
+function matchWwwAt(s: string, i: number): string | null {
+  const m = WWW_RE.exec(s.slice(i));
+  if (!m) return null;
+  const url = trimUrlTail(m[0]);
+  const host = url.slice(4).split('/')[0]; // strip "www.", take the authority up to the first slash
+  return host.includes('.') && host.length > host.indexOf('.') + 1 ? url : null;
 }
 
 /** Index of the matching close marker, or -1. For single-char markers, occurrences that are part
@@ -157,7 +175,20 @@ function parseInline(s: string, ctx: MentionContext): MdNode[] {
       const url = matchUrlAt(s, i);
       if (url) {
         flush(i);
-        out.push({ type: 'link', text: url });
+        out.push({ type: 'link', text: url, href: url });
+        i += url.length;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Schemeless www. link — only at a word boundary (so `awww.cool` never links) and only for a
+    // plausible domain; rendered with an https:// href.
+    if (c === 'w' && (i === 0 || !/[A-Za-z0-9]/.test(s[i - 1])) && s.startsWith('www.', i)) {
+      const url = matchWwwAt(s, i);
+      if (url) {
+        flush(i);
+        out.push({ type: 'link', text: url, href: 'https://' + url });
         i += url.length;
         textStart = i;
         continue;
