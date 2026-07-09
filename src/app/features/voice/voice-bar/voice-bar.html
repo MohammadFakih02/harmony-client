@@ -1,0 +1,75 @@
+@if (voiceStore.inVoice() || voiceStore.connecting()) {
+<div class="mx-2 mt-2 rounded-xl bg-surface-2 border border-border shadow-sm animate-slide-up shrink-0">
+  <!-- Status header: connection state + where you are -->
+  <div class="flex items-center gap-2 px-2.5 pt-2" [class.pb-2]="voiceStore.connecting()">
+    <div class="flex flex-col min-w-0 flex-1">
+      @if (voiceStore.connecting()) {
+      <span class="flex items-center gap-1.5 text-xs font-semibold text-warning leading-tight">
+        <i class="fas fa-spinner fa-spin text-2xs"></i> Connecting
+      </span>
+      } @else {
+      <span class="flex items-center gap-1.5 text-xs font-semibold text-success leading-tight">
+        <i class="fas fa-signal text-2xs"></i> Voice Connected
+      </span>
+      }
+      <span class="text-2xs text-muted leading-tight truncate-text mt-0.5">
+        {{ activeChannel()?.name ?? 'Voice' }}
+        @if (activeGuildName(); as g) {
+        <span class="text-faint">/ {{ g }}</span>
+        }
+      </span>
+    </div>
+    @if (!voiceStore.connecting()) {
+    <ui-icon-button size="md" hover="surface-3" label="Disconnect" (click)="disconnect()">
+      <i class="fas fa-phone-slash text-danger"></i>
+    </ui-icon-button>
+    }
+  </div>
+
+  <!-- Mute / deafen — icon-only toggles, danger-muted when engaged -->
+  @if (!voiceStore.connecting()) {
+  <div class="flex items-center gap-1 px-1.5 pt-1.5 pb-1.5">
+    <button
+      type="button"
+      class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
+      [class.bg-surface]="!voiceStore.selfMuted()"
+      [class.text-muted]="!voiceStore.selfMuted()"
+      [class.hover:text-primary]="!voiceStore.selfMuted()"
+      [class.hover:bg-surface-3]="!voiceStore.selfMuted()"
+      [class.bg-danger-muted]="voiceStore.selfMuted()"
+      [class.text-danger]="voiceStore.selfMuted()"
+      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted()"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-microphone]="!voiceStore.selfMuted()"
+        [class.fa-microphone-slash]="voiceStore.selfMuted()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
+      [class.bg-surface]="!voiceStore.selfDeafened()"
+      [class.text-muted]="!voiceStore.selfDeafened()"
+      [class.hover:text-primary]="!voiceStore.selfDeafened()"
+      [class.hover:bg-surface-3]="!voiceStore.selfDeafened()"
+      [class.bg-danger-muted]="voiceStore.selfDeafened()"
+      [class.text-danger]="voiceStore.selfDeafened()"
+      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-headphones]="!voiceStore.selfDeafened()"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
+      ></i>
+    </button>
+  </div>
+  }
+</div>
+}

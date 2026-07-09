@@ -16,6 +16,7 @@ import {
   MemberUpdatedPayload,
 } from '../models/member.models';
 import { MemberRoleUpdatedPayload, Role, RoleDeletedPayload } from '../models/role.models';
+import { VoiceParticipant, VoiceParticipantLeft } from '../models/voice.models';
 
 // --- Small per-event shapes (previously private to HarmonyHubClient) ---
 
@@ -76,7 +77,10 @@ export type GatewayEvent =
   | { type: 'MemberRoleUpdated'; payload: MemberRoleUpdatedPayload }
   | { type: 'DmChannelUpdated'; channelId: string }
   | { type: 'ProfileUpdated'; payload: ProfileUpdatedPayload }
-  | { type: 'GuildInvitesChanged'; guildId: string };
+  | { type: 'GuildInvitesChanged'; guildId: string }
+  | { type: 'VoiceParticipantJoined'; payload: VoiceParticipant }
+  | { type: 'VoiceParticipantLeft'; payload: VoiceParticipantLeft }
+  | { type: 'VoiceStateUpdated'; payload: VoiceParticipant };
 
 /** The `type` discriminants — handy for filtering. */
 export type GatewayEventType = GatewayEvent['type'];

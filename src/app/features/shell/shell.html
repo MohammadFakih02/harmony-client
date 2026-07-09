@@ -28,7 +28,11 @@
       @if (inGuild() || inDm()) {
       <header class="flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0">
         @if (inGuild() && headerChannel(); as ch) {
-        <i class="fas fa-hashtag text-faint shrink-0"></i>
+        <i
+          class="fas text-faint shrink-0"
+          [class.fa-hashtag]="ch.type !== 'voice'"
+          [class.fa-volume-high]="ch.type === 'voice'"
+        ></i>
         <span class="font-semibold text-primary text-sm truncate shrink-0 max-w-[40%]">{{ ch.name }}</span>
         @if (ch.topic) {
         <span class="w-px h-5 bg-border mx-1 shrink-0"></span>

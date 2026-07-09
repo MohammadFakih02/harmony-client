@@ -19,6 +19,7 @@ import { PinsPanel } from '../channels/pins-panel/pins-panel';
 import { SearchPanel } from './search-panel/search-panel';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
+import { VoiceStore } from '../../core/stores/voice.store';
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { FriendStore } from '../../core/stores/friend.store';
@@ -128,6 +129,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly pinStore = inject(PinStore);
   // Same reason for TypingStore — keep its gateway subscription alive from boot.
   private readonly typingStore = inject(TypingStore);
+  // Same reason for VoiceStore — its gateway subscription (voice rosters) must be live app-wide, not
+  // just while a channel view is mounted, so the sidebar shows who's in voice across every guild.
+  private readonly voiceStore = inject(VoiceStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly memberStore = inject(MemberStore);
