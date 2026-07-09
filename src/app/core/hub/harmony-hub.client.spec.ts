@@ -148,8 +148,11 @@ describe('HarmonyHubClient', () => {
   });
 
   it('emits OnlineStatus coercing userId to a string', () => {
-    conn.emit('OnlineStatus', { userId: 7, status: 'online' });
-    expect(events[0]).toEqual({ type: 'OnlineStatus', payload: { userId: '7', status: 'online' } });
+    conn.emit('OnlineStatus', { userId: 7, status: 'online', statusMessage: 'brb' });
+    expect(events[0]).toEqual({
+      type: 'OnlineStatus',
+      payload: { userId: '7', status: 'online', statusMessage: 'brb' },
+    });
   });
 
   it('emits OfflineStatus coercing userId to a string', () => {

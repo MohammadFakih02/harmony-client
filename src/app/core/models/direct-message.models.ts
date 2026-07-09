@@ -15,6 +15,8 @@ export interface DirectMessageChannel {
   channelId: string;
   isGroup: boolean;
   name: string | null;
+  /** Group icon storage key (render via publicFileUrl). Always null for a 1:1. */
+  iconKey: string | null;
   lastReadId: string;
   participants: DmParticipant[];
 }

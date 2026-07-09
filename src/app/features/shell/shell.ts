@@ -46,6 +46,9 @@ import {
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
+import { DirectMessageService } from '../../core/services/direct-message.service';
+import { FileService } from '../../core/services/file.service';
+import { publicFileUrl } from '../../shared/util/public-file-url';
 import { LocalSettingsStore } from '../../core/stores/local-settings.store';
 import { ResizeHandle } from '../../shared/directives/resize-handle.directive';
 import {
@@ -268,6 +271,58 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected saveGroupName(channelId: string): void {
     void this.dmStore.rename(channelId, this.groupNameDraft());
     this.editingGroupName.set(false);
+  }
+
+  // ---- group icon upload (presign → PUT → confirm; any participant; §5.53 C2) ----
+  private static readonly IconTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  private static readonly MaxIconBytes = 10 * 1024 * 1024; // mirrors the server cap
+  protected readonly iconUploading = signal(false);
+  protected readonly publicFileUrl = publicFileUrl;
+  private readonly dmService = inject(DirectMessageService);
+  private readonly fileService = inject(FileService);
+
+  protected async onGroupIconSelected(channelId: string, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-picking the same file
+    if (!file || this.iconUploading()) return;
+
+    if (!ShellComponent.IconTypes.includes(file.type)) {
+      this.toast.info('Use a png, jpeg, gif, or webp image.', 'fa-circle-exclamation');
+      return;
+    }
+    if (file.size > ShellComponent.MaxIconBytes) {
+      this.toast.info('Image must be 10 MB or smaller.', 'fa-circle-exclamation');
+      return;
+    }
+
+    this.iconUploading.set(true);
+    try {
+      const presign = await this.dmService.presignIcon(channelId, {
+        filename: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+      });
+      await this.fileService.upload(presign.uploadUrl, file);
+      await this.dmService.confirmIcon(channelId, presign.fileId);
+      // The confirm broadcasts DmChannelUpdated → dmStore.resync() refreshes the list with the key.
+    } catch {
+      this.toast.info('Could not upload the group icon.', 'fa-circle-exclamation');
+    } finally {
+      this.iconUploading.set(false);
+    }
+  }
+
+  protected async removeGroupIcon(channelId: string): Promise<void> {
+    if (this.iconUploading()) return;
+    this.iconUploading.set(true);
+    try {
+      await this.dmService.removeIcon(channelId);
+    } catch {
+      this.toast.info('Could not remove the group icon.', 'fa-circle-exclamation');
+    } finally {
+      this.iconUploading.set(false);
+    }
   }
 
   /** Leaves the active group DM and returns to the friends screen. */

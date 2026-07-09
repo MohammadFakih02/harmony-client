@@ -93,7 +93,11 @@ export const PresenceStore = signalStore(
     },
 
     applyOnline(p: OnlineStatusPayload): void {
-      patchState(store, { statuses: { ...store.statuses(), [p.userId]: p.status } });
+      // Carries the custom status text so a friend coming online shows it without a reload.
+      patchState(store, {
+        statuses: { ...store.statuses(), [p.userId]: p.status },
+        statusMessages: { ...store.statusMessages(), [p.userId]: p.statusMessage },
+      });
     },
 
     applyOffline(p: OfflineStatusPayload): void {

@@ -109,6 +109,16 @@
       <span class="min-w-0 flex items-center">
         <span class="font-semibold text-primary mr-1">{{ group.authorName }}</span> pinned a message to this channel.
       </span>
+      } @else if (systemMessageType(group) === 'group_join') {
+      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the group.
+      </span>
+      } @else if (systemMessageType(group) === 'group_leave') {
+      <i class="fas fa-arrow-right-from-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> left the group.
+      </span>
       } @else {
       <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
       <span class="min-w-0">
@@ -166,17 +176,38 @@
       <div class="relative group/msg" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
-        <textarea
-          #editInput
-          cdkOverlayOrigin
-          #editOrigin="cdkOverlayOrigin"
-          autofocusEnd
-          class="w-full bg-surface-3 rounded-lg ring-1 ring-border-subtle focus:ring-2 focus:ring-accent outline-none text-sm px-3 py-2 text-primary resize-none leading-relaxed"
-          rows="2"
-          [ngModel]="editDraft()"
-          (ngModelChange)="onEditInput($event)"
-          (keydown)="onEditKeydown($event, msg)"
-        ></textarea>
+        <div class="relative" cdkOverlayOrigin #editOrigin="cdkOverlayOrigin">
+          <textarea
+            #editInput
+            autofocusEnd
+            class="w-full bg-surface-3 rounded-lg ring-1 ring-border-subtle focus:ring-2 focus:ring-accent outline-none text-sm pl-3 pr-10 py-2 text-primary resize-none leading-relaxed"
+            rows="2"
+            [ngModel]="editDraft()"
+            (ngModelChange)="onEditInput($event)"
+            (keydown)="onEditKeydown($event, msg)"
+          ></textarea>
+          <button
+            type="button"
+            title="Emoji"
+            aria-label="Emoji"
+            class="absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary transition-micro"
+            [class.text-primary]="editEmojiOpen()"
+            (click)="toggleEditEmoji()"
+          >
+            <i class="fas fa-face-smile text-sm"></i>
+          </button>
+        </div>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayOrigin]="editOrigin"
+          [cdkConnectedOverlayOpen]="editEmojiOpen()"
+          [cdkConnectedOverlayPositions]="editEmojiOverlayPositions"
+          [cdkConnectedOverlayHasBackdrop]="false"
+          (overlayOutsideClick)="closeEditEmoji()"
+          (detach)="closeEditEmoji()"
+        >
+          <app-emoji-picker (select)="onEditEmojiSelect($event)" />
+        </ng-template>
         <ng-template
           cdkConnectedOverlay
           [cdkConnectedOverlayOrigin]="editOrigin"

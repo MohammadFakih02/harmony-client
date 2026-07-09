@@ -11,6 +11,8 @@ export type PreferredStatus = 'online' | 'away' | 'dnd' | 'invisible';
 export interface OnlineStatusPayload {
   userId: string;
   status: string;
+  /** The user's custom status text, carried on connect so a coming-online friend shows it immediately. */
+  statusMessage: string | null;
 }
 
 export interface OfflineStatusPayload {

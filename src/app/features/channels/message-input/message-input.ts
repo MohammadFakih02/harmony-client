@@ -30,7 +30,13 @@ import {
   applyMention,
   detectMentionTrigger,
 } from '../../../shared/util/mention-trigger';
-import { FileKind, fileIcon, fileKind, isAllowedType } from '../../../shared/util/file-kind';
+import {
+  FileKind,
+  fileIcon,
+  fileKind,
+  isAllowedType,
+  effectiveContentType,
+} from '../../../shared/util/file-kind';
 
 const MAX_SIZE_BYTES = 50 * 1024 * 1024; // mirrors backend MaxFileSizeBytes
 const MAX_FILES = 10; // mirrors backend MessageService.MaxAttachments
@@ -398,7 +404,9 @@ export class MessageInput implements OnDestroy {
         this.attachError.set(`You can attach up to ${MAX_FILES} files.`);
         break;
       }
-      if (!isAllowedType(file.type)) {
+      // Fall back to a filename-extension MIME for signature-less text (.md reports empty file.type).
+      const contentType = effectiveContentType(file);
+      if (!isAllowedType(contentType)) {
         this.attachError.set("This file type isn't supported.");
         continue;
       }
@@ -406,18 +414,18 @@ export class MessageInput implements OnDestroy {
         this.attachError.set('Files must be 50 MB or smaller.');
         continue;
       }
-      this.startUpload(file);
+      this.startUpload(file, contentType);
     }
   }
 
-  private async startUpload(file: File): Promise<void> {
+  private async startUpload(file: File, contentType: string): Promise<void> {
     const localId = ++_localIdCounter;
-    const kind = fileKind(file.type);
+    const kind = fileKind(contentType);
     const entry: StagedFile = {
       localId,
       name: file.name,
       kind,
-      icon: fileIcon(file.type),
+      icon: fileIcon(contentType),
       // Only images get a thumbnail object URL; other kinds show an icon tile.
       previewUrl: kind === 'image' ? URL.createObjectURL(file) : '',
       progress: 0,
@@ -435,11 +443,14 @@ export class MessageInput implements OnDestroy {
     try {
       const presign = await this.fileService.presign(guildId, channelId, {
         filename: file.name,
-        contentType: file.type,
+        contentType,
         sizeBytes: file.size,
       });
+      // The presigned PUT binds Content-Type into the signature — send the effective type, not the
+      // File's own (which the browser leaves empty for .md), or the upload fails the signature check.
       await this.fileService.upload(presign.uploadUrl, file, (pct) =>
         this.patchStaged(localId, { progress: pct }),
+        contentType,
       );
       const confirmed = await this.fileService.confirm(guildId, channelId, presign.fileId);
       this.patchStaged(localId, { status: 'done', fileId: confirmed.id, progress: 100 });

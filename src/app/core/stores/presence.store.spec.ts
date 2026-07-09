@@ -85,7 +85,7 @@ describe('PresenceStore', () => {
   });
 
   it('applyOnline / applyOffline update a user’s status', () => {
-    store.applyOnline({ userId: '1', status: 'online' });
+    store.applyOnline({ userId: '1', status: 'online', statusMessage: null });
     expect(store.statusOf('1')).toBe('online');
 
     store.applyOffline({ userId: '1' });

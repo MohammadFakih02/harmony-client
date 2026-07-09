@@ -3,13 +3,15 @@ import { UiAvatar } from '../../../shared/ui';
 import { PinStore } from '../../../core/stores/pin.store';
 import { MessageStore } from '../../../core/stores/message.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
+import { MemberStore } from '../../../core/stores/member.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
 import { PinnedMessageResponse } from '../../../core/models/message.models';
 
 /**
  * The channel's pinned-message panel, opened from the header pin button (as a CDK overlay). Lists
- * pins newest-first with Jump (scrolls the message list via MessageStore.requestJump) and Unpin
- * (gated the same way as the message-list pin action). Reads everything from PinStore — the header
- * only toggles its visibility.
+ * pins newest-first with Jump (anchored history load via MessageStore.jumpToMessage, so pins outside
+ * the loaded window still land) and Unpin (gated the same way as the message-list pin action).
+ * Reads everything from PinStore — the header only toggles its visibility.
  */
 @Component({
   selector: 'app-pins-panel',
@@ -44,7 +46,7 @@ import { PinnedMessageResponse } from '../../../core/models/message.models';
           <ui-avatar [src]="pin.message.avatarKey" [alt]="pin.message.username" size="sm" class="mt-0.5 shrink-0" />
           <div class="flex flex-col gap-0.5 flex-1 min-w-0">
             <div class="flex items-baseline gap-2">
-              <span class="text-sm font-semibold text-primary truncate">{{ pin.message.username }}</span>
+              <span class="text-sm font-semibold text-primary truncate">{{ displayName(pin) }}</span>
               <span class="text-2xs text-faint shrink-0">{{ formatDate(pin.message.sentAt) }}</span>
             </div>
             <p class="text-sm text-muted wrap-break-words line-clamp-3">
@@ -78,8 +80,21 @@ export class PinsPanel {
   protected readonly pinStore = inject(PinStore);
   private readonly messageStore = inject(MessageStore);
   private readonly channelStore = inject(ChannelStore);
+  private readonly memberStore = inject(MemberStore);
+  private readonly nicknameStore = inject(NicknameStore);
 
   readonly close = output<void>();
+
+  /** Nickname-aware author name (guild server-nickname, else DM friend-nickname), like the message list. */
+  protected displayName(pin: PinnedMessageResponse): string {
+    const userId = pin.message.userId;
+    const guildId = this.messageStore.activeGuildId();
+    if (guildId) {
+      const member = this.memberStore.membersOf(guildId).find((m) => m.userId === userId);
+      return member?.nickname ?? pin.message.username;
+    }
+    return this.nicknameStore.nicknameOf(userId) ?? pin.message.username;
+  }
 
   /** Same rule as the message list: guild → PinMessages capability; DM → always (a participant). */
   protected readonly canPin = computed(() =>
@@ -99,7 +114,13 @@ export class PinsPanel {
   }
 
   protected jump(pin: PinnedMessageResponse): void {
-    this.messageStore.requestJump(pin.message.messageId);
+    // Anchored jump (loads a window centred on the pin) so pins outside the loaded window still land,
+    // unlike requestJump which only scrolls to an already-rendered message.
+    void this.messageStore.jumpToMessage(
+      this.messageStore.activeGuildId(),
+      pin.message.channelId,
+      pin.message.messageId,
+    );
     this.close.emit();
   }
 
