@@ -12,11 +12,12 @@ import { MessageList } from './message-list/message-list';
 import { MessageInput } from './message-input/message-input';
 import { TypingIndicator } from './typing-indicator/typing-indicator';
 import { NsfwGate } from './nsfw-gate/nsfw-gate';
+import { VoiceView } from '../voice/voice-view/voice-view';
 
 @Component({
   selector: 'app-channel',
   standalone: true,
-  imports: [MessageList, MessageInput, TypingIndicator, NsfwGate],
+  imports: [MessageList, MessageInput, TypingIndicator, NsfwGate, VoiceView],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
     @if (gated()) {
@@ -25,6 +26,8 @@ import { NsfwGate } from './nsfw-gate/nsfw-gate';
       (confirm)="acknowledgeNsfw()"
       (back)="leaveNsfw()"
     />
+    } @else if (isVoice()) {
+    <app-voice-view />
     } @else {
     <app-message-list #list class="flex-1 min-h-0" />
     <app-typing-indicator />
@@ -47,6 +50,11 @@ export class Channel implements OnInit, OnDestroy {
     const channel = this.channelStore.selectedChannel();
     return !!channel?.isNsfw && !this.nsfwConsent.has(channel.id);
   });
+
+  /** Voice channels render the voice stage instead of a chat (LiveKit Slice 2). */
+  protected readonly isVoice = computed(
+    () => this.channelStore.selectedChannel()?.type === 'voice',
+  );
 
   private channelId = '';
   // null = a DM (no owning guild). Guild channels carry their guild id here.
@@ -73,6 +81,14 @@ export class Channel implements OnInit, OnDestroy {
         this.channelStore.rememberChannel(newGuildId, newChannelId);
         this.channelStore.loadCapabilities(newGuildId, newChannelId);
       }
+
+      // Voice channels render the stage, not a chat — skip the text-channel bookkeeping
+      // (messages, pins, mark-read, hub text group). Media/roster are VoiceStore's concern.
+      if (this.channelStore.selectedChannel()?.type === 'voice') {
+        if (prev) void this.signalR.leaveChannel(prev);
+        return;
+      }
+
       // Load this channel's pins (drives the 📌 indicator + Pin/Unpin toggle + the pins panel).
       void this.pinStore.load(newGuildId, newChannelId);
 

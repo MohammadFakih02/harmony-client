@@ -162,6 +162,131 @@
         (cdkDropListDropped)="onChannelDropAcross($event, category)"
       >
         @for (channel of category.channels; track channel.id) {
+        @if (channel.type === 'voice') {
+        <!-- Voice channel: click to join (no route change); live roster renders inline underneath. -->
+        @let vps = voiceParticipants(channel.id);
+        @let inThisVoice = voiceStore.activeChannelId() === channel.id;
+        <div cdkDrag cdkDragLockAxis="y" class="flex flex-col">
+          <div
+            role="button"
+            tabindex="0"
+            class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative w-full text-left cursor-pointer"
+            [class.bg-surface-3]="inThisVoice"
+            [class.text-primary]="inThisVoice"
+            [attr.aria-label]="'Join ' + channel.name"
+            (contextmenu)="openChannelMenu($event, channel)"
+            (click)="joinVoice(channel)"
+            (keydown.enter)="joinVoice(channel)"
+          >
+            @if (voiceStore.connectingChannelId() === channel.id) {
+            <i class="fas fa-spinner fa-spin w-4 text-center shrink-0 text-faint text-sm"></i>
+            } @else {
+            <i
+              class="fas fa-volume-high w-4 text-center shrink-0 text-base"
+              [class.text-success]="inThisVoice"
+              [class.text-faint]="!inThisVoice"
+            ></i>
+            }
+            <span class="flex-1 truncate-text">{{ channel.name }}</span>
+            @if (vps.length) {
+            <span
+              class="shrink-0 flex items-center gap-1 text-2xs font-medium text-faint tabular-nums"
+              [attr.aria-label]="vps.length + ' connected'"
+            >
+              <i class="fas fa-user text-3xs"></i>{{ vps.length }}
+            </span>
+            }
+            <div class="opacity-0 group-hover:opacity-100 transition-micro">
+              <ui-icon-button
+                size="xs"
+                hover="surface-3"
+                [label]="canManageChannels() ? 'Edit Channel' : 'Notification Settings'"
+                cdkOverlayOrigin
+                #voiceNotifOrigin="cdkOverlayOrigin"
+                (click)="openChannelGear(channel, $event)"
+              >
+                <i class="fas fa-gear"></i>
+              </ui-icon-button>
+              <ng-template
+                cdkConnectedOverlay
+                [cdkConnectedOverlayOrigin]="voiceNotifOrigin"
+                [cdkConnectedOverlayOpen]="channelNotifTarget() === channel.id"
+                [cdkConnectedOverlayPositions]="channelNotifPositions"
+                [cdkConnectedOverlayHasBackdrop]="true"
+                cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+                (backdropClick)="channelNotifTarget.set(null)"
+                (detach)="channelNotifTarget.set(null)"
+              >
+                <div
+                  class="w-52 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+                >
+                  <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 pt-1 pb-0.5">
+                    Notification Settings
+                  </p>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                    (click)="setChannelNotif(channel.id, null)"
+                  >
+                    <i
+                      class="fas fa-check text-xs w-3.5 text-center"
+                      [class.text-accent]="channelNotifLevel(channel.id) === null"
+                      [class.opacity-0]="channelNotifLevel(channel.id) !== null"
+                    ></i>
+                    Use Server Default
+                  </button>
+                  @for (opt of notifLevelOptions; track opt.value) {
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                    (click)="setChannelNotif(channel.id, opt.value)"
+                  >
+                    <i
+                      class="fas fa-check text-xs w-3.5 text-center"
+                      [class.text-accent]="channelNotifLevel(channel.id) === opt.value"
+                      [class.opacity-0]="channelNotifLevel(channel.id) !== opt.value"
+                    ></i>
+                    {{ opt.label }}
+                  </button>
+                  }
+                </div>
+              </ng-template>
+            </div>
+          </div>
+
+          <!-- Connected participants -->
+          @if (vps.length) {
+          <div class="flex flex-col gap-0.5 ml-5 mt-0.5 mb-1 animate-slide-down">
+            @for (p of vps; track p.userId) {
+            <div
+              class="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-fade-in"
+            >
+              <span
+                class="relative rounded-full shrink-0 ring-success transition-shadow duration-150"
+                [class.ring-2]="isSpeaking(p.userId)"
+              >
+                <ui-avatar [src]="voiceAvatar(p.userId)" [alt]="voiceName(p.userId)" size="sm" />
+              </span>
+              <span
+                class="flex-1 truncate-text text-xs font-medium transition-micro"
+                [class.text-primary]="isSpeaking(p.userId)"
+                [class.text-muted]="!isSpeaking(p.userId)"
+              >
+                {{ voiceName(p.userId) }}
+              </span>
+              <!-- Deafen implies mic-muted, so a deafened participant shows both glyphs. -->
+              @if (p.isMuted || p.isDeafened) {
+              <i class="fas fa-microphone-slash text-2xs text-faint shrink-0" title="Muted"></i>
+              }
+              @if (p.isDeafened) {
+              <i class="fas fa-headphones-simple text-2xs text-danger shrink-0" title="Deafened"></i>
+              }
+            </div>
+            }
+          </div>
+          }
+        </div>
+        } @else {
         <!-- The channel you're viewing never shows an unread badge (you're reading it). -->
         @let muted = muteStore.isMuted('channel', channel.id);
         <!-- A muted channel shows no unread emphasis (dimmed, no pill/badge), Discord-style. -->
@@ -182,11 +307,8 @@
           @if (unread > 0) {
           <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary"></span>
           }
-          <i
-            class="fas w-4 text-center shrink-0 text-faint text-base"
-            [class.fa-hashtag]="channel.type === 'text' || channel.type === 'announcement'"
-            [class.fa-volume-high]="channel.type === 'voice'"
-          ></i>
+          <!-- Voice channels render in their own branch above; this row is always a text/announcement channel. -->
+          <i class="fas fa-hashtag w-4 text-center shrink-0 text-faint text-base"></i>
           <span class="flex-1 truncate-text">{{ channel.name }}</span>
 
           <!-- Unread badge -->
@@ -255,6 +377,7 @@
           </div>
           }
         </a>
+        }
         }
       </div>
       }
@@ -347,6 +470,9 @@
     }
   </div>
   }
+
+  <!-- Voice control bar (only while connected) — sits just above the user deck, Discord-style. -->
+  <app-voice-bar />
 
   <!-- User deck -->
   <div

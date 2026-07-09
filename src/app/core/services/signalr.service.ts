@@ -172,6 +172,27 @@ export class SignalRService {
     if (this.isConnected) void this._client!.stopTyping(channelId).catch(() => {});
   }
 
+  // --- Voice signaling (LiveKit). The store publishes voice-state to the server; the media path is
+  //     handled separately by VoiceService. join/leave await so the store can order its LiveKit ops. ---
+  async joinVoice(channelId: string): Promise<void> {
+    if (this.isConnected) await this._client!.joinVoice(channelId).catch(() => {});
+  }
+
+  async leaveVoice(channelId: string): Promise<void> {
+    if (this.isConnected) await this._client!.leaveVoice(channelId).catch(() => {});
+  }
+
+  /** Fire-and-forget mute/deafen/video state — ephemeral, skipped when the socket isn't live. */
+  updateVoiceState(
+    isMuted: boolean,
+    isDeafened: boolean,
+    isVideoOn: boolean,
+    isStreaming: boolean,
+  ): void {
+    if (this.isConnected)
+      void this._client!.updateVoiceState(isMuted, isDeafened, isVideoOn, isStreaming).catch(() => {});
+  }
+
   async disconnect(): Promise<void> {
     this.stopped = true;
     this.stopHeartbeat();

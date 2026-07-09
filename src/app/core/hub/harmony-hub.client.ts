@@ -236,6 +236,40 @@ export class HarmonyHubClient {
 
     this.connection.on('GuildInvitesChanged', (p: { guildId: unknown }) =>
       this.emit({ type: 'GuildInvitesChanged', guildId: String(p.guildId) }));
+
+    // Voice (LiveKit): join/leave/state-change of a channel's voice room. Fanned to the channel
+    // group AND (for guild channels) the guild group, so a guild's channel list shows live rosters.
+    this.connection.on('VoiceParticipantJoined', (p: Record<string, unknown>) =>
+      this.emit({ type: 'VoiceParticipantJoined', payload: this.coerceVoiceParticipant(p) }));
+
+    this.connection.on('VoiceStateUpdated', (p: Record<string, unknown>) =>
+      this.emit({ type: 'VoiceStateUpdated', payload: this.coerceVoiceParticipant(p) }));
+
+    this.connection.on('VoiceParticipantLeft', (p: {
+      channelId: unknown; guildId: unknown; userId: unknown;
+    }) =>
+      this.emit({
+        type: 'VoiceParticipantLeft',
+        payload: {
+          channelId: String(p.channelId),
+          guildId: p.guildId != null ? String(p.guildId) : null,
+          userId: String(p.userId),
+        },
+      }));
+  }
+
+  /** Coerce a voice participant pushed over SignalR: Snowflake ids → strings, joinedAt → number. */
+  private coerceVoiceParticipant(p: Record<string, unknown>): import('../models/voice.models').VoiceParticipant {
+    return {
+      channelId: String(p['channelId']),
+      guildId: p['guildId'] != null ? String(p['guildId']) : null,
+      userId: String(p['userId']),
+      isMuted: Boolean(p['isMuted']),
+      isDeafened: Boolean(p['isDeafened']),
+      isVideoOn: Boolean(p['isVideoOn']),
+      isStreaming: Boolean(p['isStreaming']),
+      joinedAt: Number(p['joinedAt']),
+    };
   }
 
   /** Coerce a member pushed over SignalR: Snowflake ids → strings, timestamps → numbers. */
@@ -336,5 +370,24 @@ export class HarmonyHubClient {
   /** Reports client activity state — true after ~15 min idle, false on the next interaction. */
   async setIdle(idle: boolean): Promise<void> {
     await this.connection.invoke('SetIdle', idle);
+  }
+
+  // --- Voice signaling (LiveKit). Media flows client ↔ LiveKit Cloud; these only tell the server
+  //     to publish/clear the ephemeral voice-state (roster + broadcasts). ---
+  async joinVoice(channelId: string): Promise<void> {
+    await this.connection.invoke('JoinVoice', channelId);
+  }
+
+  async leaveVoice(channelId: string): Promise<void> {
+    await this.connection.invoke('LeaveVoice', channelId);
+  }
+
+  async updateVoiceState(
+    isMuted: boolean,
+    isDeafened: boolean,
+    isVideoOn: boolean,
+    isStreaming: boolean,
+  ): Promise<void> {
+    await this.connection.invoke('UpdateVoiceState', isMuted, isDeafened, isVideoOn, isStreaming);
   }
 }
