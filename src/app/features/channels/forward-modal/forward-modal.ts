@@ -84,7 +84,7 @@ export class ForwardModal implements OnInit {
           channelId: dm.channelId,
           guildId: null,
           label: dmLabel(dm, (p) => this.nicknameStore.nicknameOf(p.userId) ?? p.username),
-          avatarKey: peer?.avatarKey ?? null,
+          avatarKey: dm.isGroup ? dm.iconKey : (peer?.avatarKey ?? null),
           isDm: true,
         };
       })

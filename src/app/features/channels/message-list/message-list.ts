@@ -4,7 +4,7 @@ import {
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
-import { UiAvatar, MentionAutocomplete } from '../../../shared/ui';
+import { UiAvatar, MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
 import { PinStore } from '../../../core/stores/pin.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
@@ -78,7 +78,7 @@ export interface MessageGroup {
   dayLabel: string | null;
 }
 
-const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin']);
+const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin', 'group_join', 'group_leave']);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
@@ -133,6 +133,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     UserProfilePopout,
     OverlayModule,
     MentionAutocomplete,
+    EmojiPicker,
   ],
   host: {
     class: 'flex flex-col min-h-0 h-full relative',
@@ -337,6 +338,13 @@ export class MessageList {
   protected readonly editMentionHighlightedIndex = signal(0);
   protected readonly editMentionOverlayPositions: ConnectionPositionPair[] = [
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
+  ];
+
+  // Emoji picker inside the inline editor — mirrors the composer, sharing the edit box origin
+  // and mutually exclusive with the mention popup (both anchor to #editOrigin).
+  protected readonly editEmojiOpen = signal(false);
+  protected readonly editEmojiOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
   ];
   private readonly editMentionPool = computed<MentionCandidate[]>(() => {
     const guildId = this.messageStore.activeGuildId();
@@ -711,6 +719,7 @@ export class MessageList {
     this.editingId.set(msg.messageId);
     this.editDraft.set(msg.content);
     this.editMentionTrigger.set(null);
+    this.editEmojiOpen.set(false);
   }
 
   /** Starts editing the user's most recent editable message (the composer ArrowUp shortcut). */
@@ -728,14 +737,43 @@ export class MessageList {
     this.editingId.set(null);
     this.editDraft.set('');
     this.editMentionTrigger.set(null);
+    this.editEmojiOpen.set(false);
   }
 
   protected onEditInput(value: string): void {
     this.editDraft.set(value);
     const el = this.editInput()?.nativeElement;
     const caret = el?.selectionStart ?? value.length;
-    this.editMentionTrigger.set(detectMentionTrigger(value, caret));
+    const trigger = detectMentionTrigger(value, caret);
+    this.editMentionTrigger.set(trigger);
     this.editMentionHighlightedIndex.set(0);
+    if (trigger) this.editEmojiOpen.set(false); // don't stack the emoji picker over the mention popup
+  }
+
+  protected toggleEditEmoji(): void {
+    const opening = !this.editEmojiOpen();
+    if (opening) this.editMentionTrigger.set(null); // the two overlays share the edit-box origin
+    this.editEmojiOpen.set(opening);
+  }
+
+  protected closeEditEmoji(): void {
+    this.editEmojiOpen.set(false);
+  }
+
+  /** Inserts the chosen emoji into the edit draft at the caret, keeping the picker open. */
+  protected onEditEmojiSelect(char: string): void {
+    const el = this.editInput()?.nativeElement;
+    const value = this.editDraft();
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    this.editDraft.set(value.slice(0, start) + char + value.slice(end));
+    queueMicrotask(() => {
+      const input = this.editInput()?.nativeElement;
+      if (!input) return;
+      const caret = start + char.length;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
   }
 
   protected selectEditMention(candidate: MentionCandidate): void {
@@ -921,9 +959,17 @@ export class MessageList {
     const el = this.scroller()?.nativeElement;
     if (!el) return;
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const wasAtBottom = this.atBottom;
     this.atBottom = fromBottom < 80;
     const anchored = this.messageStore.anchored();
     this.showJumpToBottom.set(!anchored && fromBottom > 300);
+
+    // Auto-hide the "N new messages" banner once the user has scrolled away and back to the
+    // bottom (they've seen the unread block). Gated on the false→true transition so the open-time
+    // programmatic scroll-to-bottom (which starts atBottom=true) can't insta-dismiss it.
+    if (this.atBottom && !wasAtBottom && this.messageStore.unreadOnOpen() > 0) {
+      this.messageStore.dismissUnreadBanner();
+    }
 
     // Bound the loaded window while pinned to the live bottom (this fires after each programmatic
     // scroll-to-bottom too). Dropping the oldest, off-screen messages keeps the view put — the

@@ -113,10 +113,16 @@ export class HarmonyHubClient {
         payload: { userId: String(userId), channelId: String(channelId) },
       }));
 
-    this.connection.on('OnlineStatus', (payload: { userId: unknown; status: string }) =>
+    this.connection.on('OnlineStatus', (payload: {
+      userId: unknown; status: string; statusMessage: string | null;
+    }) =>
       this.emit({
         type: 'OnlineStatus',
-        payload: { userId: String(payload.userId), status: payload.status },
+        payload: {
+          userId: String(payload.userId),
+          status: payload.status,
+          statusMessage: payload.statusMessage ?? null,
+        },
       }));
 
     this.connection.on('OfflineStatus', (payload: { userId: unknown }) =>

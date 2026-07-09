@@ -30,6 +30,7 @@ import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
+import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
 import {
   NOTIFICATION_LEVEL_OPTIONS,
@@ -314,6 +315,8 @@ export class ChannelSidebar {
   protected dmOneToOnePeer(dm: DirectMessageChannel): DmParticipant | undefined {
     return dmPeer(dm);
   }
+
+  protected readonly publicFileUrl = publicFileUrl;
 
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
   // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.

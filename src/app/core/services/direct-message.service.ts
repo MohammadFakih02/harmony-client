@@ -40,6 +40,32 @@ export class DirectMessageService {
     return firstValueFrom(this.http.patch<void>(`${this.base}/dm/${channelId}/name`, { name }));
   }
 
+  // ---- group icon — participant-scoped presign → PUT → confirm (mirrors profile assets) ----
+
+  presignIcon(
+    channelId: string,
+    req: { filename: string; contentType: string; sizeBytes: number },
+  ): Promise<{ fileId: string; uploadUrl: string; objectKey: string; expiresAt: string }> {
+    return firstValueFrom(
+      this.http.post<{ fileId: string; uploadUrl: string; objectKey: string; expiresAt: string }>(
+        `${this.base}/dm/${channelId}/icon/presign`,
+        req,
+      ),
+    );
+  }
+
+  /** Finalizes the upload — the returned key is now set on the group channel. */
+  confirmIcon(channelId: string, fileId: string): Promise<{ key: string }> {
+    return firstValueFrom(
+      this.http.post<{ key: string }>(`${this.base}/dm/${channelId}/icon/${fileId}/confirm`, null),
+    );
+  }
+
+  /** Clears the group icon (idempotent). */
+  removeIcon(channelId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/dm/${channelId}/icon`));
+  }
+
   getMyDms(): Promise<DirectMessageChannel[]> {
     return firstValueFrom(this.http.get<DirectMessageChannel[]>(`${this.base}/dm`));
   }

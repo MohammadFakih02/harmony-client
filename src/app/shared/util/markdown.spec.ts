@@ -125,10 +125,32 @@ describe('parseMarkdown', () => {
   it('linkifies a bare http(s) URL with surrounding text', () => {
     expect(parse('see https://example.com now')).toEqual([
       { type: 'text', text: 'see ' },
-      { type: 'link', text: 'https://example.com' },
+      { type: 'link', text: 'https://example.com', href: 'https://example.com' },
       { type: 'text', text: ' now' },
     ]);
     expect(flatten(parse('http://x.io'))).toEqual(['link:http://x.io']);
+  });
+
+  it('linkifies a schemeless www. link with an https:// href', () => {
+    expect(parse('go www.example.com ok')).toEqual([
+      { type: 'text', text: 'go ' },
+      { type: 'link', text: 'www.example.com', href: 'https://www.example.com' },
+      { type: 'text', text: ' ok' },
+    ]);
+  });
+
+  it('does not linkify www. mid-word or without a plausible domain', () => {
+    expect(flatten(parse('awww.cool'))).toEqual(['text:awww.cool']);
+    expect(flatten(parse('www.foo'))).toEqual(['text:www.foo']);
+    expect(flatten(parse('just www. here'))).toEqual(['text:just www. here']);
+  });
+
+  it('trims trailing punctuation off a www. link', () => {
+    expect(flatten(parse('visit www.example.com.'))).toEqual([
+      'text:visit ',
+      'link:www.example.com',
+      'text:.',
+    ]);
   });
 
   it('trims trailing sentence punctuation off a link', () => {

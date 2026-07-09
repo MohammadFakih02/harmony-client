@@ -28,6 +28,28 @@ export function isAllowedType(contentType: string): boolean {
   return ALLOWED_CONTENT_TYPES.includes(contentType.toLowerCase());
 }
 
+// Some allowed text formats (notably .md) report an empty `File.type` in the browser, so the file
+// would be rejected client-side despite being allowed. Fall back to a filename-extension map for the
+// signature-less text types the backend accepts.
+const EXTENSION_CONTENT_TYPES: Record<string, string> = {
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  txt: 'text/plain',
+  log: 'text/plain',
+  csv: 'text/csv',
+};
+
+/** Infers a content type from the filename extension (only when the browser gives none). */
+export function contentTypeFromName(filename: string): string | null {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return EXTENSION_CONTENT_TYPES[ext] ?? null;
+}
+
+/** The File's own MIME type, or an extension-based fallback when the browser reports none. */
+export function effectiveContentType(file: File): string {
+  return file.type || contentTypeFromName(file.name) || '';
+}
+
 /** Bucket a content type into how it should render. Unknown / non-media → 'file'. */
 export function fileKind(contentType: string | undefined | null): FileKind {
   const type = (contentType ?? '').toLowerCase();

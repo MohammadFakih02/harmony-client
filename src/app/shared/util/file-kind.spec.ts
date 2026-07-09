@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fileIcon, fileKind, formatBytes, isAllowedType } from './file-kind';
+import {
+  contentTypeFromName,
+  effectiveContentType,
+  fileIcon,
+  fileKind,
+  formatBytes,
+  isAllowedType,
+} from './file-kind';
 
 describe('fileKind', () => {
   it('classifies images', () => {
@@ -45,6 +52,31 @@ describe('isAllowedType', () => {
     expect(isAllowedType('image/svg+xml')).toBe(false);
     expect(isAllowedType('application/x-msdownload')).toBe(false);
     expect(isAllowedType('')).toBe(false);
+  });
+});
+
+describe('contentTypeFromName', () => {
+  it('maps signature-less text extensions', () => {
+    expect(contentTypeFromName('notes.md')).toBe('text/markdown');
+    expect(contentTypeFromName('README.MARKDOWN')).toBe('text/markdown');
+    expect(contentTypeFromName('server.log')).toBe('text/plain');
+    expect(contentTypeFromName('data.csv')).toBe('text/csv');
+  });
+  it('returns null for unknown or extensionless names', () => {
+    expect(contentTypeFromName('archive.zip')).toBeNull();
+    expect(contentTypeFromName('noextension')).toBeNull();
+  });
+});
+
+describe('effectiveContentType', () => {
+  it('uses the File type when present', () => {
+    expect(effectiveContentType(new File([''], 'a.png', { type: 'image/png' }))).toBe('image/png');
+  });
+  it('falls back to the extension map when the browser gives none', () => {
+    expect(effectiveContentType(new File([''], 'notes.md'))).toBe('text/markdown');
+  });
+  it('is empty when neither yields a type', () => {
+    expect(effectiveContentType(new File([''], 'mystery.bin'))).toBe('');
   });
 });
 

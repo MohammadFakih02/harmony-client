@@ -35,13 +35,20 @@ export class FileService {
    * PUTs the bytes directly to the object store via the presigned URL. Uses a raw
    * XMLHttpRequest — NOT HttpClient — because the auth interceptor would attach the
    * JWT + credentials, which breaks the presigned signature and trips CORS. The
-   * Content-Type MUST match the type declared at presign (the signature binds it).
+   * Content-Type MUST match the type declared at presign (the signature binds it). Pass
+   * `contentType` when the File's own type is empty/wrong (e.g. .md → text/markdown) so the
+   * header matches what was signed.
    */
-  upload(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
+  upload(
+    uploadUrl: string,
+    file: File,
+    onProgress?: (pct: number) => void,
+    contentType?: string,
+  ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', uploadUrl, true);
-      xhr.setRequestHeader('Content-Type', file.type);
+      xhr.setRequestHeader('Content-Type', contentType || file.type);
 
       if (onProgress) {
         // Progress events fire far more often than the bar can meaningfully move; only

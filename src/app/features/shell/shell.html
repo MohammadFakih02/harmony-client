@@ -36,8 +36,12 @@
         }
         } @else if (inDm() && dmChannel()) {
         @if (dmIsGroup()) {
-        <span class="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center text-muted shrink-0">
+        <span class="w-6 h-6 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted shrink-0">
+          @if (dmChannel()?.iconKey; as icon) {
+          <img [src]="publicFileUrl(icon)" [alt]="dmHeaderName()" class="w-full h-full object-cover" />
+          } @else {
           <i class="fas fa-user-group text-2xs"></i>
+          }
         </span>
         <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
         <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
@@ -174,8 +178,41 @@
       @if (dmIsGroup()) {
       <!-- Group: name, member list, add/leave -->
       <div class="px-4 pb-4">
-        <div class="relative z-10 inline-flex items-center justify-center w-20 h-20 -mt-10 rounded-full bg-surface-3 ring-[6px] ring-surface-2 text-muted">
-          <i class="fas fa-user-group text-2xl"></i>
+        <div class="relative z-10 inline-block -mt-10 group/icon">
+          <div class="w-20 h-20 rounded-full overflow-hidden bg-surface-3 ring-[6px] ring-surface-2 flex items-center justify-center text-muted">
+            @if (dm.iconKey) {
+            <img [src]="publicFileUrl(dm.iconKey)" [alt]="dmHeaderName()" class="w-full h-full object-cover" />
+            } @else {
+            <i class="fas fa-user-group text-2xl"></i>
+            }
+          </div>
+          <label
+            class="absolute inset-0 rounded-full flex items-center justify-center bg-black/50 text-white opacity-0 group-hover/icon:opacity-100 transition-micro cursor-pointer"
+            [class.pointer-events-none]="iconUploading()"
+            title="Change group icon"
+          >
+            @if (iconUploading()) {
+            <i class="fas fa-spinner fa-spin text-sm"></i>
+            } @else {
+            <i class="fas fa-camera text-sm"></i>
+            }
+            <input
+              type="file"
+              class="hidden"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              (change)="onGroupIconSelected(dm.channelId, $event)"
+            />
+          </label>
+          @if (dm.iconKey && !iconUploading()) {
+          <button
+            type="button"
+            class="absolute -top-0.5 -right-0.5 w-6 h-6 rounded-full bg-surface border border-border-subtle text-faint hover:text-danger transition-micro flex items-center justify-center opacity-0 group-hover/icon:opacity-100"
+            aria-label="Remove group icon"
+            (click)="removeGroupIcon(dm.channelId)"
+          >
+            <i class="fas fa-xmark text-2xs"></i>
+          </button>
+          }
         </div>
 
         <div class="mt-2.5 min-w-0">

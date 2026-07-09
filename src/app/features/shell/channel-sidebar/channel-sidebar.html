@@ -308,9 +308,13 @@
       >
         @if (dm.isGroup) {
         <span
-          class="w-8 h-8 shrink-0 rounded-full bg-surface-3 flex items-center justify-center text-muted"
+          class="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted"
         >
+          @if (dm.iconKey; as icon) {
+          <img [src]="publicFileUrl(icon)" [alt]="dmDisplayName(dm)" class="w-full h-full object-cover" />
+          } @else {
           <i class="fas fa-user-group text-xs"></i>
+          }
         </span>
         } @else if (peer) {
         <ui-avatar
