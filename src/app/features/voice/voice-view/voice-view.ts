@@ -1,30 +1,29 @@
 import { Component, computed, inject } from '@angular/core';
 import { ChannelStore } from '../../../core/stores/channel.store';
-import { GuildStore } from '../../../core/stores/guild.store';
-import { MemberStore } from '../../../core/stores/member.store';
-import { NicknameStore } from '../../../core/stores/nickname.store';
 import { VoiceStore } from '../../../core/stores/voice.store';
-import { UiAvatar } from '../../../shared/ui';
+import { buildTiles } from '../call-tiles';
+import { CallOverlayService } from '../call-overlay/call-overlay.service';
+import { VoiceTile } from '../voice-tile/voice-tile';
 
 /**
- * The voice channel stage (LiveKit Slice 2 polish) — rendered in the main content pane instead of a
+ * The voice channel stage (LiveKit Slices 2+3) — rendered in the main content pane instead of a
  * chat when the selected channel is a voice channel. Discord-style: an always-dark stage (independent
- * of the app theme) with one tile per connected participant, a Join button while spectating, and
- * round mute / deafen / disconnect controls while connected. Media + roster live in VoiceStore.
+ * of the app theme) with one tile per connected participant (plus screenshare tiles), a Join button
+ * while spectating, and round camera / screenshare / mute / deafen / expand / disconnect controls
+ * while connected. Media + roster live in VoiceStore; clicking a tile expands the call overlay
+ * focused on it.
  */
 @Component({
   selector: 'app-voice-view',
   standalone: true,
-  imports: [UiAvatar],
+  imports: [VoiceTile],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   templateUrl: './voice-view.html',
 })
 export class VoiceView {
   protected readonly voiceStore = inject(VoiceStore);
   private readonly channelStore = inject(ChannelStore);
-  private readonly guildStore = inject(GuildStore);
-  private readonly memberStore = inject(MemberStore);
-  private readonly nicknameStore = inject(NicknameStore);
+  private readonly overlay = inject(CallOverlayService);
 
   protected readonly channel = computed(() => this.channelStore.selectedChannel());
 
@@ -32,6 +31,8 @@ export class VoiceView {
     const id = this.channel()?.id;
     return id ? this.voiceStore.participantsByChannel()[id] ?? [] : [];
   });
+
+  protected readonly tiles = computed(() => buildTiles(this.participants()));
 
   /** Connected to THIS channel (the store allows only one active call). */
   protected readonly connected = computed(
@@ -42,19 +43,15 @@ export class VoiceView {
     () => this.voiceStore.connectingChannelId() === this.channel()?.id,
   );
 
-  /** Display name: guild nickname ?? friend nickname ?? username (same resolution as the sidebar roster). */
-  protected name(userId: string): string {
-    const member = this.member(userId);
-    return member?.nickname ?? this.nicknameStore.nicknameOf(userId) ?? member?.username ?? 'Unknown';
-  }
+  // Optimistic-true while capabilities are still loading — the LiveKit token + hub clamp are the
+  // real enforcement; this only decides whether the buttons render.
+  protected readonly canUseVideo = computed(
+    () => this.channelStore.currentCapabilities()?.canUseVideo ?? true,
+  );
 
-  protected avatar(userId: string): string | null {
-    return this.member(userId)?.avatarKey ?? null;
-  }
-
-  protected isSpeaking(userId: string): boolean {
-    return this.voiceStore.speakingUserIds().has(userId);
-  }
+  protected readonly canStream = computed(
+    () => this.channelStore.currentCapabilities()?.canStream ?? true,
+  );
 
   protected join(): void {
     const channel = this.channel();
@@ -73,10 +70,15 @@ export class VoiceView {
     this.voiceStore.toggleDeafen();
   }
 
-  private member(userId: string) {
-    const guildId = this.guildStore.selectedGuildId();
-    return guildId
-      ? this.memberStore.membersOf(guildId).find((m) => m.userId === userId)
-      : undefined;
+  protected toggleCamera(): void {
+    void this.voiceStore.toggleCamera();
+  }
+
+  protected toggleScreenShare(): void {
+    void this.voiceStore.toggleScreenShare();
+  }
+
+  protected expand(tileId?: string): void {
+    if (this.connected()) this.overlay.open(tileId);
   }
 }

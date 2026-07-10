@@ -36,6 +36,7 @@ import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
+import { CallOverlay } from '../voice/call-overlay/call-overlay';
 import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
@@ -69,6 +70,7 @@ import {
     MemberSidebar,
     NotificationBell,
     GroupDmModal,
+    CallOverlay,
     UiAvatar,
     UiIconButton,
     UiProfileBanner,
