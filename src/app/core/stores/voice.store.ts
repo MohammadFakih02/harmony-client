@@ -1,4 +1,4 @@
-import { computed, inject } from '@angular/core';
+import { computed, effect, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { GatewayEvents } from '../hub/gateway-events';
@@ -15,6 +15,8 @@ interface VoiceState {
   connectingChannelId: string | null; // which channel that in-flight join targets (drives the row spinner)
   selfMuted: boolean;
   selfDeafened: boolean;
+  selfVideoOn: boolean;
+  selfStreaming: boolean;
 }
 
 /** Replaces (or inserts) a participant in a channel's roster, keyed by userId. */
@@ -52,6 +54,8 @@ export const VoiceStore = signalStore(
     connectingChannelId: null,
     selfMuted: false,
     selfDeafened: false,
+    selfVideoOn: false,
+    selfStreaming: false,
   }),
   withComputed((store, voice = inject(VoiceService)) => ({
     /** True while connected to (or connecting to) any voice channel. */
@@ -86,8 +90,20 @@ export const VoiceStore = signalStore(
           connectingChannelId: null,
           selfMuted: false,
           selfDeafened: false,
+          selfVideoOn: false,
+          selfStreaming: false,
           participantsByChannel: id ? removeFrom(store.participantsByChannel(), channelId, id) : store.participantsByChannel(),
         });
+      };
+
+      /** Publishes the full self-state tuple — the hub takes all four flags in one invoke. */
+      const broadcastSelfState = (): void => {
+        signalR.updateVoiceState(
+          store.selfMuted(),
+          store.selfDeafened(),
+          store.selfVideoOn(),
+          store.selfStreaming(),
+        );
       };
 
       return {
@@ -120,6 +136,8 @@ export const VoiceStore = signalStore(
               connectingChannelId: null,
               selfMuted: false,
               selfDeafened: false,
+              selfVideoOn: false,
+              selfStreaming: false,
               participantsByChannel: { ...store.participantsByChannel(), [channelId]: roster },
             });
           } catch (err) {
@@ -148,7 +166,7 @@ export const VoiceStore = signalStore(
           voice.setMicMuted(muted);
           voice.setDeafened(deafened);
           patchSelf(channelId, { isMuted: muted, isDeafened: deafened });
-          signalR.updateVoiceState(muted, deafened, false, false);
+          broadcastSelfState();
         },
 
         /** Toggles deafen. Deafening also mutes the mic; undeafening unmutes it (Discord behavior). */
@@ -161,7 +179,42 @@ export const VoiceStore = signalStore(
           voice.setDeafened(deafened);
           voice.setMicMuted(muted);
           patchSelf(channelId, { isDeafened: deafened, isMuted: muted });
-          signalR.updateVoiceState(muted, deafened, false, false);
+          broadcastSelfState();
+        },
+
+        /**
+         * Toggles the camera. The published flag follows the *actual* publish result (a device
+         * error / permission denial resolves to the old state), so roster and media never drift.
+         */
+        async toggleCamera(): Promise<void> {
+          const channelId = store.activeChannelId();
+          if (!channelId) return;
+          const on = await voice.setCameraEnabled(!store.selfVideoOn());
+          patchState(store, { selfVideoOn: on });
+          patchSelf(channelId, { isVideoOn: on });
+          broadcastSelfState();
+        },
+
+        /** Toggles screensharing. Cancelling the browser's picker resolves back to "off" silently. */
+        async toggleScreenShare(): Promise<void> {
+          const channelId = store.activeChannelId();
+          if (!channelId) return;
+          const on = await voice.setScreenShareEnabled(!store.selfStreaming());
+          patchState(store, { selfStreaming: on });
+          patchSelf(channelId, { isStreaming: on });
+          broadcastSelfState();
+        },
+
+        /**
+         * The share ended outside our UI (the browser's own "Stop sharing" bar) — LiveKit already
+         * unpublished the track; this re-aligns the flag and tells everyone else.
+         */
+        syncScreenShareEnded(): void {
+          const channelId = store.activeChannelId();
+          if (!channelId || !store.selfStreaming()) return;
+          patchState(store, { selfStreaming: false });
+          patchSelf(channelId, { isStreaming: false });
+          broadcastSelfState();
         },
 
         // --- gateway handlers (own-state mutation for the live roster) ---
@@ -171,6 +224,16 @@ export const VoiceStore = signalStore(
 
         applyStateUpdated(p: VoiceParticipant): void {
           patchState(store, { participantsByChannel: upsert(store.participantsByChannel(), p) });
+          // Sync own flags from the echo: the hub clamps unauthorized video/stream flags, so a
+          // server-adjusted state must snap the local toggles back too.
+          if (p.userId === myId() && p.channelId === store.activeChannelId()) {
+            patchState(store, {
+              selfMuted: p.isMuted,
+              selfDeafened: p.isDeafened,
+              selfVideoOn: p.isVideoOn,
+              selfStreaming: p.isStreaming,
+            });
+          }
         },
 
         applyLeft(channelId: string, userId: string): void {
@@ -188,7 +251,7 @@ export const VoiceStore = signalStore(
     },
   ),
   withHooks({
-    onInit(store, gateway = inject(GatewayEvents)) {
+    onInit(store, gateway = inject(GatewayEvents), voice = inject(VoiceService)) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         switch (e.type) {
           case 'VoiceParticipantJoined':
@@ -200,6 +263,14 @@ export const VoiceStore = signalStore(
           case 'VoiceParticipantLeft':
             store.applyLeft(e.payload.channelId, e.payload.userId);
             break;
+        }
+      });
+
+      // The browser's own "Stop sharing" bar unpublishes the track directly — mirror that back
+      // into store state so the toggle and the roster don't stay stuck "streaming".
+      effect(() => {
+        if (!voice.localScreenShareOn() && store.selfStreaming()) {
+          store.syncScreenShareEnded();
         }
       });
     },

@@ -28,7 +28,10 @@ describe('VoiceStore', () => {
     getParticipants: ReturnType<typeof vi.fn>;
     setMicMuted: ReturnType<typeof vi.fn>;
     setDeafened: ReturnType<typeof vi.fn>;
+    setCameraEnabled: ReturnType<typeof vi.fn>;
+    setScreenShareEnabled: ReturnType<typeof vi.fn>;
     speakingUserIds: ReturnType<typeof signal<ReadonlySet<string>>>;
+    localScreenShareOn: ReturnType<typeof signal<boolean>>;
   };
   let signalR: {
     joinVoice: ReturnType<typeof vi.fn>;
@@ -43,7 +46,11 @@ describe('VoiceStore', () => {
       getParticipants: vi.fn().mockResolvedValue([]),
       setMicMuted: vi.fn(),
       setDeafened: vi.fn(),
+      // The real service resolves to the *achieved* state (device error / picker-cancel keeps the old one).
+      setCameraEnabled: vi.fn(async (on: boolean) => on),
+      setScreenShareEnabled: vi.fn(async (on: boolean) => on),
       speakingUserIds: signal<ReadonlySet<string>>(new Set()),
+      localScreenShareOn: signal(false),
     };
     signalR = {
       joinVoice: vi.fn().mockResolvedValue(undefined),
@@ -154,5 +161,72 @@ describe('VoiceStore', () => {
 
     expect(store.activeChannelId()).toBeNull();
     expect(voice.disconnect).toHaveBeenCalled();
+  });
+
+  it('toggleCamera() publishes and broadcasts the video flag', async () => {
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+
+    await store.toggleCamera();
+
+    expect(voice.setCameraEnabled).toHaveBeenCalledWith(true);
+    expect(store.selfVideoOn()).toBe(true);
+    expect(signalR.updateVoiceState).toHaveBeenLastCalledWith(false, false, true, false);
+    expect(store.participantsOf('c1').find((p) => p.userId === 'me')?.isVideoOn).toBe(true);
+  });
+
+  it('toggleScreenShare() picker-cancel leaves streaming off', async () => {
+    await store.join('c1');
+    voice.setScreenShareEnabled.mockResolvedValue(false); // user dismissed the browser picker
+
+    await store.toggleScreenShare();
+
+    expect(store.selfStreaming()).toBe(false);
+    expect(signalR.updateVoiceState).toHaveBeenLastCalledWith(false, false, false, false);
+  });
+
+  it('toggleMute() after toggleCamera() keeps broadcasting the live video flag', async () => {
+    await store.join('c1');
+    await store.toggleCamera();
+
+    store.toggleMute();
+
+    expect(signalR.updateVoiceState).toHaveBeenLastCalledWith(true, false, true, false);
+  });
+
+  it('applyStateUpdated for ourselves syncs the self flags (server clamp echo)', async () => {
+    await store.join('c1');
+    await store.toggleCamera();
+    expect(store.selfVideoOn()).toBe(true);
+
+    // The hub clamped video off (no UseVideo permission) — the echo snaps the toggle back.
+    store.applyStateUpdated(participant({ userId: 'me', isVideoOn: false }));
+
+    expect(store.selfVideoOn()).toBe(false);
+  });
+
+  it('leave() clears the video flags', async () => {
+    voice.localScreenShareOn.set(true);
+    await store.join('c1');
+    await store.toggleCamera();
+    await store.toggleScreenShare();
+
+    await store.leave();
+
+    expect(store.selfVideoOn()).toBe(false);
+    expect(store.selfStreaming()).toBe(false);
+  });
+
+  it("the browser's own Stop-sharing rebroadcasts streaming off", async () => {
+    voice.localScreenShareOn.set(true);
+    await store.join('c1');
+    await store.toggleScreenShare();
+    expect(store.selfStreaming()).toBe(true);
+
+    voice.localScreenShareOn.set(false); // LiveKit unpublished via the browser bar
+    TestBed.tick(); // flush the sync effect
+
+    expect(store.selfStreaming()).toBe(false);
+    expect(signalR.updateVoiceState).toHaveBeenLastCalledWith(false, false, false, false);
   });
 });
