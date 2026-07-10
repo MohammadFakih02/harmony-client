@@ -1,28 +1,59 @@
-<!-- Always-dark stage, Discord-style — deliberately independent of the app theme. -->
-<div class="relative flex-1 min-h-0 flex flex-col bg-[#0b0a0e]">
-  @if (participants().length === 0) {
-  <!-- Empty stage: invite to be the first one in -->
-  <div class="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center animate-fade-in">
-    <div class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-      <i class="fas fa-volume-high text-white/80 text-2xl"></i>
+<!-- Expanded call view — always-dark full-screen overlay above the whole app shell. -->
+@if (visible()) {
+<div class="fixed inset-0 z-[100] bg-[#0b0a0e] flex flex-col animate-fade-in">
+  <!-- Header: where the call is -->
+  <div class="flex items-center gap-2 px-5 h-14 shrink-0 text-white">
+    <i class="fas fa-volume-high text-white/60 text-sm"></i>
+    <span class="font-semibold text-sm truncate-text">{{ activeChannel()?.name ?? 'Voice' }}</span>
+    @if (activeGuildName(); as guildName) {
+    <span class="text-white/40 text-sm truncate-text">— {{ guildName }}</span>
+    }
+  </div>
+
+  <!-- Stage -->
+  @if (focusedTile(); as focused) {
+  <!-- Focused layout: one big tile + a filmstrip of the rest -->
+  <div class="flex-1 min-h-0 flex flex-col gap-3 px-6 pb-3">
+    <app-voice-tile
+      class="flex-1 min-h-0"
+      [tile]="focused"
+      [channelId]="voiceStore.activeChannelId()!"
+      [showControls]="true"
+      [emphasized]="true"
+      (focusRequested)="toggleFocus(focused.id)"
+    />
+    @if (filmstripTiles().length > 0) {
+    <div class="h-24 shrink-0 flex gap-2 overflow-x-auto justify-center">
+      @for (t of filmstripTiles(); track t.id) {
+      <app-voice-tile
+        class="h-full aspect-video shrink-0"
+        [tile]="t"
+        [channelId]="voiceStore.activeChannelId()!"
+        [showControls]="true"
+        (focusRequested)="toggleFocus(t.id)"
+      />
+      }
     </div>
-    <h2 class="text-white text-xl font-bold">{{ channel()?.name ?? 'Voice' }}</h2>
-    <p class="text-white/50 text-sm -mt-1.5">No one is currently in voice. Ready to talk?</p>
+    }
   </div>
   } @else {
-  <!-- Participant tiles (camera/avatar + dedicated screenshare tiles) -->
-  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-6 pb-24">
-    <div class="grid gap-3 w-full max-w-4xl grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+  <!-- Grid layout: everyone equal -->
+  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-6 pb-3">
+    <div class="grid gap-3 w-full max-w-6xl grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
       @for (t of tiles(); track t.id) {
-      <app-voice-tile [tile]="t" [channelId]="channel()!.id" (focusRequested)="expand(t.id)" />
+      <app-voice-tile
+        [tile]="t"
+        [channelId]="voiceStore.activeChannelId()!"
+        [showControls]="true"
+        (focusRequested)="toggleFocus(t.id)"
+      />
       }
     </div>
   </div>
   }
 
-  <!-- Bottom controls: join while spectating, call controls while connected -->
-  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
-    @if (connected()) {
+  <!-- Bottom controls: the full call pill -->
+  <div class="flex items-center justify-center gap-3 py-4 shrink-0">
     @if (canUseVideo()) {
     <button
       type="button"
@@ -86,34 +117,21 @@
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
-      title="Expand call view"
-      aria-label="Expand call view"
-      (click)="expand()"
+      title="Collapse call view (ESC)"
+      aria-label="Collapse call view (ESC)"
+      (click)="collapse()"
     >
-      <i class="fas fa-expand text-base"></i>
+      <i class="fas fa-compress text-base"></i>
     </button>
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
       title="Disconnect"
       aria-label="Disconnect"
-      (click)="leave()"
+      (click)="disconnect()"
     >
       <i class="fas fa-phone-slash text-base"></i>
     </button>
-    } @else {
-    <button
-      type="button"
-      class="h-11 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
-      [disabled]="connecting()"
-      (click)="join()"
-    >
-      @if (connecting()) {
-      <i class="fas fa-spinner fa-spin"></i> Connecting
-      } @else {
-      Join Voice
-      }
-    </button>
-    }
   </div>
 </div>
+}

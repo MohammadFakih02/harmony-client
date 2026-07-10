@@ -27,5 +27,7 @@ export interface ChannelCapabilities {
   canManageMessages: boolean;
   canManageChannels: boolean;
   canPin: boolean;
+  canUseVideo: boolean;
+  canStream: boolean;
   timedOut: boolean;
 }

@@ -359,6 +359,9 @@
 <!-- App-wide image lightbox -->
 <ui-lightbox />
 
+<!-- Expanded call view (shows only while open AND in a call) -->
+<app-call-overlay />
+
 <!-- Add people to the active group DM (from the members panel) -->
 @if (showAddPeople() && dmChannel(); as dm) {
 <app-group-dm-modal
