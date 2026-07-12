@@ -2,12 +2,13 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
-import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
-import { Channel, ChannelCategory } from '../../../core/models/channel.models';
+import { Channel, ChannelCategory, SidebarEntry } from '../../../core/models/channel.models';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { GuildStore } from '../../../core/stores/guild.store';
@@ -32,6 +33,13 @@ import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
 import { VoiceBar } from '../../voice/voice-bar/voice-bar';
+import { buildVoiceParticipantMenu, VoiceMenuDeps } from '../../voice/voice-user-menu';
+import { VoiceService } from '../../../core/services/voice.service';
+import { RoleStore } from '../../../core/stores/role.store';
+import { RoleService } from '../../../core/services/role.service';
+import { BlockStore } from '../../../core/stores/block.store';
+import { ProfileModalService } from '../../../core/services/profile-modal.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
@@ -61,6 +69,7 @@ interface ExpiryOption {
     UiAvatar,
     UiIconButton,
     FormsModule,
+    NgTemplateOutlet,
     OverlayModule,
     DragDropModule,
     GroupDmModal,
@@ -86,6 +95,21 @@ export class ChannelSidebar {
   protected readonly guildNotif = inject(GuildNotificationSettingsStore);
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
+  protected readonly voiceService = inject(VoiceService);
+  private readonly voiceMenuDeps: VoiceMenuDeps = {
+    memberStore: this.memberStore,
+    roleStore: inject(RoleStore),
+    roleService: inject(RoleService),
+    dmStore: this.dmStore,
+    blockStore: inject(BlockStore),
+    muteStore: this.muteStore,
+    profileModal: inject(ProfileModalService),
+    toast: inject(ToastService),
+    router: this.router,
+    auth: this.auth,
+    voiceStore: this.voiceStore,
+    voiceService: this.voiceService,
+  };
 
   /** The channel being edited in the settings modal (row gear, or right-click → Edit Channel), or null. */
   protected readonly editingChannel = signal<Channel | null>(null);
@@ -160,9 +184,7 @@ export class ChannelSidebar {
               checked: () => channel.categoryId === null,
               action: () => void this.channelStore.moveToCategory(channel.guildId, channel.id, null),
             },
-            ...categories
-              .filter((c) => c.id !== null)
-              .map((c) => ({
+            ...categories.map((c) => ({
                 label: c.name,
                 checked: () => channel.categoryId === c.id,
                 action: () => void this.channelStore.moveToCategory(channel.guildId, channel.id, c.id),
@@ -247,27 +269,92 @@ export class ChannelSidebar {
     }
   }
 
-  /** Cross-category drag-and-drop: dropping in a different category's list moves the channel;
-   *  dropping within the same list reorders (existing onChannelDrop behavior). */
-  protected onChannelDropAcross(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
-    if (event.previousContainer === event.container) {
-      this.onChannelDrop(event, category);
-      return;
-    }
-    const guildId = this.guildStore.selectedGuildId();
-    const moved = event.previousContainer.data[event.previousIndex];
-    if (!guildId || !moved) return;
-    void this.channelStore.moveToCategory(guildId, moved.id, category.id);
+  // --- Sidebar drag-and-drop: one top-level list (bare channels + category blocks, interleaved
+  //     by position) plus a nested list per category, all connected. ---
+
+  protected readonly TOP_LEVEL_LIST_ID = 'channel-top-level';
+
+  /** Every drop-list id (top level + each category), so cdkDropListConnectedTo links them all. */
+  protected readonly connectedDropListIds = computed(() => [
+    this.TOP_LEVEL_LIST_ID,
+    ...this.channelStore.currentCategories().map((c) => this.categoryDropListId(c.id)),
+  ]);
+
+  protected categoryDropListId(categoryId: string): string {
+    return `channel-category-${categoryId}`;
   }
 
-  /** Every rendered category's drop-list id, so cdkDropListConnectedTo can link them all —
-   *  without this, a channel could only reorder within its own category, never move between. */
-  protected readonly categoryDropListIds = computed(() =>
-    this.channelStore.currentCategories().map((c) => this.categoryDropListId(c.id)),
-  );
+  /** Category blocks may only be dropped at top level — never inside another category. */
+  protected readonly channelOnlyPredicate = (drag: CdkDrag<unknown>): boolean =>
+    (drag.data as { kind?: string } | null)?.kind !== 'category';
 
-  protected categoryDropListId(categoryId: string | null): string {
-    return `channel-category-${categoryId ?? 'none'}`;
+  protected entryTrackId(entry: SidebarEntry): string {
+    return entry.kind === 'category' ? `cat-${entry.category.id}` : `ch-${entry.channel.id}`;
+  }
+
+  private static topLevelEntryId(entry: SidebarEntry): string {
+    return entry.kind === 'category' ? entry.category.id : entry.channel.id;
+  }
+
+  /**
+   * Drop onto the top-level list: reorders the mixed sequence (categories are ordinary channels
+   * with positions, so moving a group rides the same reorder endpoint), or — when the drag came
+   * out of a category's list — ungroups the channel, landing it at the drop index.
+   */
+  protected onTopLevelDrop(event: CdkDragDrop<SidebarEntry[]>): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    const entries = [...this.channelStore.sidebarEntries()];
+
+    if (event.previousContainer === event.container) {
+      if (event.previousIndex === event.currentIndex) return;
+      moveItemInArray(entries, event.previousIndex, event.currentIndex);
+      void this.channelStore.reorderChannels(
+        guildId,
+        entries.map((e) => ChannelSidebar.topLevelEntryId(e)),
+      );
+      return;
+    }
+
+    const data = event.item.data as SidebarEntry | Channel;
+    if ('kind' in data) return; // a category block can't arrive from another list
+    entries.splice(event.currentIndex, 0, { kind: 'channel', channel: data });
+    void this.channelStore
+      .moveToCategory(guildId, data.id, null)
+      .then(() =>
+        this.channelStore.reorderChannels(
+          guildId,
+          entries.map((e) => ChannelSidebar.topLevelEntryId(e)),
+        ),
+      )
+      .catch(() => {});
+  }
+
+  /**
+   * Drop onto a category's list: reorders within the category, or — when the drag came from the
+   * top level or another category — moves the channel into this category at the drop index.
+   */
+  protected onCategoryDrop(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (!guildId) return;
+    const moved = event.item.data as Channel;
+    if (!moved || 'kind' in moved) return;
+
+    if (event.previousContainer === event.container) {
+      if (event.previousIndex === event.currentIndex) return;
+      const ids = category.channels.map((c) => c.id);
+      ids.splice(event.previousIndex, 1);
+      ids.splice(event.currentIndex, 0, moved.id);
+      void this.channelStore.reorderChannels(guildId, ids);
+      return;
+    }
+
+    const ids = category.channels.filter((c) => c.id !== moved.id).map((c) => c.id);
+    ids.splice(event.currentIndex, 0, moved.id);
+    void this.channelStore
+      .moveToCategory(guildId, moved.id, category.id)
+      .then(() => this.channelStore.reorderChannels(guildId, ids))
+      .catch(() => {});
   }
 
   /** Right-click empty space below the categories/channels — Create Channel/Category
@@ -360,6 +447,32 @@ export class ChannelSidebar {
     return this.voiceStore.speakingUserIds().has(userId);
   }
 
+  /** Right-click a voice roster row → the voice participant menu (local controls + moderation + user core). */
+  protected openVoiceUserMenu(event: MouseEvent, p: VoiceParticipant): void {
+    const guildId = this.guildStore.selectedGuildId();
+    const member = guildId
+      ? this.memberStore.membersOf(guildId).find((m) => m.userId === p.userId)
+      : undefined;
+    const voiceChannels = guildId
+      ? (this.channelStore.channelsByGuild()[guildId] ?? []).filter((c) => c.type === 'voice')
+      : [];
+    this.contextMenu.open(
+      event,
+      buildVoiceParticipantMenu(
+        this.voiceMenuDeps,
+        {
+          userId: p.userId,
+          guildId,
+          username: member?.username ?? this.voiceName(p.userId),
+          member,
+          caps: guildId ? this.memberStore.capabilitiesOf(guildId) : null,
+        },
+        p,
+        voiceChannels,
+      ),
+    );
+  }
+
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
   // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.
   protected readonly canManageChannels = computed(
@@ -371,18 +484,6 @@ export class ChannelSidebar {
   protected readonly isGuildOwner = computed(
     () => this.guildStore.selectedGuild()?.ownerId === this.auth.currentUser()?.id,
   );
-
-  /** Drag-reorder within a category group (ManageChannels; the drop list is disabled otherwise). */
-  protected onChannelDrop(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
-    if (event.previousIndex === event.currentIndex) return;
-    const guildId = this.guildStore.selectedGuildId();
-    if (!guildId) return;
-    const ids = category.channels.map((c) => c.id);
-    const [moved] = ids.splice(event.previousIndex, 1);
-    if (!moved) return;
-    ids.splice(event.currentIndex, 0, moved);
-    void this.channelStore.reorderChannels(guildId, ids);
-  }
 
   // Server dropdown (guild-header ▾) — a CDK overlay so it escapes the sidebar's overflow-hidden.
   // The single home for Invite / Create Channel / Server Settings / Leave (the top bar no longer
@@ -687,8 +788,8 @@ export class ChannelSidebar {
     this.presenceStore.setCustomStatus(null);
   }
 
-  toggleCategory(categoryId: string | null): void {
-    if (categoryId !== null) this.channelStore.toggleCategory(categoryId);
+  toggleCategory(categoryId: string): void {
+    this.channelStore.toggleCategory(categoryId);
   }
 
   openSettings(): void {

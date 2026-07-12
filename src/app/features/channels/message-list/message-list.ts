@@ -78,7 +78,14 @@ export interface MessageGroup {
   dayLabel: string | null;
 }
 
-const SYSTEM_MESSAGE_TYPES = new Set(['member_join', 'system', 'pin', 'group_join', 'group_leave']);
+const SYSTEM_MESSAGE_TYPES = new Set([
+  'member_join',
+  'system',
+  'pin',
+  'group_join',
+  'group_leave',
+  'missed_call',
+]);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
@@ -642,6 +649,7 @@ export class MessageList {
   /** Whether a message exposes any hover action (drives the hover toolbar's visibility). */
   protected hasActions(msg: MessageResponse): boolean {
     return (
+      this.canReact(msg) ||
       this.canReply(msg) ||
       this.canCopy(msg) ||
       this.canForward(msg) ||
@@ -649,6 +657,57 @@ export class MessageList {
       this.canEdit(msg) ||
       this.canDelete(msg)
     );
+  }
+
+  /**
+   * Whether the caller may react in the open channel. In a guild this is the resolved AddReactions
+   * capability; in a DM/group (no guild) any participant may react — the viewer always is one.
+   */
+  protected readonly canReactInChannel = computed(() =>
+    this.messageStore.activeGuildId()
+      ? (this.channelStore.currentCapabilities()?.canReact ?? false)
+      : true,
+  );
+
+  /** Reactions are available for any settled message when the caller may react in this channel. */
+  protected canReact(msg: MessageResponse): boolean {
+    return this.canReply(msg) && this.canReactInChannel();
+  }
+
+  // --- add-reaction emoji popover (opened from the hover toolbar) ---
+  // A single overlay anchored to the clicked message's button (mirrors the profile popout), keyed by
+  // messageId so re-clicking the same button toggles it closed.
+  protected readonly reactionTarget = signal<MessageResponse | null>(null);
+  protected readonly reactionOrigin = signal<CdkOverlayOrigin | null>(null);
+  protected readonly reactionPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -4 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
+  ];
+
+  protected openReactionPicker(msg: MessageResponse, origin: CdkOverlayOrigin): void {
+    if (this.reactionTarget()?.messageId === msg.messageId) {
+      this.closeReactionPicker();
+      return;
+    }
+    this.reactionOrigin.set(origin);
+    this.reactionTarget.set(msg);
+  }
+
+  protected closeReactionPicker(): void {
+    this.reactionTarget.set(null);
+    this.reactionOrigin.set(null);
+  }
+
+  /** Picks an emoji from the add-reaction popover → toggle it on, then close. */
+  protected onReactionPicked(char: string): void {
+    const msg = this.reactionTarget();
+    this.closeReactionPicker();
+    if (msg) void this.messageStore.toggleReaction(msg, char);
+  }
+
+  /** Click an existing reaction pill → toggle the current user's reaction to that emoji. */
+  protected toggleReaction(msg: MessageResponse, emoji: string): void {
+    void this.messageStore.toggleReaction(msg, emoji);
   }
 
   // --- forward modal (opened from the hover toolbar) ---

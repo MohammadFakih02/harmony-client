@@ -1,14 +1,54 @@
 import { inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
-import { MessageFailedPayload, MessageResponse, ReplyTarget } from '../models/message.models';
+import {
+  MessageFailedPayload,
+  MessageResponse,
+  ReactionPayload,
+  ReactionSummary,
+  ReplyTarget,
+} from '../models/message.models';
 import { GatewayEvents } from '../hub/gateway-events';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../services/message.service';
+import { ReactionService } from '../services/reaction.service';
+import { ToastService } from '../services/toast.service';
 import { extractApiError } from '../../shared/util/api-error';
 
 let _tempIdCounter = -1;
 const nextTempId = (): number => _tempIdCounter--;
+
+/**
+ * Applies one reaction delta to a message's pill list, immutably. `delta` is +1 (add) or -1
+ * (remove); `isMe` flips the pill's meReacted flag (a foreign reaction only moves the count). A pill
+ * appears when its first reactor arrives and disappears when its last one leaves. Pure so both the
+ * optimistic toggle and the gateway reconcile share one source of truth.
+ */
+function applyReactionDelta(
+  pills: readonly ReactionSummary[],
+  emoji: string,
+  delta: 1 | -1,
+  isMe: boolean,
+): ReactionSummary[] {
+  const idx = pills.findIndex((p) => p.emoji === emoji);
+  if (delta > 0) {
+    if (idx === -1) return [...pills, { emoji, count: 1, meReacted: isMe }];
+    const next = [...pills];
+    next[idx] = {
+      ...next[idx],
+      count: next[idx].count + 1,
+      meReacted: next[idx].meReacted || isMe,
+    };
+    return next;
+  }
+  if (idx === -1) return [...pills];
+  const cur = pills[idx];
+  const count = cur.count - 1;
+  if (count <= 0) return pills.filter((_, i) => i !== idx);
+  const next = [...pills];
+  next[idx] = { ...cur, count, meReacted: isMe ? false : cur.meReacted };
+  return next;
+}
 
 // The message list renders in a plain scroll container (no virtualization), so the loaded window
 // is bounded to keep the DOM cheap: while pinned to the bottom, older off-screen messages beyond
@@ -66,7 +106,28 @@ export const MessageStore = signalStore(
     anchored: false,
     pendingJump: null,
   }),
-  withMethods((store, service = inject(MessageService), auth = inject(AuthService)) => {
+  withMethods((
+    store,
+    service = inject(MessageService),
+    auth = inject(AuthService),
+    reactions = inject(ReactionService),
+    toast = inject(ToastService),
+  ) => {
+    /** Rewrites one loaded message's pill list via `applyReactionDelta`; no-op if not loaded. */
+    const mutateReactions = (
+      messageId: string,
+      emoji: string,
+      delta: 1 | -1,
+      isMe: boolean,
+    ): void => {
+      patchState(store, {
+        messages: store.messages().map((m) =>
+          m.messageId === messageId
+            ? { ...m, reactions: applyReactionDelta(m.reactions ?? [], emoji, delta, isMe) }
+            : m,
+        ),
+      });
+    };
     // Instant re-open: settled messages stashed per channel when the view switches away, painted
     // synchronously on return while the fresh fetch (still authoritative) is in flight.
     // Non-reactive — only read inside load calls. LRU-capped so a long session stays bounded.
@@ -512,6 +573,57 @@ export const MessageStore = signalStore(
     dismissUnreadBanner(): void {
       patchState(store, { unreadOnOpen: 0 });
     },
+
+    /**
+     * Toggles the current user's reaction to `emoji` on `msg`: optimistically mutates the pill row
+     * (add if not mine, remove if already mine), fires the REST call, and reverts on failure. Skips
+     * optimistic messages (no server id yet). The authoritative echo arrives via the gateway and is
+     * de-duplicated against this optimistic state (see reactionAdded/reactionRemoved).
+     */
+    async toggleReaction(msg: MessageResponse, emoji: string): Promise<void> {
+      if (msg.pending || msg.failed || msg.tempId !== undefined) return;
+      const current = store.messages().find((m) => m.messageId === msg.messageId);
+      if (!current) return;
+      const mine = current.reactions?.find((r) => r.emoji === emoji)?.meReacted ?? false;
+      const delta: 1 | -1 = mine ? -1 : 1;
+
+      mutateReactions(msg.messageId, emoji, delta, true); // optimistic
+      try {
+        if (mine) await reactions.remove(msg.guildId, msg.channelId, msg.messageId, emoji);
+        else await reactions.add(msg.guildId, msg.channelId, msg.messageId, emoji);
+      } catch {
+        mutateReactions(msg.messageId, emoji, (delta === 1 ? -1 : 1), true); // revert
+        toast.info('Could not update reaction', 'fa-triangle-exclamation');
+      }
+    },
+
+    /**
+     * Live ReactionAdded: bumps that emoji's pill on the loaded message. A self-echo (userId == me)
+     * that we already applied optimistically is a no-op — guarded on meReacted so the count never
+     * double-counts.
+     */
+    reactionAdded(payload: ReactionPayload): void {
+      const isMe = payload.userId === auth.currentUser()?.id;
+      if (isMe) {
+        const pill = store.messages()
+          .find((m) => m.messageId === payload.messageId)
+          ?.reactions?.find((r) => r.emoji === payload.emoji);
+        if (pill?.meReacted) return; // our own optimistic add already landed
+      }
+      mutateReactions(payload.messageId, payload.emoji, 1, isMe);
+    },
+
+    /** Live ReactionRemoved: decrements the pill; a self-echo already applied optimistically no-ops. */
+    reactionRemoved(payload: ReactionPayload): void {
+      const isMe = payload.userId === auth.currentUser()?.id;
+      if (isMe) {
+        const pill = store.messages()
+          .find((m) => m.messageId === payload.messageId)
+          ?.reactions?.find((r) => r.emoji === payload.emoji);
+        if (!pill || !pill.meReacted) return; // our own optimistic remove already landed
+      }
+      mutateReactions(payload.messageId, payload.emoji, -1, isMe);
+    },
     };
   }),
   withHooks({
@@ -531,6 +643,12 @@ export const MessageStore = signalStore(
             break;
           case 'MessageFailed':
             store.handleFailed(e.payload);
+            break;
+          case 'ReactionAdded':
+            store.reactionAdded(e.payload);
+            break;
+          case 'ReactionRemoved':
+            store.reactionRemoved(e.payload);
             break;
         }
       });

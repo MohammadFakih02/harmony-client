@@ -1,8 +1,14 @@
 @if (voiceStore.inVoice() || voiceStore.connecting()) {
 <div class="mx-2 mt-2 rounded-xl bg-surface-2 border border-border shadow-sm animate-slide-up shrink-0">
-  <!-- Status header: connection state + where you are -->
+  <!-- Status header: connection state + where you are (click → back to the call) -->
   <div class="flex items-center gap-2 px-2.5 pt-2" [class.pb-2]="voiceStore.connecting()">
-    <div class="flex flex-col min-w-0 flex-1">
+    <button
+      type="button"
+      class="flex flex-col min-w-0 flex-1 text-left cursor-pointer group/label"
+      (click)="goToCall()"
+      [attr.aria-label]="'Go to ' + activeLabel()"
+      title="Go to the call"
+    >
       @if (voiceStore.connecting()) {
       <span class="flex items-center gap-1.5 text-xs font-semibold text-warning leading-tight">
         <i class="fas fa-spinner fa-spin text-2xs"></i> Connecting
@@ -12,13 +18,13 @@
         <i class="fas fa-signal text-2xs"></i> Voice Connected
       </span>
       }
-      <span class="text-2xs text-muted leading-tight truncate-text mt-0.5">
-        {{ activeChannel()?.name ?? 'Voice' }}
-        @if (activeGuildName(); as g) {
+      <span class="text-2xs text-muted leading-tight truncate-text mt-0.5 group-hover/label:underline">
+        {{ activeLabel() }}
+        @if (activeContext(); as g) {
         <span class="text-faint">/ {{ g }}</span>
         }
       </span>
-    </div>
+    </button>
     @if (!voiceStore.connecting()) {
     <ui-icon-button size="md" hover="surface-3" label="Disconnect" (click)="disconnect()">
       <i class="fas fa-phone-slash text-danger"></i>
@@ -26,49 +32,92 @@
     }
   </div>
 
-  <!-- Mute / deafen — icon-only toggles, danger-muted when engaged -->
+  <!-- Mute / deafen / camera / screenshare — icon-only toggles, danger-muted when engaged.
+       A server mute/deafen locks its toggle (only a moderator can lift it; the store no-ops too). -->
   @if (!voiceStore.connecting()) {
   <div class="flex items-center gap-1 px-1.5 pt-1.5 pb-1.5">
+    @let srvMuted = voiceStore.selfServerMuted();
+    @let micOn = !voiceStore.selfMuted() && !srvMuted;
     <button
       type="button"
       class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
-      [class.bg-surface]="!voiceStore.selfMuted()"
-      [class.text-muted]="!voiceStore.selfMuted()"
-      [class.hover:text-primary]="!voiceStore.selfMuted()"
-      [class.hover:bg-surface-3]="!voiceStore.selfMuted()"
-      [class.bg-danger-muted]="voiceStore.selfMuted()"
-      [class.text-danger]="voiceStore.selfMuted()"
-      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-pressed]="voiceStore.selfMuted()"
+      [class.bg-surface]="micOn"
+      [class.text-muted]="micOn"
+      [class.hover:text-primary]="micOn"
+      [class.hover:bg-surface-3]="micOn"
+      [class.bg-danger-muted]="!micOn"
+      [class.text-danger]="!micOn"
+      [class.cursor-not-allowed]="srvMuted"
+      [title]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="!micOn"
+      [attr.aria-disabled]="srvMuted"
       (click)="toggleMute()"
     >
-      <i
-        class="fas text-sm"
-        [class.fa-microphone]="!voiceStore.selfMuted()"
-        [class.fa-microphone-slash]="voiceStore.selfMuted()"
-      ></i>
+      <i class="fas text-sm" [class.fa-microphone]="micOn" [class.fa-microphone-slash]="!micOn"></i>
+      @if (srvMuted) {
+      <i class="fas fa-lock text-3xs ml-1"></i>
+      }
     </button>
+    @let srvDeafened = voiceStore.selfServerDeafened();
+    @let hearing = !voiceStore.selfDeafened() && !srvDeafened;
     <button
       type="button"
       class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
-      [class.bg-surface]="!voiceStore.selfDeafened()"
-      [class.text-muted]="!voiceStore.selfDeafened()"
-      [class.hover:text-primary]="!voiceStore.selfDeafened()"
-      [class.hover:bg-surface-3]="!voiceStore.selfDeafened()"
-      [class.bg-danger-muted]="voiceStore.selfDeafened()"
-      [class.text-danger]="voiceStore.selfDeafened()"
-      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      [class.bg-surface]="hearing"
+      [class.text-muted]="hearing"
+      [class.hover:text-primary]="hearing"
+      [class.hover:bg-surface-3]="hearing"
+      [class.bg-danger-muted]="!hearing"
+      [class.text-danger]="!hearing"
+      [class.cursor-not-allowed]="srvDeafened"
+      [title]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="!hearing"
+      [attr.aria-disabled]="srvDeafened"
       (click)="toggleDeafen()"
     >
-      <i
-        class="fas text-sm"
-        [class.fa-headphones]="!voiceStore.selfDeafened()"
-        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
-      ></i>
+      <i class="fas text-sm" [class.fa-headphones]="hearing" [class.fa-headphones-simple]="!hearing"></i>
+      @if (srvDeafened) {
+      <i class="fas fa-lock text-3xs ml-1"></i>
+      }
     </button>
+    @if (canUseVideo()) {
+    <button
+      type="button"
+      class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
+      [class.bg-surface]="!voiceStore.selfVideoOn()"
+      [class.text-muted]="!voiceStore.selfVideoOn()"
+      [class.hover:text-primary]="!voiceStore.selfVideoOn()"
+      [class.hover:bg-surface-3]="!voiceStore.selfVideoOn()"
+      [class.bg-success-muted]="voiceStore.selfVideoOn()"
+      [class.text-success]="voiceStore.selfVideoOn()"
+      [title]="voiceStore.selfVideoOn() ? 'Turn Off Camera' : 'Turn On Camera'"
+      [attr.aria-label]="voiceStore.selfVideoOn() ? 'Turn Off Camera' : 'Turn On Camera'"
+      [attr.aria-pressed]="voiceStore.selfVideoOn()"
+      (click)="toggleCamera()"
+    >
+      <i class="fas text-sm" [class.fa-video]="voiceStore.selfVideoOn()" [class.fa-video-slash]="!voiceStore.selfVideoOn()"></i>
+    </button>
+    }
+    @if (canStream()) {
+    <button
+      type="button"
+      class="flex-1 flex items-center justify-center h-8 rounded-lg transition-micro"
+      [class.bg-surface]="!voiceStore.selfStreaming()"
+      [class.text-muted]="!voiceStore.selfStreaming()"
+      [class.hover:text-primary]="!voiceStore.selfStreaming()"
+      [class.hover:bg-surface-3]="!voiceStore.selfStreaming()"
+      [class.bg-success-muted]="voiceStore.selfStreaming()"
+      [class.text-success]="voiceStore.selfStreaming()"
+      [title]="voiceStore.selfStreaming() ? 'Stop Sharing Screen' : 'Share Screen'"
+      [attr.aria-label]="voiceStore.selfStreaming() ? 'Stop Sharing Screen' : 'Share Screen'"
+      [attr.aria-pressed]="voiceStore.selfStreaming()"
+      (click)="toggleScreenShare()"
+    >
+      <i class="fas fa-display text-sm"></i>
+    </button>
+    }
   </div>
   }
 </div>

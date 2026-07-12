@@ -158,10 +158,10 @@ export class UserProfileModal {
     this.profileModal.close();
   }
 
-  /** Your profile is edited in Settings ▸ Profile — one editor, no nested edit modes. */
+  /** Your profile is edited in Settings ▸ My Account — one editor, no nested edit modes. */
   protected editProfile(): void {
     this.close();
-    void this.router.navigate(['/app/settings'], { queryParams: { tab: 'profile' } });
+    void this.router.navigate(['/app/settings'], { queryParams: { tab: 'account' } });
   }
 
   // ---- server nickname edit ----

@@ -1,7 +1,12 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Channel } from '../models/channel.models';
-import { MessageFailedPayload, MessageResponse, UnreadCountPayload } from '../models/message.models';
+import {
+  MessageFailedPayload,
+  MessageResponse,
+  ReactionPayload,
+  UnreadCountPayload,
+} from '../models/message.models';
 import {
   OfflineStatusPayload,
   OnlineStatusPayload,
@@ -16,7 +21,14 @@ import {
   MemberUpdatedPayload,
 } from '../models/member.models';
 import { MemberRoleUpdatedPayload, Role, RoleDeletedPayload } from '../models/role.models';
-import { VoiceParticipant, VoiceParticipantLeft } from '../models/voice.models';
+import {
+  CallCancelledPayload,
+  CallDeclinedPayload,
+  IncomingCallPayload,
+  VoiceForceMovedPayload,
+  VoiceParticipant,
+  VoiceParticipantLeft,
+} from '../models/voice.models';
 
 // --- Small per-event shapes (previously private to HarmonyHubClient) ---
 
@@ -54,6 +66,8 @@ export type GatewayEvent =
   | { type: 'MessageDeleted'; messageId: string }
   | { type: 'MessagePinned'; pin: MessagePinEvent }
   | { type: 'MessageUnpinned'; pin: MessagePinEvent }
+  | { type: 'ReactionAdded'; payload: ReactionPayload }
+  | { type: 'ReactionRemoved'; payload: ReactionPayload }
   | { type: 'MessageFailed'; payload: MessageFailedPayload }
   | { type: 'UnreadCountUpdated'; payload: UnreadCountPayload }
   | { type: 'ChannelCreated'; channel: Channel }
@@ -80,7 +94,11 @@ export type GatewayEvent =
   | { type: 'GuildInvitesChanged'; guildId: string }
   | { type: 'VoiceParticipantJoined'; payload: VoiceParticipant }
   | { type: 'VoiceParticipantLeft'; payload: VoiceParticipantLeft }
-  | { type: 'VoiceStateUpdated'; payload: VoiceParticipant };
+  | { type: 'VoiceStateUpdated'; payload: VoiceParticipant }
+  | { type: 'IncomingCall'; payload: IncomingCallPayload }
+  | { type: 'CallCancelled'; payload: CallCancelledPayload }
+  | { type: 'CallDeclined'; payload: CallDeclinedPayload }
+  | { type: 'VoiceForceMoved'; payload: VoiceForceMovedPayload };
 
 /** The `type` discriminants — handy for filtering. */
 export type GatewayEventType = GatewayEvent['type'];

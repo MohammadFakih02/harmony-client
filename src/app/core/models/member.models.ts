@@ -24,6 +24,9 @@ export interface GuildCapabilities {
   canTimeout: boolean;
   canViewAuditLog: boolean;
   canManageNicknames: boolean;
+  canMuteMembers: boolean;
+  canDeafenMembers: boolean;
+  canMoveMembers: boolean;
 }
 
 /** A guild ban row, enriched with banned-user + banning-moderator identity. */

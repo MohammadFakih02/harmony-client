@@ -27,11 +27,11 @@
   <div class="relative flex-1 overflow-y-auto">
     <div class="mx-auto max-w-2xl px-10 py-12">
       @switch (activeTab()) {
-        @case ('account') { <app-account-settings (openProfile)="activeTab.set('profile')" /> }
-        @case ('profile') { <app-profile-settings /> }
+        @case ('account') { <app-account-settings /> }
         @case ('privacy') { <app-privacy-settings /> }
         @case ('notifications') { <app-notification-settings /> }
         @case ('appearance') { <app-appearance-settings /> }
+        @case ('voice') { <app-voice-settings /> }
         @case ('accessibility') { <app-accessibility-settings /> }
       }
     </div>

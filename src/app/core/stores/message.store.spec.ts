@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { MessageStore } from './message.store';
 import { MessageService } from '../services/message.service';
 import { AuthService } from '../services/auth.service';
+import { ReactionService } from '../services/reaction.service';
+import { ToastService } from '../services/toast.service';
 import { MessageResponse } from '../models/message.models';
 
 const makeMsg = (overrides: Partial<MessageResponse> & { messageId: string }): MessageResponse => ({
@@ -32,6 +34,7 @@ describe('MessageStore', () => {
     markRead: ReturnType<typeof vi.fn>;
   };
   let auth: { currentUser: ReturnType<typeof vi.fn>; getAccessToken: ReturnType<typeof vi.fn> };
+  let reactions: { add: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     service = {
@@ -43,11 +46,17 @@ describe('MessageStore', () => {
       currentUser: vi.fn().mockReturnValue(AUTH_USER),
       getAccessToken: vi.fn().mockReturnValue('token'),
     };
+    reactions = {
+      add: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
     TestBed.configureTestingModule({
       providers: [
         MessageStore,
         { provide: MessageService, useValue: service },
         { provide: AuthService, useValue: auth },
+        { provide: ReactionService, useValue: reactions },
+        { provide: ToastService, useValue: { info: vi.fn() } },
       ],
     });
     store = TestBed.inject(MessageStore);
@@ -584,6 +593,76 @@ describe('MessageStore', () => {
       const consumed = store.consumePendingJump('42');
       expect(consumed).toEqual({ guildId: '7', channelId: '42', messageId: '900' });
       expect(store.consumePendingJump('42')).toBeNull(); // already consumed
+    });
+  });
+
+  describe('reactions', () => {
+    beforeEach(async () => {
+      // A single settled message from someone else, no reactions yet.
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '50', userId: '99', username: 'bob' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+    });
+
+    const msgOf = (id: string) => store.messages().find((m) => m.messageId === id)!;
+    const pill = (id: string, emoji: string) => msgOf(id).reactions?.find((r) => r.emoji === emoji);
+
+    it('adds optimistically and calls the add endpoint', async () => {
+      const p = TestBed.runInInjectionContext(() => store.toggleReaction(msgOf('50'), '😀'));
+      // Optimistic pill lands before the POST resolves.
+      expect(pill('50', '😀')).toEqual({ emoji: '😀', count: 1, meReacted: true });
+      await p;
+      expect(reactions.add).toHaveBeenCalledWith('1', '1', '50', '😀');
+    });
+
+    it('toggling an already-mine emoji removes it and calls the remove endpoint', async () => {
+      await TestBed.runInInjectionContext(() => store.toggleReaction(msgOf('50'), '😀'));
+      expect(pill('50', '😀')?.meReacted).toBe(true);
+
+      await TestBed.runInInjectionContext(() => store.toggleReaction(msgOf('50'), '😀'));
+      expect(pill('50', '😀')).toBeUndefined(); // dropped at count 0
+      expect(reactions.remove).toHaveBeenCalledWith('1', '1', '50', '😀');
+    });
+
+    it('reverts the optimistic add when the service rejects', async () => {
+      reactions.add.mockRejectedValueOnce(new Error('nope'));
+      await TestBed.runInInjectionContext(() => store.toggleReaction(msgOf('50'), '😀'));
+      expect(pill('50', '😀')).toBeUndefined();
+    });
+
+    it('a foreign ReactionAdded bumps the count without flipping meReacted', () => {
+      store.reactionAdded({ messageId: '50', channelId: '1', guildId: '1', emoji: '🔥', userId: '77' });
+      expect(pill('50', '🔥')).toEqual({ emoji: '🔥', count: 1, meReacted: false });
+
+      store.reactionAdded({ messageId: '50', channelId: '1', guildId: '1', emoji: '🔥', userId: '88' });
+      expect(pill('50', '🔥')?.count).toBe(2);
+    });
+
+    it('ReactionRemoved drops the pill when the last reactor leaves', () => {
+      store.reactionAdded({ messageId: '50', channelId: '1', guildId: '1', emoji: '🔥', userId: '77' });
+      store.reactionRemoved({ messageId: '50', channelId: '1', guildId: '1', emoji: '🔥', userId: '77' });
+      expect(pill('50', '🔥')).toBeUndefined();
+    });
+
+    it('does not double-count my own echo after an optimistic add', async () => {
+      await TestBed.runInInjectionContext(() => store.toggleReaction(msgOf('50'), '😀'));
+      expect(pill('50', '😀')?.count).toBe(1);
+
+      // The server echoes my own reaction back — must be a no-op (guarded on meReacted).
+      store.reactionAdded({ messageId: '50', channelId: '1', guildId: '1', emoji: '😀', userId: '10' });
+      expect(pill('50', '😀')).toEqual({ emoji: '😀', count: 1, meReacted: true });
+    });
+
+    it('ignores toggles on optimistic (pending) messages', async () => {
+      service.sendMessage.mockImplementation(() => new Promise(() => {})); // never resolves
+      TestBed.runInInjectionContext(() => store.sendMessage('pending'));
+      const pendingMsg = store.messages().find((m) => m.pending)!;
+
+      await TestBed.runInInjectionContext(() => store.toggleReaction(pendingMsg, '😀'));
+
+      expect(reactions.add).not.toHaveBeenCalled();
     });
   });
 });

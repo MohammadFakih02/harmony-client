@@ -10,14 +10,25 @@ export interface Channel {
   categoryId: string | null;
   isNsfw: boolean;
   slowmodeSeconds: number;
+  bitrate: number | null; // voice only — bps (8k–96k); null elsewhere
+  userLimit: number | null; // voice only — max participants; null = unlimited (0 clears on save)
 }
 
 export interface ChannelCategory {
-  id: string | null;
+  id: string;
   name: string;
   channels: Channel[];
   collapsed: boolean;
 }
+
+/**
+ * One top-level row of the channel sidebar: a category block (header + its channels) or a bare
+ * uncategorized channel — interleaved in global position order, so a channel can sit below a
+ * category without belonging to it (Discord-style).
+ */
+export type SidebarEntry =
+  | { kind: 'category'; category: ChannelCategory }
+  | { kind: 'channel'; channel: Channel };
 
 /** The caller's effective capabilities in a channel (computed server-side). */
 export interface ChannelCapabilities {
@@ -27,6 +38,7 @@ export interface ChannelCapabilities {
   canManageMessages: boolean;
   canManageChannels: boolean;
   canPin: boolean;
+  canReact: boolean;
   canUseVideo: boolean;
   canStream: boolean;
   timedOut: boolean;

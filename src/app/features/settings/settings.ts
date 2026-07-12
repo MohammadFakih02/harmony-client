@@ -2,15 +2,22 @@ import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AccountSettings } from './pages/account-settings';
-import { ProfileSettings } from './pages/profile-settings';
 import { AppearanceSettings } from './pages/appearance-settings';
 import { AccessibilitySettings } from './pages/accessibility-settings';
 import { NotificationSettings } from './pages/notification-settings';
 import { PrivacySettings } from './pages/privacy-settings';
+import { VoiceSettings } from './pages/voice-settings';
 
-type Tab = 'account' | 'profile' | 'privacy' | 'notifications' | 'appearance' | 'accessibility';
+type Tab = 'account' | 'privacy' | 'notifications' | 'appearance' | 'accessibility' | 'voice';
 
-const TABS: readonly Tab[] = ['account', 'profile', 'privacy', 'notifications', 'appearance', 'accessibility'];
+const TABS: readonly Tab[] = [
+  'account',
+  'privacy',
+  'notifications',
+  'appearance',
+  'accessibility',
+  'voice',
+];
 
 interface NavGroup {
   title: string;
@@ -29,11 +36,11 @@ interface NavGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AccountSettings,
-    ProfileSettings,
     AppearanceSettings,
     AccessibilitySettings,
     NotificationSettings,
     PrivacySettings,
+    VoiceSettings,
   ],
   templateUrl: './settings.html',
 })
@@ -41,10 +48,12 @@ export class Settings {
   private readonly location = inject(Location);
   private readonly router = inject(Router);
 
-  // Deep-linkable pane (`/app/settings?tab=profile`) — how "Edit Profile" buttons land here.
+  // Deep-linkable pane (`/app/settings?tab=…`). The old `profile` tab merged into My Account,
+  // so legacy Edit-Profile deep-links map to `account`.
   protected readonly activeTab = signal<Tab>(
     (() => {
-      const tab = inject(ActivatedRoute).snapshot.queryParamMap.get('tab') as Tab | null;
+      const raw = inject(ActivatedRoute).snapshot.queryParamMap.get('tab');
+      const tab = (raw === 'profile' ? 'account' : raw) as Tab | null;
       return tab && TABS.includes(tab) ? tab : 'account';
     })(),
   );
@@ -54,7 +63,6 @@ export class Settings {
       title: 'User Settings',
       items: [
         { id: 'account', label: 'My Account', icon: 'fa-user' },
-        { id: 'profile', label: 'Profile', icon: 'fa-id-badge' },
         { id: 'privacy', label: 'Privacy & Safety', icon: 'fa-shield-halved' },
         { id: 'notifications', label: 'Notifications', icon: 'fa-bell' },
       ],
@@ -63,6 +71,7 @@ export class Settings {
       title: 'App Settings',
       items: [
         { id: 'appearance', label: 'Appearance', icon: 'fa-palette' },
+        { id: 'voice', label: 'Voice & Video', icon: 'fa-headset' },
         { id: 'accessibility', label: 'Accessibility', icon: 'fa-universal-access' },
       ],
     },

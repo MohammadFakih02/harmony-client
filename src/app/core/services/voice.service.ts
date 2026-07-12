@@ -14,6 +14,7 @@ import {
 } from 'livekit-client';
 import { environment } from '../../../environments/environment';
 import { VoiceParticipant, VoiceTokenResponse } from '../models/voice.models';
+import { VoicePrefsService } from './voice-prefs.service';
 
 /** The attachable video tracks a participant is publishing, camera and screenshare slotted apart. */
 export interface ParticipantVideoTracks {
@@ -32,9 +33,14 @@ export interface ParticipantVideoTracks {
 @Injectable({ providedIn: 'root' })
 export class VoiceService {
   private readonly http = inject(HttpClient);
+  private readonly prefs = inject(VoicePrefsService);
   private readonly base = environment.apiUrl;
 
   private room: Room | null = null;
+  // Bumped by every disconnect()/new connect(); an in-flight connect() whose epoch is stale by the
+  // time the socket opens tears its Room down instead of keeping it — otherwise a leave-during-join
+  // leaks a live Room nobody references, whose reconnect loop hammers the LiveKit wss endpoint.
+  private connectEpoch = 0;
   // trackSid → the hidden <audio> playing it + whose it is, so we can detach on unsubscribe /
   // cleanup and apply per-user local mute/volume.
   private readonly audioEls = new Map<string, { el: HTMLMediaElement; identity: string }>();
@@ -81,6 +87,8 @@ export class VoiceService {
       isDeafened: Boolean(p['isDeafened']),
       isVideoOn: Boolean(p['isVideoOn']),
       isStreaming: Boolean(p['isStreaming']),
+      isServerMuted: Boolean(p['isServerMuted']),
+      isServerDeafened: Boolean(p['isServerDeafened']),
       joinedAt: Number(p['joinedAt']),
     }));
   }
@@ -89,19 +97,64 @@ export class VoiceService {
    * Connects to a channel's voice room and starts publishing the microphone. `onEnded` fires if the
    * room drops for any reason we didn't initiate (network loss, server close) so the store can reset.
    * Any existing room is torn down first (single active call, Discord-style).
+   * `maxAudioBitrateBps` is the voice channel's configured bitrate (null/undefined = LiveKit's
+   * default — DM calls and unconfigured channels).
    */
-  async connect(channelId: string, onEnded: () => void): Promise<void> {
+  async connect(
+    channelId: string,
+    onEnded: () => void,
+    maxAudioBitrateBps?: number | null,
+  ): Promise<void> {
     await this.disconnect();
+    const epoch = ++this.connectEpoch;
 
     const { token, url } = await this.getToken(channelId);
-    const room = new Room({ adaptiveStream: true, dynacast: true });
+    const prefs = this.prefs.prefs();
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      // Device + audio-processing preferences apply at track creation; a null deviceId falls
+      // back to the system default.
+      audioCaptureDefaults: {
+        deviceId: prefs.micDeviceId ?? undefined,
+        noiseSuppression: prefs.noiseSuppression,
+        echoCancellation: prefs.echoCancellation,
+        autoGainControl: prefs.autoGainControl,
+      },
+      videoCaptureDefaults: { deviceId: prefs.cameraDeviceId ?? undefined },
+      audioOutput: { deviceId: prefs.speakerDeviceId ?? undefined },
+      publishDefaults: maxAudioBitrateBps
+        ? { audioPreset: { maxBitrate: maxAudioBitrateBps } }
+        : undefined,
+    });
     this.wire(room);
 
-    await room.connect(url, token);
-    await room.localParticipant.setMicrophoneEnabled(true);
+    try {
+      await room.connect(url, token);
+    } catch (err) {
+      room.removeAllListeners();
+      throw err;
+    }
 
+    // A disconnect (or a newer connect) raced this one while the socket was opening — this room
+    // must not survive, or it leaks as an unreachable connection that retries forever.
+    if (epoch !== this.connectEpoch) {
+      room.removeAllListeners();
+      await room.disconnect().catch(() => {});
+      throw new Error('voice connect superseded by a disconnect');
+    }
+
+    // Make the room reachable BEFORE enabling the mic: a mic permission/device failure must not
+    // orphan a fully connected Room (disconnect() could never reach it → leaked reconnect loop).
     this.room = room;
     this.onEnded = onEnded;
+
+    try {
+      await room.localParticipant.setMicrophoneEnabled(true);
+    } catch {
+      // No mic (denied/missing device): stay in the call listen-only; the user can retry unmute.
+    }
+
     // Re-apply deafen if it was toggled before connecting.
     if (this.deafened) this.applyAudioPrefs();
   }
@@ -180,6 +233,7 @@ export class VoiceService {
 
     room.on(RoomEvent.Disconnected, () => {
       const ended = this.onEnded;
+      room.removeAllListeners(); // this room is done — nothing may re-trigger reconnect handling
       this.teardown();
       ended?.(); // let the store reset its active-channel state
     });
@@ -187,10 +241,14 @@ export class VoiceService {
 
   /** Leaves the room (initiated locally) and detaches all audio. Safe to call when not connected. */
   async disconnect(): Promise<void> {
+    this.connectEpoch++; // invalidate any connect() still in flight
     const room = this.room;
     this.onEnded = null; // a local disconnect must not re-fire the store's onEnded reset
     this.teardown();
-    await room?.disconnect();
+    if (room) {
+      room.removeAllListeners();
+      await room.disconnect();
+    }
   }
 
   private teardown(): void {
@@ -242,6 +300,20 @@ export class VoiceService {
     } catch {
       return !on;
     }
+  }
+
+  /** Enumerates local media devices of a kind (labels need a prior permission grant). */
+  listDevices(kind: MediaDeviceKind): Promise<MediaDeviceInfo[]> {
+    return Room.getLocalDevices(kind, false).catch(() => []);
+  }
+
+  /**
+   * Applies a device preference live to the active call (no-op when not in one — the preference
+   * still lands via capture defaults on the next connect). deviceId null = system default.
+   */
+  async switchActiveDevice(kind: MediaDeviceKind, deviceId: string | null): Promise<void> {
+    if (!this.room) return;
+    await this.room.switchActiveDevice(kind, deviceId ?? 'default').catch(() => {});
   }
 
   /** Sets a per-user local playback volume (0..1). A client-side preference only. */

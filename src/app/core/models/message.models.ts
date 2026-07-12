@@ -1,3 +1,16 @@
+/**
+ * One aggregated reaction pill on a message: the emoji token (a Unicode char today; a
+ * `custom:{emojiId}` string once custom emoji land — slice 3), how many distinct users reacted with
+ * it, and whether the current viewer is one of them. The client recomputes count/meReacted locally
+ * from the ReactionAdded/ReactionRemoved gateway events; the server sends the authoritative summary
+ * with each loaded message.
+ */
+export interface ReactionSummary {
+  emoji: string;
+  count: number;
+  meReacted: boolean;
+}
+
 export interface MessageResponse {
   messageId: string;
   channelId: string;
@@ -15,6 +28,9 @@ export interface MessageResponse {
   attachmentIds: string[];
   mentionIds: string[];
   replyToId: string | null;
+  // Aggregated emoji reactions (server-authoritative on load; mutated live via the reaction
+  // gateway events). Absent/undefined is treated as "no reactions".
+  reactions?: ReactionSummary[];
   // Client-side only — not from the server
   pending?: boolean;
   failed?: boolean;
@@ -59,6 +75,19 @@ export interface MessageFailedPayload {
   messageId: string;
   channelId: string;
   guildId: string | null;
+}
+
+/**
+ * A live reaction add/remove pushed to a channel group. Carries only the delta — the client finds
+ * the message in its loaded window and recomputes that emoji's count + meReacted (meReacted flips
+ * only when `userId` is the current user). Messages outside the window are ignored.
+ */
+export interface ReactionPayload {
+  messageId: string;
+  channelId: string;
+  guildId: string | null;
+  emoji: string;
+  userId: string;
 }
 
 export interface UnreadCountPayload {
