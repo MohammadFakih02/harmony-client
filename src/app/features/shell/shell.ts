@@ -20,6 +20,7 @@ import { SearchPanel } from './search-panel/search-panel';
 import { UnreadStore } from '../../core/stores/unread.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { VoiceStore } from '../../core/stores/voice.store';
+import { CallStore } from '../../core/stores/call.store';
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { FriendStore } from '../../core/stores/friend.store';
@@ -37,6 +38,7 @@ import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { CallOverlay } from '../voice/call-overlay/call-overlay';
+import { IncomingCall } from '../voice/incoming-call/incoming-call';
 import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
@@ -71,6 +73,7 @@ import {
     NotificationBell,
     GroupDmModal,
     CallOverlay,
+    IncomingCall,
     UiAvatar,
     UiIconButton,
     UiProfileBanner,
@@ -134,6 +137,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   // Same reason for VoiceStore — its gateway subscription (voice rosters) must be live app-wide, not
   // just while a channel view is mounted, so the sidebar shows who's in voice across every guild.
   private readonly voiceStore = inject(VoiceStore);
+  // Same reason for CallStore — the ring lifecycle (incoming modal, timeouts, ringtone) must run
+  // from boot so a call reaches you before you've opened any DM view.
+  protected readonly callStore = inject(CallStore);
   private readonly unreadStore = inject(UnreadStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly memberStore = inject(MemberStore);
@@ -170,6 +176,16 @@ export class ShellComponent implements OnInit, OnDestroy {
   });
   // Group members for the profile panel (each with nickname precedence applied at render).
   protected readonly dmMembers = computed(() => this.dmChannel()?.participants ?? []);
+  // A call is already live in the open DM (someone's in the voice room) → the button joins
+  // instead of ringing. Hidden entirely while WE are connected — the stage owns the controls then.
+  protected readonly dmCallActive = computed(() => {
+    const dm = this.dmChannel();
+    return !!dm && this.voiceStore.participantsOf(dm.channelId).length > 0;
+  });
+  protected readonly dmCallConnected = computed(() => {
+    const dm = this.dmChannel();
+    return !!dm && this.voiceStore.activeChannelId() === dm.channelId;
+  });
   private readonly friendStore = inject(FriendStore);
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
@@ -331,6 +347,12 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Header phone button: rings the DM — or just joins when a call is already going. */
+  protected startOrJoinCall(channelId: string): void {
+    if (this.dmCallActive()) void this.voiceStore.join(channelId);
+    else void this.callStore.startCall(channelId);
+  }
+
   /** Leaves the active group DM and returns to the friends screen. */
   protected leaveGroup(): void {
     const dm = this.dmChannel();
@@ -455,6 +477,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subs.unsubscribe();
     this.idle.stop();
+    // Leaving the app shell (logout) while in a call must also tear the LiveKit room down —
+    // the hub disconnect below only clears the server-side voice state, not the media.
+    if (this.voiceStore.inVoice()) void this.voiceStore.leave();
     this.signalR.disconnect();
   }
 

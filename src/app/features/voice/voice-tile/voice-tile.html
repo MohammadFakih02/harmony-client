@@ -6,6 +6,7 @@
   [class.ring-success]="isSpeaking()"
   [class.cursor-pointer]="!emphasized()"
   (click)="focusRequested.emit()"
+  (contextmenu)="onContextMenu($event)"
 >
   @if (showVideo()) {
   <!-- Video elements stay muted: audio plays via VoiceService's hidden <audio> els. -->
@@ -19,8 +20,20 @@
     [class.object-contain]="tile().kind === 'screen'"
     [class.-scale-x-100]="tile().kind === 'camera' && isSelf()"
   ></video>
+  } @else if (tile().kind === 'screen' && awaitingWatch()) {
+  <!-- Click-to-watch: the stream stays an inert LIVE tile until the viewer opts in. -->
+  <div class="flex flex-col items-center gap-2.5">
+    <span class="text-2xs font-bold uppercase tracking-wider bg-danger text-white rounded px-1.5 py-0.5">Live</span>
+    <button
+      type="button"
+      class="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-micro"
+      (click)="watchStream($event)"
+    >
+      <i class="fas fa-display mr-1.5"></i>Watch Stream
+    </button>
+  </div>
   } @else if (tile().kind === 'screen') {
-  <!-- Screenshare announced but the track hasn't arrived yet. -->
+  <!-- Watching, but the track hasn't arrived yet. -->
   <div class="flex flex-col items-center gap-2 text-white/50">
     <i class="fas fa-display text-2xl"></i>
     <span class="text-xs">Loading stream…</span>
@@ -38,11 +51,22 @@
     <span class="truncate-text">{{ name() }}'s screen</span>
     } @else {
     <span class="truncate-text">{{ name() }}</span>
-    @if (participant()?.isMuted || participant()?.isDeafened) {
-    <i class="fas fa-microphone-slash text-2xs text-white/70 shrink-0" title="Muted"></i>
+    <!-- A server-imposed mute/deafen renders red (only a moderator can lift it); self state stays soft. -->
+    @if (participant()?.isMuted || participant()?.isDeafened || participant()?.isServerMuted || participant()?.isServerDeafened) {
+    <i
+      class="fas fa-microphone-slash text-2xs shrink-0"
+      [class.text-danger]="participant()?.isServerMuted"
+      [class.text-white/70]="!participant()?.isServerMuted"
+      [title]="participant()?.isServerMuted ? 'Server muted' : 'Muted'"
+    ></i>
     }
-    @if (participant()?.isDeafened) {
-    <i class="fas fa-headphones-simple text-2xs text-danger shrink-0" title="Deafened"></i>
+    @if (participant()?.isDeafened || participant()?.isServerDeafened) {
+    <i
+      class="fas fa-headphones-simple text-2xs shrink-0"
+      [class.text-danger]="participant()?.isServerDeafened"
+      [class.text-white/70]="!participant()?.isServerDeafened"
+      [title]="participant()?.isServerDeafened ? 'Server deafened' : 'Deafened'"
+    ></i>
     }
     }
     @if (locallyMuted()) {

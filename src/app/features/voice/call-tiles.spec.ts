@@ -10,6 +10,8 @@ function participant(over: Partial<VoiceParticipant> = {}): VoiceParticipant {
     isDeafened: false,
     isVideoOn: false,
     isStreaming: false,
+    isServerMuted: false,
+    isServerDeafened: false,
     joinedAt: 1,
     ...over,
   };

@@ -104,10 +104,10 @@
     <div class="flex justify-center pt-8">
       <i class="fas fa-yin-yang animate-spin text-faint"></i>
     </div>
-    } @else if (channelStore.loading() && channelStore.currentCategories().length === 0) {
+    } @else if (channelStore.loading() && channelStore.sidebarEntries().length === 0) {
     <!-- Loading under the delay threshold with nothing cached → render nothing
          (avoids flashing the spinner or the "No channels yet" empty state) -->
-    } @else if (channelStore.currentCategories().length === 0 && guildStore.selectedGuildId()) {
+    } @else if (channelStore.sidebarEntries().length === 0 && guildStore.selectedGuildId()) {
     <!-- Empty state -->
     <div class="flex flex-col items-center gap-3 px-4 pt-10 text-center">
       <i class="fas fa-hashtag text-3xl text-faint"></i>
@@ -122,51 +122,87 @@
       }
     </div>
     } @else {
-    @for (category of channelStore.currentCategories(); track category.id) {
-    <div class="mb-1">
-      <!-- Category header (only shown when the category has a name) -->
-      @if (category.name) {
-      <div
-        class="channel-category-header group flex items-center w-full px-2 pl-4 py-1"
-        (contextmenu)="openCategoryMenu($event, category)"
-      >
-        <button
-          class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
-          (click)="toggleCategory(category.id)"
+    <!-- Top-level list: bare channels + category blocks, interleaved by position. Dropping a
+         channel here (dragged out of a category) ungroups it at that spot; dragging a category
+         block reorders whole groups. -->
+    <div
+      cdkDropList
+      [id]="TOP_LEVEL_LIST_ID"
+      [cdkDropListData]="channelStore.sidebarEntries()"
+      [cdkDropListConnectedTo]="connectedDropListIds()"
+      [cdkDropListDisabled]="!canManageChannels()"
+      (cdkDropListDropped)="onTopLevelDrop($event)"
+      class="flex flex-col gap-0.5 px-2"
+    >
+      @for (entry of channelStore.sidebarEntries(); track entryTrackId(entry)) {
+      @if (entry.kind === 'category') {
+      @let category = entry.category;
+      <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry" class="mb-1">
+        <!-- Category header -->
+        <div
+          class="channel-category-header group flex items-center w-full pl-2 py-1"
+          (contextmenu)="openCategoryMenu($event, category)"
         >
-          <i
-            class="fas fa-chevron-right text-3xs shrink-0 transition-element"
-            [class.rotate-90]="!category.collapsed"
-          ></i>
-          <span class="flex-1 text-left">{{ category.name }}</span>
-        </button>
-        @if (canManageChannels()) {
-        <span class="opacity-0 group-hover:opacity-100 transition-micro">
-          <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
-            <i class="fas fa-plus"></i>
-          </ui-icon-button>
-        </span>
+          <button
+            class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+            (click)="toggleCategory(category.id)"
+          >
+            <i
+              class="fas fa-chevron-right text-3xs shrink-0 transition-element"
+              [class.rotate-90]="!category.collapsed"
+            ></i>
+            <span class="flex-1 text-left">{{ category.name }}</span>
+          </button>
+          @if (canManageChannels()) {
+          <span class="opacity-0 group-hover:opacity-100 transition-micro">
+            <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
+              <i class="fas fa-plus"></i>
+            </ui-icon-button>
+          </span>
+          }
+        </div>
+
+        <!-- The category's channels — drag to reorder, across categories, or out to top level -->
+        @if (!category.collapsed) {
+        <div
+          class="flex flex-col gap-0.5 animate-slide-down"
+          cdkDropList
+          [id]="categoryDropListId(category.id)"
+          [cdkDropListData]="category.channels"
+          [cdkDropListConnectedTo]="connectedDropListIds()"
+          [cdkDropListEnterPredicate]="channelOnlyPredicate"
+          [cdkDropListDisabled]="!canManageChannels()"
+          (cdkDropListDropped)="onCategoryDrop($event, category)"
+        >
+          @for (channel of category.channels; track channel.id) {
+          <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="channel">
+            <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: channel }" />
+          </div>
+          }
+          @if (category.channels.length === 0) {
+          <p class="px-2 py-1 text-2xs text-faint italic">No channels yet</p>
+          }
+        </div>
         }
       </div>
+      } @else {
+      <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry.channel">
+        <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: entry.channel }" />
+      </div>
       }
+      }
+    </div>
 
-      <!-- Channels — drag to reorder when you have ManageChannels -->
-      @if (!category.collapsed) {
-      <div
-        class="flex flex-col gap-0.5 px-2 animate-slide-down"
-        cdkDropList
-        [id]="categoryDropListId(category.id)"
-        [cdkDropListData]="category.channels"
-        [cdkDropListConnectedTo]="categoryDropListIds()"
-        [cdkDropListDisabled]="!canManageChannels()"
-        (cdkDropListDropped)="onChannelDropAcross($event, category)"
-      >
-        @for (channel of category.channels; track channel.id) {
+    <!-- One channel row (voice or text) — shared between the category lists and the top level.
+         cdkDrag must live on the wrapper at each stamping site, NOT inside this template: a drag
+         directive resolves its parent drop list at the template's DECLARATION site, so rows
+         dragged from in here would float free (no reorder, no drop, click-through on release). -->
+    <ng-template #channelRow let-channel>
         @if (channel.type === 'voice') {
         <!-- Voice channel: click to join (no route change); live roster renders inline underneath. -->
         @let vps = voiceParticipants(channel.id);
         @let inThisVoice = voiceStore.activeChannelId() === channel.id;
-        <div cdkDrag cdkDragLockAxis="y" class="flex flex-col">
+        <div class="flex flex-col">
           <div
             role="button"
             tabindex="0"
@@ -188,12 +224,19 @@
             ></i>
             }
             <span class="flex-1 truncate-text">{{ channel.name }}</span>
-            @if (vps.length) {
+            <!-- Occupancy: "n" when unlimited, "n/limit" when capped (red once full — the server
+                 rejects joins past the limit unless the joiner holds MoveMembers). -->
+            @if (vps.length || channel.userLimit) {
+            @let full = !!channel.userLimit && vps.length >= channel.userLimit;
             <span
-              class="shrink-0 flex items-center gap-1 text-2xs font-medium text-faint tabular-nums"
-              [attr.aria-label]="vps.length + ' connected'"
+              class="shrink-0 flex items-center gap-1 text-2xs font-medium tabular-nums"
+              [class.text-danger]="full"
+              [class.text-faint]="!full"
+              [attr.aria-label]="vps.length + ' connected' + (channel.userLimit ? ' of ' + channel.userLimit : '')"
+              [title]="full ? 'This voice channel is full' : ''"
             >
-              <i class="fas fa-user text-3xs"></i>{{ vps.length }}
+              <i class="fas fa-user text-3xs"></i
+              >{{ vps.length }}@if (channel.userLimit) {<span class="opacity-70">/{{ channel.userLimit }}</span>}
             </span>
             }
             <div class="opacity-0 group-hover:opacity-100 transition-micro">
@@ -260,6 +303,7 @@
             @for (p of vps; track p.userId) {
             <div
               class="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-fade-in"
+              (contextmenu)="openVoiceUserMenu($event, p)"
             >
               <span
                 class="relative rounded-full shrink-0 ring-success transition-shadow duration-150"
@@ -274,12 +318,32 @@
               >
                 {{ voiceName(p.userId) }}
               </span>
-              <!-- Deafen implies mic-muted, so a deafened participant shows both glyphs. -->
-              @if (p.isMuted || p.isDeafened) {
-              <i class="fas fa-microphone-slash text-2xs text-faint shrink-0" title="Muted"></i>
+              @if (p.isStreaming) {
+              <span class="text-3xs font-bold uppercase tracking-wide bg-danger text-white rounded px-1 py-px shrink-0">Live</span>
               }
-              @if (p.isDeafened) {
-              <i class="fas fa-headphones-simple text-2xs text-danger shrink-0" title="Deafened"></i>
+              @if (p.isVideoOn) {
+              <i class="fas fa-video text-2xs text-faint shrink-0" title="Camera on"></i>
+              }
+              @if (voiceService.locallyMutedUserIds().has(p.userId)) {
+              <i class="fas fa-volume-xmark text-2xs text-danger shrink-0" title="Muted for you"></i>
+              }
+              <!-- Deafen implies mic-muted, so a deafened participant shows both glyphs. A server-
+                   imposed mute/deafen renders red (only a moderator can lift it); self state stays faint. -->
+              @if (p.isMuted || p.isDeafened || p.isServerMuted || p.isServerDeafened) {
+              <i
+                class="fas fa-microphone-slash text-2xs shrink-0"
+                [class.text-danger]="p.isServerMuted"
+                [class.text-faint]="!p.isServerMuted"
+                [title]="p.isServerMuted ? 'Server muted' : 'Muted'"
+              ></i>
+              }
+              @if (p.isDeafened || p.isServerDeafened) {
+              <i
+                class="fas fa-headphones-simple text-2xs shrink-0"
+                [class.text-danger]="p.isServerDeafened"
+                [class.text-faint]="!p.isServerDeafened"
+                [title]="p.isServerDeafened ? 'Server deafened' : 'Deafened'"
+              ></i>
               }
             </div>
             }
@@ -292,8 +356,6 @@
         <!-- A muted channel shows no unread emphasis (dimmed, no pill/badge), Discord-style. -->
         @let unread = channelStore.selectedChannelId() === channel.id || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
         <a
-          cdkDrag
-          cdkDragLockAxis="y"
           [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
           routerLinkActive="bg-surface-3 text-primary"
           class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
@@ -378,11 +440,7 @@
           }
         </a>
         }
-        }
-      </div>
-      }
-    </div>
-    }
+    </ng-template>
     }
   </div>
   } @else {

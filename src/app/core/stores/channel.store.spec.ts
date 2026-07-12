@@ -13,6 +13,8 @@ const makeChannel = (overrides: Partial<Channel> & { id: string; name: string })
   categoryId: null,
   isNsfw: false,
   slowmodeSeconds: 0,
+  bitrate: null,
+  userLimit: null,
   ...overrides,
 });
 
@@ -131,16 +133,53 @@ describe('ChannelStore', () => {
     expect(cats[0].channels).toHaveLength(2);
   });
 
-  it('currentCategories puts uncategorized channels in a nameless group', async () => {
+  it('an uncategorized channel is a bare top-level entry, not a fake group', async () => {
     const ch = makeChannel({ id: '5', name: 'lobby', guildId: '1', categoryId: null });
     service.getGuildChannels.mockResolvedValue([ch]);
     await TestBed.runInInjectionContext(() => store.loadChannels('1'));
     guildStore.selectGuild('1');
 
-    const cats = store.currentCategories();
-    expect(cats[0].id).toBeNull();
-    expect(cats[0].name).toBe('');
-    expect(cats[0].channels[0].id).toBe('5');
+    expect(store.currentCategories()).toEqual([]);
+    expect(store.sidebarEntries()).toEqual([{ kind: 'channel', channel: ch }]);
+  });
+
+  it('an empty category still renders (visible, droppable, offered in menus)', async () => {
+    const cat = makeChannel({ id: '9', name: 'new cat', guildId: '1', type: 'category', position: 0 });
+    service.getGuildChannels.mockResolvedValue([cat]);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
+
+    expect(store.currentCategories()).toHaveLength(1);
+    expect(store.currentCategories()[0].channels).toEqual([]);
+    expect(store.sidebarEntries()[0].kind).toBe('category');
+  });
+
+  it('sidebarEntries interleaves bare channels and categories by position', async () => {
+    const above = makeChannel({ id: '1', name: 'above', guildId: '1', position: 0 });
+    const cat = makeChannel({ id: '2', name: 'cat', guildId: '1', type: 'category', position: 1 });
+    const inCat = makeChannel({ id: '3', name: 'inside', guildId: '1', categoryId: '2', position: 2 });
+    const below = makeChannel({ id: '4', name: 'below', guildId: '1', position: 3 });
+    service.getGuildChannels.mockResolvedValue([above, cat, inCat, below]);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
+
+    const entries = store.sidebarEntries();
+    expect(
+      entries.map((e) => (e.kind === 'category' ? `cat:${e.category.id}` : e.channel.id)),
+    ).toEqual(['1', 'cat:2', '4']);
+    const catEntry = entries[1];
+    expect(catEntry.kind === 'category' && catEntry.category.channels.map((c) => c.id)).toEqual([
+      '3',
+    ]);
+  });
+
+  it('a channel orphaned by a deleted category degrades to top level', async () => {
+    const orphan = makeChannel({ id: '7', name: 'orphan', guildId: '1', categoryId: '999' });
+    service.getGuildChannels.mockResolvedValue([orphan]);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
+
+    expect(store.sidebarEntries()).toEqual([{ kind: 'channel', channel: orphan }]);
   });
 
   it('toggleCategory() flips collapsed state', async () => {

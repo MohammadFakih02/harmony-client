@@ -1,0 +1,126 @@
+<!-- Embedded DM call stage — always-dark like every call surface, independent of the app theme. -->
+@if (visible()) {
+@if (connected() || connecting()) {
+<!-- Connected (or connecting): a fixed slice of the pane with the shared tile grid + controls -->
+<div class="relative basis-[45%] min-h-60 shrink-0 flex flex-col bg-[#0b0a0e] animate-fade-in">
+  @if (connecting()) {
+  <div class="flex-1 flex items-center justify-center gap-2 text-white/60 text-sm">
+    <i class="fas fa-spinner fa-spin"></i> Connecting
+  </div>
+  } @else {
+  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4 pt-4 pb-20">
+    <div class="grid gap-2 w-full max-w-3xl grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+      @for (t of tiles(); track t.id) {
+      <app-voice-tile [tile]="t" [channelId]="channelId()" (focusRequested)="expand(t.id)" />
+      }
+    </div>
+  </div>
+
+  @if (ringing()) {
+  <div
+    class="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white/10 text-white/70 text-xs font-semibold animate-pulse"
+  >
+    Ringing…
+  </div>
+  }
+
+  <!-- Round call controls (voice-stage styling, compact) -->
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfVideoOn() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfVideoOn() ? 'Turn off camera' : 'Turn on camera'"
+      [attr.aria-label]="voiceStore.selfVideoOn() ? 'Turn off camera' : 'Turn on camera'"
+      [attr.aria-pressed]="voiceStore.selfVideoOn()"
+      (click)="toggleCamera()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-video]="voiceStore.selfVideoOn()"
+        [class.fa-video-slash]="!voiceStore.selfVideoOn()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfStreaming() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen'"
+      [attr.aria-label]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen'"
+      [attr.aria-pressed]="voiceStore.selfStreaming()"
+      (click)="toggleScreenShare()"
+    >
+      <i class="fas fa-display text-sm"></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted()"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-microphone]="!voiceStore.selfMuted()"
+        [class.fa-microphone-slash]="voiceStore.selfMuted()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-headphones]="!voiceStore.selfDeafened()"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
+      title="Expand call view"
+      aria-label="Expand call view"
+      (click)="expand()"
+    >
+      <i class="fas fa-expand text-sm"></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+      title="Disconnect"
+      aria-label="Disconnect"
+      (click)="leave()"
+    >
+      <i class="fas fa-phone-slash text-sm"></i>
+    </button>
+  </div>
+  }
+</div>
+} @else {
+<!-- Ongoing call you haven't joined: slim strip + Join Call -->
+<div class="shrink-0 flex items-center gap-3 px-4 py-3 bg-[#0b0a0e] animate-fade-in">
+  <div class="flex -space-x-2">
+    @for (entry of stripEntries(); track entry.userId) {
+    <ui-avatar [src]="entry.avatarKey" [alt]="entry.name" size="sm" ringClass="border-[#0b0a0e]" />
+    }
+  </div>
+  <span class="text-white/70 text-sm flex-1 truncate-text">
+    {{ stripEntries().length === 1 ? '1 person is' : stripEntries().length + ' people are' }} in the call
+  </span>
+  <button
+    type="button"
+    class="h-9 px-5 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro"
+    (click)="join()"
+  >
+    Join Call
+  </button>
+</div>
+}
+}

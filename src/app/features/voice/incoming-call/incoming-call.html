@@ -1,0 +1,61 @@
+<!-- Incoming ring — always-dark centered card above everything but the expanded call view. -->
+@if (callStore.incoming(); as ring) {
+<div class="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center animate-fade-in">
+  <div
+    class="relative w-80 rounded-2xl bg-[#0b0a0e] border border-white/10 shadow-modal px-6 py-8 flex flex-col items-center gap-4 text-center"
+  >
+    <!-- Ignore (local dismiss — the caller's side times out on its own) -->
+    <button
+      type="button"
+      class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-micro"
+      title="Ignore"
+      aria-label="Ignore the call"
+      (click)="dismiss()"
+    >
+      <i class="fas fa-xmark"></i>
+    </button>
+
+    <!-- Pulsing caller avatar -->
+    <div class="relative">
+      <span class="absolute inset-0 rounded-full bg-success/40 animate-ping"></span>
+      <ui-avatar
+        class="relative"
+        [src]="caller()?.avatarKey ?? null"
+        [alt]="callerName()"
+        size="2xl"
+        ringClass="border-[#0b0a0e]"
+      />
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <h2 class="text-white text-lg font-bold">{{ callerName() }} is calling</h2>
+      @if (groupLabel(); as label) {
+      <p class="text-white/50 text-sm">in {{ label }}</p>
+      } @else {
+      <p class="text-white/50 text-sm">Incoming call</p>
+      }
+    </div>
+
+    <div class="flex items-center gap-4 mt-2">
+      <button
+        type="button"
+        class="w-14 h-14 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+        title="Decline"
+        aria-label="Decline the call"
+        (click)="decline()"
+      >
+        <i class="fas fa-phone-slash text-lg"></i>
+      </button>
+      <button
+        type="button"
+        class="w-14 h-14 rounded-full flex items-center justify-center bg-success hover:opacity-85 text-white transition-micro"
+        title="Accept"
+        aria-label="Accept the call"
+        (click)="accept()"
+      >
+        <i class="fas fa-phone text-lg"></i>
+      </button>
+    </div>
+  </div>
+</div>
+}

@@ -16,11 +16,14 @@ const SLOWMODE_OPTIONS: { label: string; seconds: number }[] = [
   { label: '6h', seconds: 21600 },
 ];
 
+/** Voice bitrate presets (kbps) — 8–96, LiveKit/Discord's free-tier ladder; default 64. */
+const BITRATE_OPTIONS_KBPS = [8, 16, 32, 64, 96];
+
 /**
- * Channel settings editor (ManageChannels) — name, topic, NSFW flag, and slowmode. A focused modal
- * opened from the channel right-click menu; text channels only (voice channels have no topic/slowmode
- * surface yet). Saves through ChannelStore.saveChannel; the ChannelUpdated broadcast reconciles other
- * clients.
+ * Channel settings editor (ManageChannels). Text channels: name, topic, NSFW flag, slowmode.
+ * Voice channels: name plus the voice-only settings — audio bitrate and user limit (0 = no
+ * limit; the server enforces the cap, MoveMembers holders bypass it). Saves through
+ * ChannelStore.saveChannel; the ChannelUpdated broadcast reconciles other clients.
  */
 @Component({
   selector: 'app-channel-settings-modal',
@@ -37,7 +40,7 @@ const SLOWMODE_OPTIONS: { label: string; seconds: number }[] = [
         (click)="$event.stopPropagation()"
       >
         <div class="flex items-center gap-2">
-          <i class="fas fa-hashtag text-faint"></i>
+          <i class="fas text-faint" [class.fa-hashtag]="!isVoice()" [class.fa-volume-up]="isVoice()"></i>
           <h2 class="text-lg font-bold text-primary">Edit Channel</h2>
         </div>
 
@@ -53,6 +56,7 @@ const SLOWMODE_OPTIONS: { label: string; seconds: number }[] = [
           />
         </div>
 
+        @if (!isVoice()) {
         <div class="flex flex-col gap-1.5">
           <label class="text-2xs font-bold uppercase tracking-wider text-faint">Channel Topic</label>
           <textarea
@@ -111,6 +115,53 @@ const SLOWMODE_OPTIONS: { label: string; seconds: number }[] = [
             ></span>
           </span>
         </button>
+        } @else {
+        <div class="flex flex-col gap-1.5">
+          <label class="text-2xs font-bold uppercase tracking-wider text-faint">Audio Bitrate</label>
+          <div class="flex flex-wrap gap-1.5">
+            @for (kbps of bitrateOptions; track kbps) {
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md text-xs font-medium border transition-micro"
+              [class.bg-accent]="bitrateKbps() === kbps"
+              [class.text-white]="bitrateKbps() === kbps"
+              [class.border-accent]="bitrateKbps() === kbps"
+              [class.border-border-subtle]="bitrateKbps() !== kbps"
+              [class.text-muted]="bitrateKbps() !== kbps"
+              [class.hover:bg-surface-2]="bitrateKbps() !== kbps"
+              (click)="bitrateKbps.set(kbps)"
+            >
+              {{ kbps }} kbps
+            </button>
+            }
+          </div>
+          <p class="text-2xs text-faint">
+            Higher bitrate means better voice quality and more bandwidth per speaker.
+          </p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-2xs font-bold uppercase tracking-wider text-faint">User Limit</label>
+          <div class="flex items-center gap-3">
+            <input
+              type="range"
+              min="0"
+              max="99"
+              step="1"
+              class="flex-1 accent-accent"
+              [ngModel]="userLimit()"
+              (ngModelChange)="userLimit.set(+$event)"
+              aria-label="User limit"
+            />
+            <span class="text-sm text-primary w-16 text-right tabular-nums">
+              {{ userLimit() === 0 ? 'No limit' : userLimit() }}
+            </span>
+          </div>
+          <p class="text-2xs text-faint">
+            Members can't join a full channel — moderators with Move Members can.
+          </p>
+        </div>
+        }
 
         @if (error()) {
         <p class="text-xs text-danger">{{ error() }}</p>
@@ -144,18 +195,29 @@ export class ChannelSettingsModal {
   private readonly channelStore = inject(ChannelStore);
 
   protected readonly slowmodeOptions = SLOWMODE_OPTIONS;
+  protected readonly bitrateOptions = BITRATE_OPTIONS_KBPS;
 
   protected readonly name = signal('');
   protected readonly topic = signal('');
   protected readonly isNsfw = signal(false);
   protected readonly slowmode = signal(0);
+  protected readonly bitrateKbps = signal(64);
+  protected readonly userLimit = signal(0); // 0 = no limit
   protected readonly saving = signal(false);
   protected readonly error = signal('');
 
+  protected readonly isVoice = computed(() => this.channel().type === 'voice');
+
   protected readonly dirty = computed(() => {
     const c = this.channel();
+    if (this.name().trim() !== c.name) return true;
+    if (this.isVoice()) {
+      return (
+        this.bitrateKbps() !== Math.round((c.bitrate ?? 64000) / 1000) ||
+        this.userLimit() !== (c.userLimit ?? 0)
+      );
+    }
     return (
-      this.name().trim() !== c.name ||
       this.topic() !== (c.topic ?? '') ||
       this.isNsfw() !== c.isNsfw ||
       this.slowmode() !== c.slowmodeSeconds
@@ -171,6 +233,8 @@ export class ChannelSettingsModal {
       this.topic.set(c.topic ?? '');
       this.isNsfw.set(c.isNsfw);
       this.slowmode.set(c.slowmodeSeconds);
+      this.bitrateKbps.set(Math.round((c.bitrate ?? 64000) / 1000));
+      this.userLimit.set(c.userLimit ?? 0);
     });
   }
 
@@ -181,12 +245,23 @@ export class ChannelSettingsModal {
     this.saving.set(true);
     this.error.set('');
     try {
-      await this.channelStore.saveChannel(c.guildId!, c.id, {
-        name,
-        topic: this.topic().trim() || null,
-        isNsfw: this.isNsfw(),
-        slowmodeSeconds: this.slowmode(),
-      });
+      await this.channelStore.saveChannel(
+        c.guildId!,
+        c.id,
+        this.isVoice()
+          ? {
+              name,
+              // bps on the wire; userLimit 0 clears the limit server-side (null = unchanged).
+              bitrate: this.bitrateKbps() * 1000,
+              userLimit: this.userLimit(),
+            }
+          : {
+              name,
+              topic: this.topic().trim() || null,
+              isNsfw: this.isNsfw(),
+              slowmodeSeconds: this.slowmode(),
+            },
+      );
       this.close.emit();
     } catch {
       this.error.set('Could not save the channel. Check your permissions.');

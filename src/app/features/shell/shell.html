@@ -121,7 +121,16 @@
           <i class="fas fa-users"></i>
         </ui-icon-button>
         }
-        @if (inDm() && dmChannel()) {
+        @if (inDm() && dmChannel(); as dm) {
+        @if (!dmCallConnected()) {
+        <ui-icon-button
+          size="md"
+          [label]="dmCallActive() ? 'Join Call' : 'Start Call'"
+          (click)="startOrJoinCall(dm.channelId)"
+        >
+          <i class="fas fa-phone" [class.text-success]="dmCallActive()"></i>
+        </ui-icon-button>
+        }
         <ui-icon-button
           size="md"
           [active]="showDmProfile()"
@@ -361,6 +370,9 @@
 
 <!-- Expanded call view (shows only while open AND in a call) -->
 <app-call-overlay />
+
+<!-- Incoming DM/group-DM call ring (app-wide) -->
+<app-incoming-call />
 
 <!-- Add people to the active group DM (from the members panel) -->
 @if (showAddPeople() && dmChannel(); as dm) {

@@ -1,6 +1,6 @@
 @if (contextMenu.state(); as s) {
 <!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. -->
-<div class="fixed inset-0 z-200" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
+<div class="fixed inset-0 z-1100" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
   <div
     #menu
     class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-scale-in origin-top-left"

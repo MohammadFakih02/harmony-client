@@ -10,6 +10,7 @@
             [style.height.px]="att.height"
             title="Click to expand"
             (click)="open(att.meta)"
+            (contextmenu)="openAttachmentMenu($event, att)"
           >
             <img
               [src]="att.meta.url"
@@ -26,11 +27,13 @@
             [src]="att.meta.url"
             class="rounded-lg ring-1 ring-border-subtle bg-black max-w-full"
             [style.width.px]="att.width"
+            (contextmenu)="openAttachmentMenu($event, att)"
           ></video>
         }
         @case ('audio') {
           <div
             class="flex flex-col gap-1.5 p-2 rounded-lg ring-1 ring-border-subtle bg-surface-2 w-72 max-w-full"
+            (contextmenu)="openAttachmentMenu($event, att)"
           >
             <div class="flex items-center gap-2 min-w-0">
               <i class="fas fa-music text-faint shrink-0"></i>
@@ -43,6 +46,7 @@
           <!-- pdf / zip / text and any other non-media → download card -->
           <div
             class="flex items-center gap-3 px-3 py-2.5 rounded-lg ring-1 ring-border-subtle bg-surface-2 w-72 max-w-full"
+            (contextmenu)="openAttachmentMenu($event, att)"
           >
             <i class="fas {{ att.icon }} text-2xl text-faint shrink-0"></i>
             <div class="flex flex-col min-w-0 flex-1">

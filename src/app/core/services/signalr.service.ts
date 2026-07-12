@@ -193,6 +193,43 @@ export class SignalRService {
       void this._client!.updateVoiceState(isMuted, isDeafened, isVideoOn, isStreaming).catch(() => {});
   }
 
+  // --- Voice moderation (Slice B). RETHROW on failure — the menu action surfaces a toast so the
+  //     moderator learns about a permission rejection instead of a silent no-op. ---
+  async moderateVoiceState(
+    targetUserId: string,
+    serverMute: boolean | null,
+    serverDeafen: boolean | null,
+  ): Promise<void> {
+    if (!this.isConnected) throw new Error('Not connected');
+    await this._client!.moderateVoiceState(targetUserId, serverMute, serverDeafen);
+  }
+
+  async moveVoiceParticipant(targetUserId: string, toChannelId: string): Promise<void> {
+    if (!this.isConnected) throw new Error('Not connected');
+    await this._client!.moveVoiceParticipant(targetUserId, toChannelId);
+  }
+
+  // --- DM/group-DM call ringing (Slice 4). ---
+
+  /**
+   * Rings the other participants. Unlike the other wrappers this RETHROWS on failure — the caller
+   * UI must know the ring didn't go out (occupied room, not in the voice room, socket down).
+   */
+  async startCall(channelId: string): Promise<void> {
+    if (!this.isConnected) throw new Error('Not connected');
+    await this._client!.startCall(channelId);
+  }
+
+  /** Fire-and-forget: ends an outgoing ring; `missed: true` posts the missed-call message. */
+  cancelCall(channelId: string, missed: boolean): void {
+    if (this.isConnected) void this._client!.cancelCall(channelId, missed).catch(() => {});
+  }
+
+  /** Fire-and-forget: declines an incoming ring (the modal clears locally regardless). */
+  declineCall(channelId: string): void {
+    if (this.isConnected) void this._client!.declineCall(channelId).catch(() => {});
+  }
+
   async disconnect(): Promise<void> {
     this.stopped = true;
     this.stopHeartbeat();

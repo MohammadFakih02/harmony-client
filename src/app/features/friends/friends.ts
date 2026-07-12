@@ -11,13 +11,14 @@ import { RoleStore } from '../../core/stores/role.store';
 import { NicknameStore } from '../../core/stores/nickname.store';
 import { PresenceStore } from '../../core/stores/presence.store';
 import { toAvatarStatus } from '../../core/models/presence.models';
-import { Friend } from '../../core/models/friend.models';
+import { Friend, PendingFriend } from '../../core/models/friend.models';
 import { RoleService } from '../../core/services/role.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ContextMenuService } from '../../core/services/context-menu.service';
 import { AuthService } from '../../core/services/auth.service';
 import { buildUserMenu, UserMenuDeps } from '../shell/user-context-menu';
+import { ContextMenuEntry } from '../../core/models/context-menu.models';
 import { UiAvatar } from '../../shared/ui';
 import { NotificationBell } from '../shell/notification-bell/notification-bell';
 import { UserProfilePopout } from '../shell/user-profile-popout/user-profile-popout';
@@ -133,6 +134,22 @@ export class Friends {
       },
     );
     this.contextMenu.open(event, entries);
+  }
+
+  /** Right-click a pending row → accept/ignore (incoming) or cancel (outgoing), plus the shared core. */
+  protected openPendingMenu(event: MouseEvent, p: PendingFriend): void {
+    const section: ContextMenuEntry[] =
+      p.direction === 'incoming'
+        ? [
+            { label: 'Accept', icon: 'fa-check', action: () => void this.accept(p.id) },
+            { label: 'Ignore', icon: 'fa-xmark', danger: true, action: () => void this.remove(p.id) },
+          ]
+        : [{ label: 'Cancel Request', icon: 'fa-xmark', danger: true, action: () => void this.remove(p.id) }];
+    this.contextMenu.open(event, [
+      ...section,
+      { separator: true },
+      ...buildUserMenu(this.userMenuDeps, { userId: p.id, guildId: null, username: p.username }),
+    ]);
   }
 
   async accept(requesterId: string): Promise<void> {

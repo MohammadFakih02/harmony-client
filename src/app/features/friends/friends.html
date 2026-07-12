@@ -112,7 +112,10 @@
     </p>
     <div class="flex flex-col mb-4">
       @for (p of friendStore.incoming(); track p.id) {
-      <div class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-micro">
+      <div
+        class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-micro"
+        (contextmenu)="openPendingMenu($event, p)"
+      >
         <ui-avatar [src]="p.avatarKey" [alt]="p.username" />
         <div class="flex flex-col flex-1 min-w-0">
           <span class="text-sm font-semibold text-primary truncate-text">{{ p.username }}</span>
@@ -147,7 +150,10 @@
     </p>
     <div class="flex flex-col">
       @for (p of friendStore.outgoing(); track p.id) {
-      <div class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-micro">
+      <div
+        class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-micro"
+        (contextmenu)="openPendingMenu($event, p)"
+      >
         <ui-avatar [src]="p.avatarKey" [alt]="p.username" />
         <div class="flex flex-col flex-1 min-w-0">
           <span class="text-sm font-semibold text-primary truncate-text">{{ p.username }}</span>
