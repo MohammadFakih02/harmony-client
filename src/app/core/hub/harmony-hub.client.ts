@@ -84,6 +84,36 @@ export class HarmonyHubClient {
         pin: { messageId: String(p.messageId), channelId: String(p.channelId) },
       }));
 
+    // Reaction add/remove — a delta the store applies to the matching loaded message. The emoji
+    // token is a plain string (Unicode char / custom:{id}); only the ids need coercion.
+    this.connection.on('ReactionAdded', (p: {
+      messageId: unknown; channelId: unknown; guildId: unknown; emoji: string; userId: unknown;
+    }) =>
+      this.emit({
+        type: 'ReactionAdded',
+        payload: {
+          messageId: String(p.messageId),
+          channelId: String(p.channelId),
+          guildId: p.guildId != null ? String(p.guildId) : null,
+          emoji: p.emoji,
+          userId: String(p.userId),
+        },
+      }));
+
+    this.connection.on('ReactionRemoved', (p: {
+      messageId: unknown; channelId: unknown; guildId: unknown; emoji: string; userId: unknown;
+    }) =>
+      this.emit({
+        type: 'ReactionRemoved',
+        payload: {
+          messageId: String(p.messageId),
+          channelId: String(p.channelId),
+          guildId: p.guildId != null ? String(p.guildId) : null,
+          emoji: p.emoji,
+          userId: String(p.userId),
+        },
+      }));
+
     this.connection.on('MessageFailed', (payload: MessageFailedPayload) =>
       this.emit({ type: 'MessageFailed', payload }));
 
@@ -256,6 +286,43 @@ export class HarmonyHubClient {
           userId: String(p.userId),
         },
       }));
+
+    // DM/group-DM call ringing (Slice 4). Sent per-user via Clients.Users(...) — the callee hasn't
+    // joined any hub group when the ring arrives.
+    this.connection.on('IncomingCall', (p: {
+      channelId: unknown; callerId: unknown; startedAt: unknown;
+    }) =>
+      this.emit({
+        type: 'IncomingCall',
+        payload: {
+          channelId: String(p.channelId),
+          callerId: String(p.callerId),
+          startedAt: Number(p.startedAt),
+        },
+      }));
+
+    this.connection.on('CallCancelled', (p: { channelId: unknown }) =>
+      this.emit({ type: 'CallCancelled', payload: { channelId: String(p.channelId) } }));
+
+    this.connection.on('CallDeclined', (p: { channelId: unknown; userId: unknown }) =>
+      this.emit({
+        type: 'CallDeclined',
+        payload: { channelId: String(p.channelId), userId: String(p.userId) },
+      }));
+
+    // Voice moderation (Slice B): a moderator moved you — targeted per-user; the VoiceStore
+    // reconnects media to the destination channel.
+    this.connection.on('VoiceForceMoved', (p: {
+      fromChannelId: unknown; toChannelId: unknown; guildId: unknown;
+    }) =>
+      this.emit({
+        type: 'VoiceForceMoved',
+        payload: {
+          fromChannelId: String(p.fromChannelId),
+          toChannelId: String(p.toChannelId),
+          guildId: p.guildId != null ? String(p.guildId) : null,
+        },
+      }));
   }
 
   /** Coerce a voice participant pushed over SignalR: Snowflake ids → strings, joinedAt → number. */
@@ -268,6 +335,8 @@ export class HarmonyHubClient {
       isDeafened: Boolean(p['isDeafened']),
       isVideoOn: Boolean(p['isVideoOn']),
       isStreaming: Boolean(p['isStreaming']),
+      isServerMuted: Boolean(p['isServerMuted']),
+      isServerDeafened: Boolean(p['isServerDeafened']),
       joinedAt: Number(p['joinedAt']),
     };
   }
@@ -389,5 +458,34 @@ export class HarmonyHubClient {
     isStreaming: boolean,
   ): Promise<void> {
     await this.connection.invoke('UpdateVoiceState', isMuted, isDeafened, isVideoOn, isStreaming);
+  }
+
+  // --- Voice moderation (Slice B). Gated server-side on MuteMembers/DeafenMembers/MoveMembers
+  //     against the target's CURRENT room; null flags mean "leave that one unchanged". ---
+  async moderateVoiceState(
+    targetUserId: string,
+    serverMute: boolean | null,
+    serverDeafen: boolean | null,
+  ): Promise<void> {
+    await this.connection.invoke('ModerateVoiceState', targetUserId, serverMute, serverDeafen);
+  }
+
+  async moveVoiceParticipant(targetUserId: string, toChannelId: string): Promise<void> {
+    await this.connection.invoke('MoveVoiceParticipant', targetUserId, toChannelId);
+  }
+
+  // --- DM/group-DM call ringing (Slice 4). The caller must already be in the channel's voice
+  //     room (JoinVoice) before StartCall — the server enforces it. ---
+  async startCall(channelId: string): Promise<void> {
+    await this.connection.invoke('StartCall', channelId);
+  }
+
+  /** `missed: true` (hang-up/timeout while ringing) posts the missed-call system message. */
+  async cancelCall(channelId: string, missed: boolean): Promise<void> {
+    await this.connection.invoke('CancelCall', channelId, missed);
+  }
+
+  async declineCall(channelId: string): Promise<void> {
+    await this.connection.invoke('DeclineCall', channelId);
   }
 }

@@ -65,6 +65,7 @@
         <div
           class="group flex items-start gap-2.5 w-full px-3.5 py-2.5 hover:bg-surface-2 transition-micro relative"
           [class.opacity-55]="n.isRead"
+          (contextmenu)="openItemMenu($event, n)"
         >
           @if (!n.isRead) {
           <span

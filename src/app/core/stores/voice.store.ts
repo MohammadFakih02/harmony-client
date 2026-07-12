@@ -5,6 +5,7 @@ import { GatewayEvents } from '../hub/gateway-events';
 import { SignalRService } from '../services/signalr.service';
 import { VoiceService } from '../services/voice.service';
 import { AuthService } from '../services/auth.service';
+import { ChannelStore } from './channel.store';
 import { VoiceParticipant } from '../models/voice.models';
 
 interface VoiceState {
@@ -17,6 +18,12 @@ interface VoiceState {
   selfDeafened: boolean;
   selfVideoOn: boolean;
   selfStreaming: boolean;
+  // Click-to-watch: streams render as an inert LIVE tile until the viewer opts in (bandwidth —
+  // adaptiveStream pauses video nobody attached). Cleared per user when their stream ends, and
+  // wholesale on leave. Local-only, like volumes/mute-for-me.
+  watchedStreamUserIds: string[];
+  // "Hide video for me": camera tiles the viewer collapsed back to an avatar. Survives the call.
+  hiddenVideoUserIds: string[];
 }
 
 /** Replaces (or inserts) a participant in a channel's roster, keyed by userId. */
@@ -56,19 +63,33 @@ export const VoiceStore = signalStore(
     selfDeafened: false,
     selfVideoOn: false,
     selfStreaming: false,
+    watchedStreamUserIds: [],
+    hiddenVideoUserIds: [],
   }),
-  withComputed((store, voice = inject(VoiceService)) => ({
-    /** True while connected to (or connecting to) any voice channel. */
-    inVoice: computed(() => store.activeChannelId() !== null),
-    /** userIds currently speaking (from LiveKit active-speaker detection). */
-    speakingUserIds: computed(() => voice.speakingUserIds()),
-  })),
+  withComputed((store, voice = inject(VoiceService), auth = inject(AuthService)) => {
+    const selfEntry = computed(() => {
+      const channelId = store.activeChannelId();
+      const myId = auth.currentUser()?.id;
+      if (!channelId || !myId) return null;
+      return (store.participantsByChannel()[channelId] ?? []).find((p) => p.userId === myId) ?? null;
+    });
+    return {
+      /** True while connected to (or connecting to) any voice channel. */
+      inVoice: computed(() => store.activeChannelId() !== null),
+      /** userIds currently speaking (from LiveKit active-speaker detection). */
+      speakingUserIds: computed(() => voice.speakingUserIds()),
+      /** Moderator-imposed flags on ME (from my own roster entry) — they lock the local toggles. */
+      selfServerMuted: computed(() => selfEntry()?.isServerMuted ?? false),
+      selfServerDeafened: computed(() => selfEntry()?.isServerDeafened ?? false),
+    };
+  }),
   withMethods(
     (
       store,
       voice = inject(VoiceService),
       signalR = inject(SignalRService),
       auth = inject(AuthService),
+      channels = inject(ChannelStore),
     ) => {
       const myId = () => auth.currentUser()?.id ?? null;
 
@@ -92,6 +113,7 @@ export const VoiceStore = signalStore(
           selfDeafened: false,
           selfVideoOn: false,
           selfStreaming: false,
+          watchedStreamUserIds: [],
           participantsByChannel: id ? removeFrom(store.participantsByChannel(), channelId, id) : store.participantsByChannel(),
         });
       };
@@ -112,6 +134,21 @@ export const VoiceStore = signalStore(
         },
 
         /**
+         * Seeds a channel's roster from REST *without* joining — lets a DM view surface an ongoing
+         * call you haven't answered (the channel group's live deltas keep it fresh afterwards).
+         */
+        async loadRoster(channelId: string): Promise<void> {
+          try {
+            const roster = await voice.getParticipants(channelId);
+            patchState(store, {
+              participantsByChannel: { ...store.participantsByChannel(), [channelId]: roster },
+            });
+          } catch {
+            // fail open — keep whatever the gateway has delivered
+          }
+        },
+
+        /**
          * Joins a channel's voice room: connect media (LiveKit) → publish voice-state (SignalR) → seed
          * the roster. If already in another room, that one is left first (single active call).
          */
@@ -122,12 +159,22 @@ export const VoiceStore = signalStore(
 
           patchState(store, { connecting: true, connectingChannelId: channelId });
           try {
+            // The channel's configured bitrate caps the published audio (guild voice channels
+            // only — a DM call isn't in ChannelStore and rides the LiveKit default).
+            const bitrate =
+              Object.values(channels.channelsByGuild())
+                .flat()
+                .find((c) => c.id === channelId)?.bitrate ?? null;
             // onEnded fires only on an *unexpected* drop (an intentional leave() nulls the callback
             // before disconnecting), so it both resets local state and tells the server we're gone.
-            await voice.connect(channelId, () => {
-              reset(channelId);
-              void signalR.leaveVoice(channelId);
-            });
+            await voice.connect(
+              channelId,
+              () => {
+                reset(channelId);
+                void signalR.leaveVoice(channelId);
+              },
+              bitrate,
+            );
             await signalR.joinVoice(channelId);
             const roster = await voice.getParticipants(channelId);
             patchState(store, {
@@ -156,10 +203,11 @@ export const VoiceStore = signalStore(
           await voice.disconnect().catch(() => {});
         },
 
-        /** Toggles the mic. Unmuting while deafened also undeafens (Discord behavior). */
+        /** Toggles the mic. Unmuting while deafened also undeafens (Discord behavior).
+         *  Locked while server-muted — only a moderator can lift a server mute. */
         toggleMute(): void {
           const channelId = store.activeChannelId();
-          if (!channelId) return;
+          if (!channelId || store.selfServerMuted()) return;
           const muted = !store.selfMuted();
           const deafened = muted ? store.selfDeafened() : false; // unmute clears deafen
           patchState(store, { selfMuted: muted, selfDeafened: deafened });
@@ -169,10 +217,11 @@ export const VoiceStore = signalStore(
           broadcastSelfState();
         },
 
-        /** Toggles deafen. Deafening also mutes the mic; undeafening unmutes it (Discord behavior). */
+        /** Toggles deafen. Deafening also mutes the mic; undeafening unmutes it (Discord behavior).
+         *  Locked while server-deafened — only a moderator can lift a server deafen. */
         toggleDeafen(): void {
           const channelId = store.activeChannelId();
-          if (!channelId) return;
+          if (!channelId || store.selfServerDeafened()) return;
           const deafened = !store.selfDeafened();
           const muted = deafened; // deafen implies mic-muted; undeafen unmutes
           patchState(store, { selfDeafened: deafened, selfMuted: muted });
@@ -217,13 +266,64 @@ export const VoiceStore = signalStore(
           broadcastSelfState();
         },
 
+        // --- click-to-watch streams + hide-video-for-me (local viewer preferences) ---
+        isWatchingStream(userId: string): boolean {
+          return store.watchedStreamUserIds().includes(userId);
+        },
+
+        toggleWatchStream(userId: string): void {
+          const watched = store.watchedStreamUserIds();
+          patchState(store, {
+            watchedStreamUserIds: watched.includes(userId)
+              ? watched.filter((id) => id !== userId)
+              : [...watched, userId],
+          });
+        },
+
+        isVideoHidden(userId: string): boolean {
+          return store.hiddenVideoUserIds().includes(userId);
+        },
+
+        toggleHideVideo(userId: string): void {
+          const hidden = store.hiddenVideoUserIds();
+          patchState(store, {
+            hiddenVideoUserIds: hidden.includes(userId)
+              ? hidden.filter((id) => id !== userId)
+              : [...hidden, userId],
+          });
+        },
+
+        // --- voice moderation (MuteMembers / DeafenMembers / MoveMembers — server-gated). These
+        //     rethrow so menu actions can toast a permission rejection; the roster updates via the
+        //     VoiceStateUpdated / Left+Joined echoes, nothing is patched optimistically. ---
+        async serverMute(targetUserId: string, mute: boolean): Promise<void> {
+          await signalR.moderateVoiceState(targetUserId, mute, null);
+        },
+
+        async serverDeafen(targetUserId: string, deafen: boolean): Promise<void> {
+          await signalR.moderateVoiceState(targetUserId, null, deafen);
+        },
+
+        async moveParticipant(targetUserId: string, toChannelId: string): Promise<void> {
+          await signalR.moveVoiceParticipant(targetUserId, toChannelId);
+        },
+
         // --- gateway handlers (own-state mutation for the live roster) ---
         applyJoined(p: VoiceParticipant): void {
           patchState(store, { participantsByChannel: upsert(store.participantsByChannel(), p) });
         },
 
         applyStateUpdated(p: VoiceParticipant): void {
+          const prev = (store.participantsByChannel()[p.channelId] ?? []).find(
+            (x) => x.userId === p.userId,
+          );
           patchState(store, { participantsByChannel: upsert(store.participantsByChannel(), p) });
+          // A stream that ended revokes its watch opt-in — restarting it needs a fresh click.
+          if (!p.isStreaming && store.watchedStreamUserIds().includes(p.userId)) {
+            patchState(store, {
+              watchedStreamUserIds: store.watchedStreamUserIds().filter((id) => id !== p.userId),
+            });
+          }
           // Sync own flags from the echo: the hub clamps unauthorized video/stream flags, so a
           // server-adjusted state must snap the local toggles back too.
           if (p.userId === myId() && p.channelId === store.activeChannelId()) {
@@ -233,6 +333,14 @@ export const VoiceStore = signalStore(
               selfVideoOn: p.isVideoOn,
               selfStreaming: p.isStreaming,
             });
+            // Comply with a server mute/deafen in the media layer too (belt to LiveKit's braces),
+            // and restore mic/audio when a moderator lifts it — unless self-muted underneath.
+            if (prev && prev.isServerMuted !== p.isServerMuted) {
+              voice.setMicMuted(p.isServerMuted || p.isMuted);
+            }
+            if (prev && prev.isServerDeafened !== p.isServerDeafened) {
+              voice.setDeafened(p.isServerDeafened || p.isDeafened);
+            }
           }
         },
 
@@ -262,6 +370,15 @@ export const VoiceStore = signalStore(
             break;
           case 'VoiceParticipantLeft':
             store.applyLeft(e.payload.channelId, e.payload.userId);
+            break;
+          case 'VoiceForceMoved':
+            // A moderator moved us — reconnect media to the destination. Only the tab actually in
+            // the source room acts (the event reaches every tab of the user). join() handles the
+            // old room's teardown; Redis state has already moved, so the reconnect is media-only.
+            if (store.activeChannelId() === e.payload.fromChannelId) {
+              patchState(store, { activeChannelId: null });
+              void store.join(e.payload.toChannelId);
+            }
             break;
         }
       });

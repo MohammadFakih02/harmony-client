@@ -53,34 +53,39 @@
       <i class="fas fa-display text-base"></i>
     </button>
     }
+    <!-- A server mute/deafen locks its toggle (danger + lock; the store no-ops while it's on). -->
+    @let srvMuted = voiceStore.selfServerMuted();
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
-      [class]="voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-pressed]="voiceStore.selfMuted()"
+      [class]="srvMuted ? 'bg-danger/80 text-white cursor-not-allowed' : voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted() || srvMuted"
+      [attr.aria-disabled]="srvMuted"
       (click)="toggleMute()"
     >
       <i
         class="fas text-base"
-        [class.fa-microphone]="!voiceStore.selfMuted()"
-        [class.fa-microphone-slash]="voiceStore.selfMuted()"
+        [class.fa-microphone]="!voiceStore.selfMuted() && !srvMuted"
+        [class.fa-microphone-slash]="voiceStore.selfMuted() || srvMuted"
       ></i>
     </button>
+    @let srvDeafened = voiceStore.selfServerDeafened();
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
-      [class]="voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      [class]="srvDeafened ? 'bg-danger/80 text-white cursor-not-allowed' : voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened() || srvDeafened"
+      [attr.aria-disabled]="srvDeafened"
       (click)="toggleDeafen()"
     >
       <i
         class="fas text-base"
-        [class.fa-headphones]="!voiceStore.selfDeafened()"
-        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
+        [class.fa-headphones]="!voiceStore.selfDeafened() && !srvDeafened"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened() || srvDeafened"
       ></i>
     </button>
     <button

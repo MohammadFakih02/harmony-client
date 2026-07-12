@@ -1,7 +1,7 @@
 import { computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
-import { Channel, ChannelCapabilities, ChannelCategory } from '../models/channel.models';
+import { Channel, ChannelCapabilities, ChannelCategory, SidebarEntry } from '../models/channel.models';
 import { GatewayEvents } from '../hub/gateway-events';
 import { ChannelService } from '../services/channel.service';
 import { GuildStore } from './guild.store';
@@ -18,10 +18,22 @@ interface ChannelState {
 
 const isTextChannel = (c: Channel) => c.type === 'text' || c.type === 'announcement';
 
-// Channel lists are kept position-sorted on write, so the currentCategories computed (which
-// re-evaluates on every state change) only filters — filtering preserves order.
+// Channel lists are kept position-sorted on write, so the sidebar computeds (which
+// re-evaluate on every state change) only filter — filtering preserves order.
 const sortChannels = (channels: Channel[]): Channel[] =>
   [...channels].sort((a, b) => a.position - b.position);
+
+/** A category channel + its member channels (in position order) as one render block. */
+const toCategory = (
+  cat: Channel,
+  all: Channel[],
+  collapsed: Record<string, boolean>,
+): ChannelCategory => ({
+  id: cat.id,
+  name: cat.name.toUpperCase(),
+  channels: all.filter((c) => c.type !== 'category' && c.categoryId === cat.id),
+  collapsed: collapsed[cat.id] ?? false,
+});
 
 export const ChannelStore = signalStore(
   { providedIn: 'root' },
@@ -34,40 +46,39 @@ export const ChannelStore = signalStore(
     loading: false,
   }),
   withComputed((store, guildStore = inject(GuildStore)) => ({
+    /** Every category (by `type === 'category'` — empty ones included, so a fresh category is
+     *  visible, droppable, and offered in the Move-to-Category menu). Position order. */
     currentCategories: computed<ChannelCategory[]>(() => {
       const guildId = guildStore.selectedGuildId();
       if (!guildId) return [];
 
       const all = store.channelsByGuild()[guildId] ?? [];
       const collapsed = store.collapsedCategories();
+      return all.filter((c) => c.type === 'category').map((cat) => toCategory(cat, all, collapsed));
+    }),
 
-      const categoryIds = new Set(
-        all.filter((c) => c.categoryId !== null).map((c) => c.categoryId!),
-      );
-      // `all` is kept position-sorted on write, so plain filters below stay in order.
-      const categoryChannels = all.filter((c) => categoryIds.has(c.id));
-      const leafChannels = all.filter(
-        (c) => !categoryIds.has(c.id) && c.type !== 'category',
-      );
+    /**
+     * The sidebar's top-level sequence: category blocks and bare (uncategorized) channels
+     * interleaved in global position order. A channel whose categoryId points at a deleted
+     * category degrades to top-level rather than vanishing.
+     */
+    sidebarEntries: computed<SidebarEntry[]>(() => {
+      const guildId = guildStore.selectedGuildId();
+      if (!guildId) return [];
 
-      const categories: ChannelCategory[] = categoryChannels.map((cat) => ({
-        id: cat.id,
-        name: cat.name.toUpperCase(),
-        channels: leafChannels.filter((c) => c.categoryId === cat.id),
-        collapsed: collapsed[cat.id] ?? false,
-      }));
+      const all = store.channelsByGuild()[guildId] ?? [];
+      const collapsed = store.collapsedCategories();
+      const categoryIds = new Set(all.filter((c) => c.type === 'category').map((c) => c.id));
 
-      const uncategorized = leafChannels.filter((c) => c.categoryId === null);
-      if (uncategorized.length > 0) {
-        categories.unshift({
-          id: null,
-          name: '',
-          channels: uncategorized,
-          collapsed: false,
-        });
+      const entries: SidebarEntry[] = [];
+      for (const c of all) {
+        if (c.type === 'category') {
+          entries.push({ kind: 'category', category: toCategory(c, all, collapsed) });
+        } else if (c.categoryId === null || !categoryIds.has(c.categoryId)) {
+          entries.push({ kind: 'channel', channel: c });
+        }
       }
-
-      return categories;
+      return entries;
     }),
 
     selectedChannel: computed<Channel | null>(() => {
@@ -248,12 +259,20 @@ export const ChannelStore = signalStore(
       }
     },
 
-    /** Saves channel settings (name/topic/NSFW/slowmode). The ChannelUpdated broadcast also
-     *  arrives for other clients; applying the response here updates the editor immediately. */
+    /** Saves channel settings (name/topic/NSFW/slowmode + voice bitrate/userLimit). The
+     *  ChannelUpdated broadcast also arrives for other clients; applying the response here
+     *  updates the editor immediately. */
     async saveChannel(
       guildId: string,
       channelId: string,
-      patch: { name?: string; topic?: string | null; isNsfw?: boolean; slowmodeSeconds?: number },
+      patch: {
+        name?: string;
+        topic?: string | null;
+        isNsfw?: boolean;
+        slowmodeSeconds?: number;
+        bitrate?: number;
+        userLimit?: number;
+      },
     ): Promise<Channel> {
       const updated = await service.update(guildId, channelId, patch);
       const list = store.channelsByGuild()[guildId] ?? [];

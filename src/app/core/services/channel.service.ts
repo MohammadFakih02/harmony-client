@@ -31,11 +31,19 @@ export class ChannelService {
     );
   }
 
-  /** Partial channel update (ManageChannels) — name/topic/NSFW/slowmode. */
+  /** Partial channel update (ManageChannels) — name/topic/NSFW/slowmode, plus the voice-only
+   *  bitrate (bps) and userLimit (0 clears the limit — null means "leave unchanged"). */
   update(
     guildId: string,
     channelId: string,
-    patch: { name?: string; topic?: string | null; isNsfw?: boolean; slowmodeSeconds?: number },
+    patch: {
+      name?: string;
+      topic?: string | null;
+      isNsfw?: boolean;
+      slowmodeSeconds?: number;
+      bitrate?: number;
+      userLimit?: number;
+    },
   ): Promise<Channel> {
     return firstValueFrom(
       this.http.patch<Channel>(`${this.base}/guilds/${guildId}/channels/${channelId}`, patch),

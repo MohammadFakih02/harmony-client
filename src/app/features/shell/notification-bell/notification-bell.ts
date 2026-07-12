@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { AppNotification, NotificationActor } from '../../../core/models/notification.models';
 import { NotificationStore } from '../../../core/stores/notification.store';
+import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 
 @Component({
@@ -14,6 +15,7 @@ import { UiAvatar, UiIconButton } from '../../../shared/ui';
 export class NotificationBell {
   protected readonly store = inject(NotificationStore);
   private readonly router = inject(Router);
+  private readonly contextMenu = inject(ContextMenuService);
 
   protected readonly showPanel = signal(false);
 
@@ -97,5 +99,21 @@ export class NotificationBell {
 
   clearAll(): void {
     this.store.clearAll();
+  }
+
+  /** Right-click a notification row → mark read / mark all read / delete / clear all. */
+  openItemMenu(event: MouseEvent, n: AppNotification): void {
+    this.contextMenu.open(event, [
+      { label: 'Mark as Read', icon: 'fa-check', disabled: n.isRead, action: () => this.store.markRead(n.id) },
+      {
+        label: 'Mark All as Read',
+        icon: 'fa-check-double',
+        disabled: this.store.unreadCount() === 0,
+        action: () => this.store.markAllRead(),
+      },
+      { separator: true },
+      { label: 'Delete', icon: 'fa-trash-can', danger: true, action: () => this.store.delete(n.id) },
+      { label: 'Clear All', icon: 'fa-broom', danger: true, action: () => this.store.clearAll() },
+    ]);
   }
 }

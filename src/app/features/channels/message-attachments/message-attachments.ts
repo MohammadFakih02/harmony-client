@@ -3,6 +3,9 @@ import { FileStore } from '../../../core/stores/file.store';
 import { LightboxService } from '../../../shared/ui/lightbox/lightbox.service';
 import { FileDownloadResponse } from '../../../core/models/file.models';
 import { FileKind, fileIcon, fileKind, formatBytes } from '../../../shared/util/file-kind';
+import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 
 const MAX_W = 400;
 const MAX_H = 300;
@@ -35,6 +38,8 @@ export class MessageAttachments {
 
   private readonly fileStore = inject(FileStore);
   private readonly lightbox = inject(LightboxService);
+  private readonly contextMenu = inject(ContextMenuService);
+  private readonly toast = inject(ToastService);
 
   // Ids whose resolve failed — rendered as an "unavailable" chip, never retried in a loop.
   private readonly failed = new Set<string>();
@@ -88,6 +93,40 @@ export class MessageAttachments {
 
   protected open(meta: FileDownloadResponse): void {
     this.lightbox.open(meta.url, meta.filename, meta.filename);
+  }
+
+  /** Right-click an attachment → View (images) / Open in Browser / Copy Link / Download. */
+  protected openAttachmentMenu(event: MouseEvent, att: RenderedAttachment): void {
+    const meta = att.meta;
+    if (!meta) return;
+    const entries: ContextMenuEntry[] = [];
+    if (att.kind === 'image') {
+      entries.push({ label: 'View', icon: 'fa-up-right-and-down-left-from-center', action: () => this.open(meta) });
+    }
+    entries.push(
+      {
+        label: 'Open in Browser',
+        icon: 'fa-arrow-up-right-from-square',
+        action: () => window.open(meta.url, '_blank', 'noopener'),
+      },
+      {
+        label: 'Copy Link',
+        icon: 'fa-link',
+        action: () => this.copyLink(meta.url),
+      },
+      { separator: true },
+      { label: 'Download', icon: 'fa-download', action: () => void this.download(meta) },
+    );
+    this.contextMenu.open(event, entries);
+  }
+
+  private async copyLink(url: string): Promise<void> {
+    try {
+      await navigator.clipboard?.writeText(url);
+      this.toast.info('Copied link', 'fa-link');
+    } catch {
+      this.toast.info('Copy failed', 'fa-triangle-exclamation');
+    }
   }
 
   protected isDownloading(id: string): boolean {

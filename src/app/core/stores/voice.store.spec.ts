@@ -4,6 +4,8 @@ import { VoiceStore } from './voice.store';
 import { VoiceService } from '../services/voice.service';
 import { SignalRService } from '../services/signalr.service';
 import { AuthService } from '../services/auth.service';
+import { ChannelStore } from './channel.store';
+import { GatewayEvents } from '../hub/gateway-events';
 import { VoiceParticipant } from '../models/voice.models';
 
 function participant(over: Partial<VoiceParticipant> = {}): VoiceParticipant {
@@ -15,6 +17,8 @@ function participant(over: Partial<VoiceParticipant> = {}): VoiceParticipant {
     isDeafened: false,
     isVideoOn: false,
     isStreaming: false,
+    isServerMuted: false,
+    isServerDeafened: false,
     joinedAt: 1,
     ...over,
   };
@@ -37,7 +41,11 @@ describe('VoiceStore', () => {
     joinVoice: ReturnType<typeof vi.fn>;
     leaveVoice: ReturnType<typeof vi.fn>;
     updateVoiceState: ReturnType<typeof vi.fn>;
+    moderateVoiceState: ReturnType<typeof vi.fn>;
+    moveVoiceParticipant: ReturnType<typeof vi.fn>;
   };
+  // The store resolves the joined channel's bitrate from here (guild voice channels only).
+  let channelsByGuild: ReturnType<typeof signal<Record<string, { id: string; bitrate: number | null }[]>>>;
 
   beforeEach(() => {
     voice = {
@@ -56,7 +64,10 @@ describe('VoiceStore', () => {
       joinVoice: vi.fn().mockResolvedValue(undefined),
       leaveVoice: vi.fn().mockResolvedValue(undefined),
       updateVoiceState: vi.fn(),
+      moderateVoiceState: vi.fn().mockResolvedValue(undefined),
+      moveVoiceParticipant: vi.fn().mockResolvedValue(undefined),
     };
+    channelsByGuild = signal<Record<string, { id: string; bitrate: number | null }[]>>({});
 
     TestBed.configureTestingModule({
       providers: [
@@ -64,6 +75,7 @@ describe('VoiceStore', () => {
         { provide: VoiceService, useValue: voice },
         { provide: SignalRService, useValue: signalR },
         { provide: AuthService, useValue: { currentUser: () => ({ id: 'me' }) } },
+        { provide: ChannelStore, useValue: { channelsByGuild } },
       ],
     });
     store = TestBed.inject(VoiceStore);
@@ -97,7 +109,7 @@ describe('VoiceStore', () => {
 
     await store.join('c1');
 
-    expect(voice.connect).toHaveBeenCalledWith('c1', expect.any(Function));
+    expect(voice.connect).toHaveBeenCalledWith('c1', expect.any(Function), null);
     expect(signalR.joinVoice).toHaveBeenCalledWith('c1');
     expect(store.activeChannelId()).toBe('c1');
     expect(store.inVoice()).toBe(true);
@@ -228,5 +240,132 @@ describe('VoiceStore', () => {
 
     expect(store.selfStreaming()).toBe(false);
     expect(signalR.updateVoiceState).toHaveBeenLastCalledWith(false, false, false, false);
+  });
+
+  // --- Slice B: bitrate, server moderation, click-to-watch/hide-video ---
+
+  it("join() passes the channel's configured bitrate to connect()", async () => {
+    channelsByGuild.set({ g1: [{ id: 'c1', bitrate: 32000 }] });
+
+    await store.join('c1');
+
+    expect(voice.connect).toHaveBeenCalledWith('c1', expect.any(Function), 32000);
+  });
+
+  it('a server-mute echo locks toggleMute() and forces the media mute', async () => {
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+
+    store.applyStateUpdated(participant({ userId: 'me', isServerMuted: true }));
+
+    expect(store.selfServerMuted()).toBe(true);
+    expect(voice.setMicMuted).toHaveBeenCalledWith(true); // media complies with the moderator
+
+    voice.setMicMuted.mockClear();
+    store.toggleMute(); // locked — only a moderator can lift a server mute
+    expect(store.selfMuted()).toBe(false);
+    expect(voice.setMicMuted).not.toHaveBeenCalled();
+  });
+
+  it('lifting a server mute restores the mic unless self-muted underneath', async () => {
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me', isServerMuted: true })]);
+    await store.join('c1');
+    expect(store.selfServerMuted()).toBe(true);
+
+    store.applyStateUpdated(participant({ userId: 'me', isServerMuted: false }));
+
+    expect(store.selfServerMuted()).toBe(false);
+    expect(voice.setMicMuted).toHaveBeenLastCalledWith(false);
+  });
+
+  it('a server-deafen echo locks toggleDeafen() and applies the media deafen', async () => {
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+
+    store.applyStateUpdated(participant({ userId: 'me', isServerDeafened: true }));
+
+    expect(store.selfServerDeafened()).toBe(true);
+    expect(voice.setDeafened).toHaveBeenCalledWith(true);
+
+    store.toggleDeafen();
+    expect(store.selfDeafened()).toBe(false); // locked
+  });
+
+  it('serverMute/serverDeafen/moveParticipant invoke the hub and rethrow rejections', async () => {
+    await store.serverMute('u2', true);
+    expect(signalR.moderateVoiceState).toHaveBeenCalledWith('u2', true, null);
+
+    await store.serverDeafen('u2', true);
+    expect(signalR.moderateVoiceState).toHaveBeenCalledWith('u2', null, true);
+
+    await store.moveParticipant('u2', 'c2');
+    expect(signalR.moveVoiceParticipant).toHaveBeenCalledWith('u2', 'c2');
+
+    signalR.moderateVoiceState.mockRejectedValue(new Error('denied'));
+    await expect(store.serverMute('u2', true)).rejects.toThrow('denied');
+  });
+
+  it('VoiceForceMoved reconnects to the destination when we are in the source room', async () => {
+    await store.join('c1');
+    voice.connect.mockClear();
+
+    TestBed.inject(GatewayEvents).emit({
+      type: 'VoiceForceMoved',
+      payload: { fromChannelId: 'c1', toChannelId: 'c2', guildId: 'g1' },
+    });
+    await Promise.resolve(); // let the fired join() start
+    await vi.waitFor(() => expect(store.activeChannelId()).toBe('c2'));
+
+    expect(voice.connect).toHaveBeenCalledWith('c2', expect.any(Function), null);
+    // The old room's Redis state already moved server-side — the reconnect must NOT LeaveVoice it.
+    expect(signalR.leaveVoice).not.toHaveBeenCalled();
+  });
+
+  it('VoiceForceMoved for a room we are not in is ignored', async () => {
+    await store.join('c1');
+    voice.connect.mockClear();
+
+    TestBed.inject(GatewayEvents).emit({
+      type: 'VoiceForceMoved',
+      payload: { fromChannelId: 'other', toChannelId: 'c2', guildId: 'g1' },
+    });
+    await Promise.resolve();
+
+    expect(store.activeChannelId()).toBe('c1');
+    expect(voice.connect).not.toHaveBeenCalled();
+  });
+
+  it('toggleWatchStream opts in per user, and the stream ending revokes it', () => {
+    store.applyJoined(participant({ userId: 'u2', isStreaming: true }));
+
+    expect(store.isWatchingStream('u2')).toBe(false);
+    store.toggleWatchStream('u2');
+    expect(store.isWatchingStream('u2')).toBe(true);
+
+    // Stream ends → the opt-in is revoked; restarting needs a fresh click.
+    store.applyStateUpdated(participant({ userId: 'u2', isStreaming: false }));
+    expect(store.isWatchingStream('u2')).toBe(false);
+  });
+
+  it('toggleHideVideo hides per user and survives roster updates', () => {
+    store.applyJoined(participant({ userId: 'u2', isVideoOn: true }));
+
+    store.toggleHideVideo('u2');
+    expect(store.isVideoHidden('u2')).toBe(true);
+
+    store.applyStateUpdated(participant({ userId: 'u2', isVideoOn: false }));
+    expect(store.isVideoHidden('u2')).toBe(true); // a viewer preference, not tied to the flag
+
+    store.toggleHideVideo('u2');
+    expect(store.isVideoHidden('u2')).toBe(false);
+  });
+
+  it('leave() clears the watch opt-ins', async () => {
+    await store.join('c1');
+    store.toggleWatchStream('u2');
+    expect(store.isWatchingStream('u2')).toBe(true);
+
+    await store.leave();
+    expect(store.isWatchingStream('u2')).toBe(false);
   });
 });

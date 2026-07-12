@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MessageResponse } from '../../core/models/message.models';
@@ -13,11 +13,12 @@ import { MessageInput } from './message-input/message-input';
 import { TypingIndicator } from './typing-indicator/typing-indicator';
 import { NsfwGate } from './nsfw-gate/nsfw-gate';
 import { VoiceView } from '../voice/voice-view/voice-view';
+import { DmCallStage } from '../voice/dm-call-stage/dm-call-stage';
 
 @Component({
   selector: 'app-channel',
   standalone: true,
-  imports: [MessageList, MessageInput, TypingIndicator, NsfwGate, VoiceView],
+  imports: [MessageList, MessageInput, TypingIndicator, NsfwGate, VoiceView, DmCallStage],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
     @if (gated()) {
@@ -29,6 +30,10 @@ import { VoiceView } from '../voice/voice-view/voice-view';
     } @else if (isVoice()) {
     <app-voice-view />
     } @else {
+    @if (dmChannelId(); as dmId) {
+    <!-- DM call surface (LiveKit Slice 4) — renders only while this DM has a live call -->
+    <app-dm-call-stage [channelId]="dmId" />
+    }
     <app-message-list #list class="flex-1 min-h-0" />
     <app-typing-indicator />
     <app-message-input (editLastRequested)="list.editLastOwnMessage()" />
@@ -59,6 +64,8 @@ export class Channel implements OnInit, OnDestroy {
   private channelId = '';
   // null = a DM (no owning guild). Guild channels carry their guild id here.
   private guildId: string | null = null;
+  /** The open channel when it's a DM (guild-less route) — mounts the embedded call stage. */
+  protected readonly dmChannelId = signal<string | null>(null);
   private paramSub?: Subscription;
 
   ngOnInit(): void {
@@ -71,6 +78,7 @@ export class Channel implements OnInit, OnDestroy {
       const prev = this.channelId;
       this.channelId = newChannelId;
       this.guildId = newGuildId;
+      this.dmChannelId.set(newGuildId ? null : newChannelId);
 
       // Capture the unread count BEFORE mark-read resets it — drives the jump banner.
       const unreadOnOpen = this.unreadStore.counts()[newChannelId] ?? 0;
