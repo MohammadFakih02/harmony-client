@@ -172,6 +172,21 @@ export class SignalRService {
     if (this.isConnected) void this._client!.stopTyping(channelId).catch(() => {});
   }
 
+  /**
+   * Primary send path — invoke the hub and return the persisted message id. Throws if the socket
+   * isn't connected (the message store then falls back to REST) or the hub rejects the send (e.g.
+   * a permission failure). The full message arrives on the MessageReceived broadcast.
+   */
+  async sendMessage(
+    guildId: string | null,
+    channelId: string,
+    content: string,
+    options: { attachmentIds?: string[]; replyToId?: string; nonce?: string } = {},
+  ): Promise<string> {
+    if (!this.isConnected) throw new Error('Not connected');
+    return this._client!.sendMessage(guildId, channelId, content, options);
+  }
+
   // --- Voice signaling (LiveKit). The store publishes voice-state to the server; the media path is
   //     handled separately by VoiceService. join/leave await so the store can order its LiveKit ops. ---
   async joinVoice(channelId: string): Promise<void> {

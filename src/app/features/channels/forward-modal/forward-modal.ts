@@ -142,7 +142,7 @@ export class ForwardModal implements OnInit {
     const source = {
       guildId: msg.guildId,
       channelId: msg.channelId,
-      content: msg.content,
+      messageId: msg.messageId,
       attachmentIds: msg.attachmentIds,
     };
     const note = this.note().trim() || undefined;

@@ -3,9 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { GatewayEvents } from '../../../core/hub/gateway-events';
 import { InviteService } from '../../../core/services/invite.service';
-import { MessageService } from '../../../core/services/message.service';
 import { FriendStore } from '../../../core/stores/friend.store';
-import { DmStore } from '../../../core/stores/dm.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { Invite } from '../../../core/models/invite.models';
 import { Friend } from '../../../core/models/friend.models';
@@ -32,9 +30,7 @@ interface MaxUsesOption {
 })
 export class InvitePeopleModal implements OnInit {
   private readonly invites = inject(InviteService);
-  private readonly messages = inject(MessageService);
   protected readonly friendStore = inject(FriendStore);
-  private readonly dmStore = inject(DmStore);
   private readonly memberStore = inject(MemberStore);
 
   readonly guildId = input.required<string>();
@@ -129,16 +125,15 @@ export class InvitePeopleModal implements OnInit {
     this.sending.set(true);
     this.error.set('');
     try {
-      const invite = await this.invites.createInvite(this.guildId(), {
+      // One server-side call: mint the invite, DM its link to the friend, and file the
+      // guild_invite notification (NON-NEGOTIABLE #8). Returns the minted invite.
+      const invite = await this.invites.inviteFriend(this.guildId(), friend.id, {
         maxUses: this.friendMaxUses() ?? undefined,
         expiresInSeconds: this.friendExpiry() ?? undefined,
       });
       // Surface it in the invite list immediately (same optimistic add as `generate`), so a
       // friend-minted invite is visible/revocable without reopening the modal.
       this.list.set([invite, ...this.list()]);
-      const dm = await this.dmStore.open(friend.id);
-      const link = `${window.location.origin}/invite/${invite.code}`;
-      await this.messages.sendMessage(null, dm.channelId, link);
       this.invitedFriendIds.set(new Set(this.invitedFriendIds()).add(friend.id));
       this.invitingFriend.set(null);
     } catch {

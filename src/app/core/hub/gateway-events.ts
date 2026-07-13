@@ -82,6 +82,7 @@ export type GatewayEvent =
   | { type: 'FriendAccepted'; payload: FriendUserPayload }
   | { type: 'FriendRemoved'; payload: FriendRemovedPayload }
   | { type: 'NotificationReceived'; payload: NotificationPayload }
+  | { type: 'NotificationBadgeUpdate'; unreadCount: number }
   | { type: 'MemberRemoved'; payload: MemberRemovedPayload }
   | { type: 'MemberJoined'; payload: MemberJoinedPayload }
   | { type: 'Kicked'; payload: KickedPayload }

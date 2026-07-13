@@ -87,6 +87,31 @@
         </ng-template>
         }
 
+        @if (inDm() && dmChannel(); as dm) {
+        <ui-icon-button
+          cdkOverlayOrigin
+          #dmSearchOrigin="cdkOverlayOrigin"
+          size="md"
+          [active]="showSearch()"
+          label="Search"
+          (click)="showSearch.set(!showSearch())"
+        >
+          <i class="fas fa-magnifying-glass"></i>
+        </ui-icon-button>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayOrigin]="dmSearchOrigin"
+          [cdkConnectedOverlayOpen]="showSearch()"
+          [cdkConnectedOverlayPositions]="searchPanelPositions"
+          [cdkConnectedOverlayHasBackdrop]="true"
+          cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+          (backdropClick)="showSearch.set(false)"
+          (detach)="showSearch.set(false)"
+        >
+          <app-search-panel [dmChannelId]="dm.channelId" (close)="showSearch.set(false)" />
+        </ng-template>
+        }
+
         <ui-icon-button
           cdkOverlayOrigin
           #pinsOrigin="cdkOverlayOrigin"

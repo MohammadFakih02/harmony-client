@@ -119,6 +119,11 @@ export const NotificationStore = signalStore(
         });
       },
 
+      /** Live unread-count push (another tab marked read / cleared) — keep the bell badge in sync. */
+      applyBadgeCount(unreadCount: number): void {
+        patchState(store, { unreadCount: Math.max(0, unreadCount) });
+      },
+
       // --- Actor identity cache (lazy, by id) ---
 
       async resolveActor(id: string): Promise<void> {
@@ -144,6 +149,7 @@ export const NotificationStore = signalStore(
     onInit(store, gateway = inject(GatewayEvents)) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         if (e.type === 'NotificationReceived') store.applyNotificationReceived(e.payload);
+        else if (e.type === 'NotificationBadgeUpdate') store.applyBadgeCount(e.unreadCount);
       });
     },
   }),

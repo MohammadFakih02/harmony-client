@@ -48,12 +48,32 @@ export class MessageService {
     guildId: string | null,
     channelId: string,
     content: string,
-    options: { attachmentIds?: string[]; replyToId?: string } = {},
+    options: { attachmentIds?: string[]; replyToId?: string; nonce?: string } = {},
   ): Promise<SendMessageResponse> {
     return firstValueFrom(
       this.http.post<SendMessageResponse>(
         `${this.channelBase(guildId, channelId)}/messages`,
         { content, ...options },
+      ),
+    );
+  }
+
+  /**
+   * Forwards an existing message into `channelId`. Sends only *references* (source channel +
+   * message) plus an optional note and any re-uploaded attachment ids — the server reads the
+   * original, verifies the forwarder can see it, and builds the authoritative snapshot. Returns
+   * the ack; the forwarded message (with its snapshot) arrives on the MessageReceived broadcast.
+   */
+  forwardMessage(
+    guildId: string | null,
+    channelId: string,
+    source: { sourceChannelId: string; sourceMessageId: string },
+    options: { note?: string; attachmentIds?: string[] } = {},
+  ): Promise<SendMessageResponse> {
+    return firstValueFrom(
+      this.http.post<SendMessageResponse>(
+        `${this.channelBase(guildId, channelId)}/messages/forward`,
+        { ...source, ...options },
       ),
     );
   }

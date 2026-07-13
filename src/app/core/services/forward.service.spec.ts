@@ -1,29 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForwardService, buildForwardContent } from './forward.service';
+import { ForwardService } from './forward.service';
 import { FileService } from './file.service';
 import { MessageService } from './message.service';
 import { FileStore } from '../stores/file.store';
 
-describe('buildForwardContent', () => {
-  it('joins a note and the original with a blank line', () => {
-    expect(buildForwardContent('look', 'hello')).toBe('look\n\nhello');
-  });
-  it('uses the note alone when there is no original (image-only forward)', () => {
-    expect(buildForwardContent('look', '')).toBe('look');
-  });
-  it('uses the original alone when there is no note', () => {
-    expect(buildForwardContent(undefined, 'hello')).toBe('hello');
-  });
-  it('is empty when both are empty', () => {
-    expect(buildForwardContent('  ', '')).toBe('');
-  });
-});
-
 describe('ForwardService', () => {
   let fileService: { presign: ReturnType<typeof vi.fn>; upload: ReturnType<typeof vi.fn>; confirm: ReturnType<typeof vi.fn> };
   let fileStore: { resolve: ReturnType<typeof vi.fn> };
-  let messageService: { sendMessage: ReturnType<typeof vi.fn> };
+  let messageService: { forwardMessage: ReturnType<typeof vi.fn> };
   let service: ForwardService;
 
   const target = { guildId: 'g2', channelId: 'c2' };
@@ -35,7 +20,7 @@ describe('ForwardService', () => {
       confirm: vi.fn().mockResolvedValue({ id: 'new-confirmed' }),
     };
     fileStore = { resolve: vi.fn() };
-    messageService = { sendMessage: vi.fn().mockResolvedValue({ messageId: 'm-new' }) };
+    messageService = { forwardMessage: vi.fn().mockResolvedValue({ messageId: 'm-new' }) };
 
     (globalThis as unknown as { fetch: unknown }).fetch = vi
       .fn()
@@ -52,19 +37,23 @@ describe('ForwardService', () => {
     service = TestBed.inject(ForwardService);
   });
 
-  it('forwards a text-only message without touching the file APIs', async () => {
+  it('forwards a text-only message by reference, without touching the file APIs', async () => {
     await service.forward(
-      { guildId: 'g1', channelId: 'c1', content: 'hi', attachmentIds: [] },
+      { guildId: 'g1', channelId: 'c1', messageId: 'm1', attachmentIds: [] },
       target,
     );
 
     expect(fileService.presign).not.toHaveBeenCalled();
-    expect(messageService.sendMessage).toHaveBeenCalledWith('g2', 'c2', 'hi', {
-      attachmentIds: undefined,
-    });
+    // The server builds the snapshot from the reference — the client sends no content.
+    expect(messageService.forwardMessage).toHaveBeenCalledWith(
+      'g2',
+      'c2',
+      { sourceChannelId: 'c1', sourceMessageId: 'm1' },
+      { note: undefined, attachmentIds: undefined },
+    );
   });
 
-  it('re-uploads an attachment to the target and sends the fresh id', async () => {
+  it('re-uploads an attachment to the target and forwards with the fresh id + note', async () => {
     fileStore.resolve.mockResolvedValue({
       url: 'http://store/get',
       filename: 'pic.png',
@@ -72,7 +61,7 @@ describe('ForwardService', () => {
     });
 
     await service.forward(
-      { guildId: 'g1', channelId: 'c1', content: '', attachmentIds: ['old-1'] },
+      { guildId: 'g1', channelId: 'c1', messageId: 'm1', attachmentIds: ['old-1'] },
       target,
       'fwd',
     );
@@ -86,22 +75,28 @@ describe('ForwardService', () => {
     });
     expect(fileService.upload).toHaveBeenCalledWith('http://store/put', expect.any(File));
     expect(fileService.confirm).toHaveBeenCalledWith('g2', 'c2', 'new-pending');
-    expect(messageService.sendMessage).toHaveBeenCalledWith('g2', 'c2', 'fwd', {
-      attachmentIds: ['new-confirmed'],
-    });
+    expect(messageService.forwardMessage).toHaveBeenCalledWith(
+      'g2',
+      'c2',
+      { sourceChannelId: 'c1', sourceMessageId: 'm1' },
+      { note: 'fwd', attachmentIds: ['new-confirmed'] },
+    );
   });
 
   it('skips an unresolvable attachment rather than failing the forward', async () => {
     fileStore.resolve.mockResolvedValue(null);
 
     await service.forward(
-      { guildId: 'g1', channelId: 'c1', content: 'hi', attachmentIds: ['gone'] },
+      { guildId: 'g1', channelId: 'c1', messageId: 'm1', attachmentIds: ['gone'] },
       target,
     );
 
     expect(fileService.presign).not.toHaveBeenCalled();
-    expect(messageService.sendMessage).toHaveBeenCalledWith('g2', 'c2', 'hi', {
-      attachmentIds: undefined,
-    });
+    expect(messageService.forwardMessage).toHaveBeenCalledWith(
+      'g2',
+      'c2',
+      { sourceChannelId: 'c1', sourceMessageId: 'm1' },
+      { note: undefined, attachmentIds: undefined },
+    );
   });
 });

@@ -64,6 +64,48 @@ describe('InviteService', () => {
     expect(invite.expiresAt).toBeNull();
   });
 
+  it('inviteFriend() posts friendId + options to the server-side route and coerces the result', async () => {
+    const promise = service.inviteFriend('7', '42', { maxUses: 1, expiresInSeconds: 604800 });
+
+    const req = httpMock.expectOne(`${base}/guilds/7/invites/invite-friend`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ friendId: '42', maxUses: 1, expiresInSeconds: 604800 });
+
+    req.flush({
+      code: 'fRi',
+      guildId: '7',
+      channelId: null,
+      creatorId: '1',
+      creatorUsername: 'owner',
+      maxUses: 1,
+      useCount: 0,
+      expiresAt: '1782295146594',
+      createdAt: '1782295110000',
+    });
+
+    const invite = await promise;
+    expect(invite.code).toBe('fRi');
+    expect(invite.expiresAt).toBe(1782295146594);
+  });
+
+  it('inviteFriend() with no options sends nulls', async () => {
+    const promise = service.inviteFriend('7', '42');
+    const req = httpMock.expectOne(`${base}/guilds/7/invites/invite-friend`);
+    expect(req.request.body).toEqual({ friendId: '42', maxUses: null, expiresInSeconds: null });
+    req.flush({
+      code: 'x',
+      guildId: '7',
+      channelId: null,
+      creatorId: '1',
+      creatorUsername: null,
+      maxUses: null,
+      useCount: 0,
+      expiresAt: null,
+      createdAt: '100',
+    });
+    await promise;
+  });
+
   it('listInvites() coerces each row', async () => {
     const promise = service.listInvites('7');
     const req = httpMock.expectOne(`${base}/guilds/7/invites`);
@@ -99,9 +141,17 @@ describe('InviteService', () => {
     const promise = service.preview('aBc');
     const req = httpMock.expectOne(`${base}/invites/aBc`);
     expect(req.request.method).toBe('GET');
-    req.flush({ code: 'aBc', guildId: '7', guildName: 'G', memberCount: 3, channelId: null });
+    req.flush({
+      code: 'aBc',
+      guildId: '7',
+      guildName: 'G',
+      memberCount: 3,
+      onlineCount: 1,
+      channelId: null,
+    });
     const preview = await promise;
     expect(preview.guildName).toBe('G');
+    expect(preview.onlineCount).toBe(1);
   });
 
   it('previewEmbed() GETs the soft embed route and surfaces the status', async () => {
