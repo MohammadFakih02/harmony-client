@@ -16,6 +16,8 @@ export interface InvitePreview {
   guildName: string;
   iconKey: string | null;
   memberCount: number;
+  /** Guild members currently in a "showing" presence status (resolved server-side). */
+  onlineCount: number;
   channelId: string | null;
 }
 

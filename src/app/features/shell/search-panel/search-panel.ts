@@ -26,9 +26,10 @@ interface HighlightSegment {
 }
 
 /**
- * Guild message search dropdown (flow #26). Debounced full-text query against the guild's search
- * endpoint; clicking a result jumps to that message (loading a window around it via the store's
- * anchored-history mode), navigating to another channel first if needed.
+ * Message search dropdown (flow #26). Two scopes: a guild search (pass `guildId`) spanning every
+ * channel the caller can view, or a DM/group-DM search (pass `dmChannelId`) scoped to that one
+ * channel. Debounced full-text query; clicking a result jumps to that message (loading a window
+ * around it via the store's anchored-history mode), navigating to the channel first if needed.
  */
 @Component({
   selector: 'app-search-panel',
@@ -42,7 +43,9 @@ interface HighlightSegment {
   },
 })
 export class SearchPanel implements OnInit, OnDestroy {
-  readonly guildId = input.required<string>();
+  // Exactly one scope is supplied: a guild search or a single-DM-channel search.
+  readonly guildId = input<string | null>(null);
+  readonly dmChannelId = input<string | null>(null);
   readonly close = output<void>();
 
   private readonly service = inject(SearchService);
@@ -95,10 +98,16 @@ export class SearchPanel implements OnInit, OnDestroy {
     const q = this.query().trim();
     if (q.length === 0) return;
 
+    const guildId = this.guildId();
+    const dmChannelId = this.dmChannelId();
+    if (!guildId && !dmChannelId) return;
+
     const before = append ? this.results().at(-1)?.createdAt : undefined;
     this.loading.set(true);
     try {
-      const page = await this.service.search(this.guildId(), q, { before });
+      const page = dmChannelId
+        ? await this.service.searchDmChannel(dmChannelId, q, { before })
+        : await this.service.search(guildId!, q, { before });
       this.results.set(append ? [...this.results(), ...page.results] : page.results);
       this.hasMore.set(page.hasMore);
       this.searched.set(true);
@@ -118,9 +127,13 @@ export class SearchPanel implements OnInit, OnDestroy {
       // Already in the target channel — jump within it.
       void this.messageStore.jumpToMessage(result.guildId, result.channelId, result.messageId);
     } else {
-      // Park the target, then navigate; the channel component loads the window on arrival.
+      // Park the target, then navigate; the channel component loads the window on arrival. A DM
+      // result (guildId null) routes to /app/dm, a guild result to its channel.
       this.messageStore.requestChannelJump(result.guildId, result.channelId, result.messageId);
-      void this.router.navigate(['/app/guilds', result.guildId, 'channels', result.channelId]);
+      const route = result.guildId
+        ? ['/app/guilds', result.guildId, 'channels', result.channelId]
+        : ['/app/dm', result.channelId];
+      void this.router.navigate(route);
     }
     this.close.emit();
   }

@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { AppNotification, NotificationActor } from '../../../core/models/notification.models';
 import { NotificationStore } from '../../../core/stores/notification.store';
+import { DmStore } from '../../../core/stores/dm.store';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { UiAvatar, UiIconButton } from '../../../shared/ui';
 
@@ -14,6 +15,7 @@ import { UiAvatar, UiIconButton } from '../../../shared/ui';
 })
 export class NotificationBell {
   protected readonly store = inject(NotificationStore);
+  private readonly dmStore = inject(DmStore);
   private readonly router = inject(Router);
   private readonly contextMenu = inject(ContextMenuService);
 
@@ -59,6 +61,10 @@ export class NotificationBell {
         return `${username} replied to you`;
       case 'friend_request':
         return `${username} sent you a friend request`;
+      case 'message':
+        return `${username} sent a message`;
+      case 'guild_invite':
+        return `${username} invited you to a server`;
       default:
         return `${username} sent you a notification`;
     }
@@ -77,13 +83,21 @@ export class NotificationBell {
   async open(n: AppNotification): Promise<void> {
     this.closePanel();
     this.store.markRead(n.id);
-    if ((n.type === 'mention' || n.type === 'reply') && n.channelId) {
+    if ((n.type === 'mention' || n.type === 'reply' || n.type === 'message') && n.channelId) {
       const route = n.guildId
         ? ['/app/guilds', n.guildId, 'channels', n.channelId]
         : ['/app/dm', n.channelId];
       await this.router.navigate(route);
     } else if (n.type === 'friend_request') {
       await this.router.navigate(['/app/friends']);
+    } else if (n.type === 'guild_invite') {
+      // The invite link was DM'd by the actor — open that DM so its inline invite card is in view.
+      try {
+        const dm = await this.dmStore.open(n.actorId);
+        await this.router.navigate(['/app/dm', dm.channelId]);
+      } catch {
+        await this.router.navigate(['/app/friends']);
+      }
     }
   }
 

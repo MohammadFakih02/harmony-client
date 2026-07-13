@@ -31,6 +31,26 @@ export class InviteService {
     return this.coerce(raw);
   }
 
+  /**
+   * Invite a friend: the server mints an invite, DMs its link to the friend, and files the
+   * guild_invite notification — all in one call (NON-NEGOTIABLE #8: the "I invited X" claim is
+   * never trusted from the client). Returns the minted invite so the caller can list/revoke it.
+   */
+  async inviteFriend(
+    guildId: string,
+    friendId: string,
+    options: { maxUses?: number; expiresInSeconds?: number } = {},
+  ): Promise<Invite> {
+    const raw = await firstValueFrom(
+      this.http.post<RawInvite>(`${this.base}/guilds/${guildId}/invites/invite-friend`, {
+        friendId,
+        maxUses: options.maxUses ?? null,
+        expiresInSeconds: options.expiresInSeconds ?? null,
+      }),
+    );
+    return this.coerce(raw);
+  }
+
   /** List a guild's invites (ManageInvites). */
   async listInvites(guildId: string): Promise<Invite[]> {
     const raw = await firstValueFrom(

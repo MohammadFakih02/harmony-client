@@ -11,6 +11,18 @@ export interface ReactionSummary {
   meReacted: boolean;
 }
 
+/**
+ * Server-authoritative snapshot of the original message, rendered as an attributed quote above a
+ * forwarded message. Built entirely server-side (the client sends only references), so a forward
+ * card can never be forged. Present only when a message is a forward.
+ */
+export interface ForwardSnapshot {
+  authorId: string;
+  authorName: string;
+  content: string;
+  sentAt: number;
+}
+
 export interface MessageResponse {
   messageId: string;
   channelId: string;
@@ -28,9 +40,16 @@ export interface MessageResponse {
   attachmentIds: string[];
   mentionIds: string[];
   replyToId: string | null;
+  // When this message is a forward, the server's attributed-quote snapshot of the original.
+  // Null/absent for ordinary messages.
+  forward?: ForwardSnapshot | null;
   // Aggregated emoji reactions (server-authoritative on load; mutated live via the reaction
   // gateway events). Absent/undefined is treated as "no reactions".
   reactions?: ReactionSummary[];
+  // Optimistic-send idempotency token. Set locally on the optimistic bubble and echoed back on the
+  // live MessageReceived broadcast so the sender reconciles its bubble in place regardless of
+  // echo/POST ordering. Present only transiently (never persisted server-side).
+  nonce?: string;
   // Client-side only — not from the server
   pending?: boolean;
   failed?: boolean;

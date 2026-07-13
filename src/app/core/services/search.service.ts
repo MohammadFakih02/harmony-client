@@ -25,4 +25,21 @@ export class SearchService {
       this.http.get<SearchResults>(`${this.base}/guilds/${guildId}/search`, { params }),
     );
   }
+
+  /**
+   * Full-text search within a single DM / group-DM channel the caller participates in. Guild-less
+   * and inherently channel-scoped (unlike a guild search, which spans visible channels). `before`
+   * (a result's createdAt) pages older.
+   */
+  searchDmChannel(
+    channelId: string,
+    query: string,
+    options: { before?: number } = {},
+  ): Promise<SearchResults> {
+    const params: Record<string, string> = { q: query };
+    if (options.before != null) params['before'] = String(options.before);
+    return firstValueFrom(
+      this.http.get<SearchResults>(`${this.base}/dm/${channelId}/search`, { params }),
+    );
+  }
 }

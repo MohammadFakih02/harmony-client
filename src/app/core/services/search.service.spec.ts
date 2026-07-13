@@ -44,4 +44,17 @@ describe('SearchService', () => {
     const results = await promise;
     expect(results.hasMore).toBe(true);
   });
+
+  it('searchDmChannel() hits the DM channel-scoped endpoint', async () => {
+    const promise = service.searchDmChannel('99', 'mango', { before: 1782295110000 });
+
+    const req = httpMock.expectOne((r) => r.url === `${base}/dm/99/search`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('q')).toBe('mango');
+    expect(req.request.params.get('before')).toBe('1782295110000');
+    expect(req.request.params.has('channelId')).toBe(false);
+
+    req.flush({ results: [], hasMore: false });
+    await promise;
+  });
 });
