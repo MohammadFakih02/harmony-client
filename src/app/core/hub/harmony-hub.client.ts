@@ -51,6 +51,16 @@ export class HarmonyHubClient {
           replyToId: msg.replyToId != null ? String(msg.replyToId) : null,
           attachmentIds: (msg.attachmentIds ?? []).map(String),
           mentionIds: (msg.mentionIds ?? []).map(String),
+          // Forward snapshot (attributed quote), when present: coerce the author id → string,
+          // sentAt → number. Left null for ordinary messages.
+          forward: msg.forward
+            ? {
+                authorId: String(msg.forward.authorId),
+                authorName: msg.forward.authorName,
+                content: msg.forward.content,
+                sentAt: Number(msg.forward.sentAt),
+              }
+            : null,
         },
       }));
 
@@ -195,6 +205,11 @@ export class HarmonyHubClient {
           createdAt: Number(p.createdAt),
         },
       }));
+
+    // Owner-only live unread-count push (mark-read/clear from another tab) so the bell badge stays
+    // in sync without a refetch. Purely a UI hint; the authoritative count is the REST endpoint.
+    this.connection.on('NotificationBadgeUpdate', (unreadCount: unknown) =>
+      this.emit({ type: 'NotificationBadgeUpdate', unreadCount: Number(unreadCount) }));
 
     this.connection.on('MemberRemoved', (p: { guildId: unknown; userId: unknown }) =>
       this.emit({
@@ -408,6 +423,38 @@ export class HarmonyHubClient {
 
   // Backend is configured with AllowReadingFromString + LongStringConverter,
   // so hub methods receive string IDs and parse them as long accurately.
+
+  /**
+   * Primary send path: invokes the hub, which persists through the normal pipeline and returns the
+   * new message's id (HubResult&lt;SendMessageResponse&gt;). The full message body arrives separately
+   * on the MessageReceived broadcast (reconciled against the optimistic bubble by nonce). Snowflake
+   * ids are passed as strings — the hub reads them via AllowReadingFromString. Throws on rejection.
+   */
+  async sendMessage(
+    guildId: string | null,
+    channelId: string,
+    content: string,
+    options: { attachmentIds?: string[]; replyToId?: string; nonce?: string } = {},
+  ): Promise<string> {
+    const result = await this.connection.invoke<{
+      succeeded: boolean;
+      data: { messageId: unknown } | null;
+      errorMessage: string | null;
+    }>(
+      'SendMessage',
+      channelId,
+      guildId,
+      content,
+      options.attachmentIds ?? null,
+      options.replyToId ?? null,
+      options.nonce ?? null,
+    );
+    if (!result.succeeded || !result.data) {
+      throw new Error(result.errorMessage ?? 'Send failed');
+    }
+    return String(result.data.messageId);
+  }
+
   async joinGuild(guildId: string): Promise<void> {
     await this.connection.invoke('JoinGuild', guildId);
   }

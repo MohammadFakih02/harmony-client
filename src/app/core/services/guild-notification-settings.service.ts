@@ -29,6 +29,24 @@ export class GuildNotificationSettingsService {
     );
   }
 
+  setGuildSuppressEveryone(guildId: string, value: boolean): Promise<void> {
+    return firstValueFrom(
+      this.http.put<void>(
+        `${this.base}/guilds/${guildId}/notification-settings/suppress-everyone`,
+        { value },
+      ),
+    );
+  }
+
+  setChannelSuppressEveryone(guildId: string, channelId: string, value: boolean): Promise<void> {
+    return firstValueFrom(
+      this.http.put<void>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/notification-settings/suppress-everyone`,
+        { value },
+      ),
+    );
+  }
+
   setChannelLevel(guildId: string, channelId: string, level: NotificationLevel): Promise<void> {
     return firstValueFrom(
       this.http.put<void>(

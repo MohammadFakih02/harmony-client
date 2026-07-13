@@ -2,6 +2,7 @@ import { inject } from '@angular/core';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import {
   GuildNotificationSettings,
+  NOTIFICATION_LEVEL_DEFAULT,
   NotificationLevel,
 } from '../models/notification-setting.models';
 import { GuildNotificationSettingsService } from '../services/guild-notification-settings.service';
@@ -50,13 +51,54 @@ export const GuildNotificationSettingsStore = signalStore(
       ): Promise<void> {
         const current = store.byGuild()[guildId];
         if (current) {
+          const existing = current.channels.find((c) => c.channelId === channelId);
           const channels = current.channels.filter((c) => c.channelId !== channelId);
-          if (level) channels.push({ channelId, level });
+          // Preserve the row's suppress-@everyone flag — it lives on the same (user, channel) row.
+          if (level) channels.push({ channelId, level, suppressEveryone: existing?.suppressEveryone ?? false });
           put(guildId, { ...current, channels });
         }
         try {
           if (level) await service.setChannelLevel(guildId, channelId, level);
           else await service.resetChannelLevel(guildId, channelId);
+        } catch {
+          await this.load(guildId);
+        }
+      },
+
+      /** Toggle guild-wide @everyone/@here suppression. */
+      async setGuildSuppressEveryone(guildId: string, value: boolean): Promise<void> {
+        const current = store.byGuild()[guildId];
+        if (current) put(guildId, { ...current, guildSuppressEveryone: value }); // optimistic
+        try {
+          await service.setGuildSuppressEveryone(guildId, value);
+        } catch {
+          await this.load(guildId);
+        }
+      },
+
+      /**
+       * Toggle @everyone/@here suppression for one channel. The flag shares the channel's settings
+       * row, so setting it on a channel with no override materializes a row at the default level
+       * (mirrors the backend upsert).
+       */
+      async setChannelSuppressEveryone(
+        guildId: string,
+        channelId: string,
+        value: boolean,
+      ): Promise<void> {
+        const current = store.byGuild()[guildId];
+        if (current) {
+          const existing = current.channels.find((c) => c.channelId === channelId);
+          const channels = current.channels.filter((c) => c.channelId !== channelId);
+          channels.push({
+            channelId,
+            level: existing?.level ?? NOTIFICATION_LEVEL_DEFAULT,
+            suppressEveryone: value,
+          });
+          put(guildId, { ...current, channels });
+        }
+        try {
+          await service.setChannelSuppressEveryone(guildId, channelId, value);
         } catch {
           await this.load(guildId);
         }

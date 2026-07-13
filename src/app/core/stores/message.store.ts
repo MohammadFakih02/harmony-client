@@ -11,12 +11,18 @@ import {
 import { GatewayEvents } from '../hub/gateway-events';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../services/message.service';
+import { SignalRService } from '../services/signalr.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
 import { extractApiError } from '../../shared/util/api-error';
 
 let _tempIdCounter = -1;
 const nextTempId = (): number => _tempIdCounter--;
+
+// Opaque per-send idempotency token, echoed back on the live MessageReceived broadcast so the
+// sender reconciles its optimistic bubble in place regardless of echo/POST ordering.
+const newNonce = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 /**
  * Applies one reaction delta to a message's pill list, immutably. `delta` is +1 (add) or -1
@@ -109,10 +115,28 @@ export const MessageStore = signalStore(
   withMethods((
     store,
     service = inject(MessageService),
+    signalr = inject(SignalRService),
     auth = inject(AuthService),
     reactions = inject(ReactionService),
     toast = inject(ToastService),
   ) => {
+    /**
+     * Sends via the hub when the socket is live (primary path — one round-trip returns the persisted
+     * id, and the full message arrives on the MessageReceived broadcast, reconciled by nonce), and
+     * falls back to REST while the socket is down. Returns the authoritative message id either way.
+     */
+    const dispatchSend = async (
+      guildId: string | null,
+      channelId: string,
+      content: string,
+      opts: { attachmentIds?: string[]; replyToId?: string; nonce?: string },
+    ): Promise<string> => {
+      if (signalr.isConnected) {
+        return signalr.sendMessage(guildId, channelId, content, opts);
+      }
+      const response = await service.sendMessage(guildId, channelId, content, opts);
+      return response.messageId;
+    };
     /** Rewrites one loaded message's pill list via `applyReactionDelta`; no-op if not loaded. */
     const mutateReactions = (
       messageId: string,
@@ -357,6 +381,7 @@ export const MessageStore = signalStore(
       }
 
       const tempId = nextTempId();
+      const nonce = newNonce();
       const optimistic: MessageResponse = {
         messageId: String(tempId), // e.g. "-1" — replaced when server confirms
         tempId,
@@ -374,17 +399,19 @@ export const MessageStore = signalStore(
         attachmentIds,
         mentionIds: [],
         replyToId,
+        nonce,
         pending: true,
       };
 
       patchState(store, { messages: [...store.messages(), optimistic] });
 
       try {
-        const response = await service.sendMessage(guildId, channelId, content, {
+        const realId = await dispatchSend(guildId, channelId, content, {
           attachmentIds: attachmentIds.length ? attachmentIds : undefined,
           replyToId: replyToId ?? undefined,
+          nonce,
         });
-        confirmSent(tempId, response.messageId);
+        confirmSent(tempId, realId);
       } catch (err) {
         const failedReason = extractApiError(err);
         patchState(store, {
@@ -400,6 +427,23 @@ export const MessageStore = signalStore(
       // reader. They surface (with everything else) when they hit "Jump to Present". The unread
       // badge still updates via UnreadStore, and edits/deletes below still apply to loaded messages.
       if (store.anchored()) return;
+
+      // Nonce-first reconcile: the live echo of MY OWN send carries the nonce I stamped on the
+      // optimistic bubble. Match on it before the id map so the bubble is replaced in place
+      // regardless of whether this echo beats the POST/hub ack — no transient duplicate, no false
+      // failure. (The echo is the only broadcast that carries a nonce; historical loads never do.)
+      if (msg.nonce) {
+        const mine = store.messages().find((m) => m.tempId !== undefined && m.nonce === msg.nonce);
+        if (mine) {
+          const map = { ...store.realIdToTempId() };
+          delete map[msg.messageId];
+          patchState(store, {
+            messages: store.messages().map((m) => (m.nonce === msg.nonce ? { ...msg } : m)),
+            realIdToTempId: map,
+          });
+          return;
+        }
+      }
 
       const realIdToTempId = store.realIdToTempId();
       const tempId = realIdToTempId[msg.messageId];
@@ -444,6 +488,7 @@ export const MessageStore = signalStore(
       if (!msg || !channelId) return;
 
       const newTempId = nextTempId();
+      const nonce = newNonce();
       patchState(store, {
         messages: store.messages().map((m) =>
           m.tempId === tempId
@@ -451,6 +496,7 @@ export const MessageStore = signalStore(
                 ...m,
                 tempId: newTempId,
                 messageId: String(newTempId),
+                nonce,
                 failed: false,
                 failedReason: undefined,
                 pending: true,
@@ -460,11 +506,12 @@ export const MessageStore = signalStore(
       });
 
       try {
-        const response = await service.sendMessage(guildId, channelId, msg.content, {
+        const realId = await dispatchSend(guildId, channelId, msg.content, {
           attachmentIds: msg.attachmentIds.length ? msg.attachmentIds : undefined,
           replyToId: msg.replyToId ?? undefined,
+          nonce,
         });
-        confirmSent(newTempId, response.messageId);
+        confirmSent(newTempId, realId);
       } catch (err) {
         const failedReason = extractApiError(err);
         patchState(store, {

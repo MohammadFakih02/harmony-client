@@ -43,6 +43,23 @@ import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notif
       }
     </div>
 
+    <label
+      class="flex items-center gap-3 rounded px-3 py-2.5 mb-7 cursor-pointer hover:bg-surface-3"
+    >
+      <input
+        type="checkbox"
+        class="accent-accent h-4 w-4"
+        [checked]="guildSuppressEveryone()"
+        (change)="onGuildSuppressChange($any($event.target).checked)"
+      />
+      <span class="flex-1 min-w-0">
+        <span class="block text-sm text-primary">Suppress &#64;everyone and &#64;here</span>
+        <span class="block text-2xs text-muted">
+          &#64;everyone / &#64;here won't notify you. Direct &#64;mentions still do.
+        </span>
+      </span>
+    </label>
+
     @if (textChannels().length) {
     <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">Channel overrides</p>
     <div class="divide-y divide-border-subtle">
@@ -50,6 +67,26 @@ import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notif
       <div class="flex items-center gap-3 py-2.5">
         <i class="fas fa-hashtag text-faint text-xs"></i>
         <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ ch.name }}</span>
+        <button
+          type="button"
+          class="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm font-semibold transition-colors"
+          [class.bg-accent]="channelSuppress(ch.id)"
+          [class.text-white]="channelSuppress(ch.id)"
+          [class.bg-surface-3]="!channelSuppress(ch.id)"
+          [class.text-faint]="!channelSuppress(ch.id)"
+          [attr.aria-label]="
+            (channelSuppress(ch.id) ? 'Allow' : 'Suppress') + ' @everyone in #' + ch.name
+          "
+          [attr.aria-pressed]="channelSuppress(ch.id)"
+          [title]="
+            channelSuppress(ch.id)
+              ? '@everyone suppressed in this channel'
+              : 'Suppress @everyone in this channel'
+          "
+          (click)="onChannelSuppressToggle(ch.id)"
+        >
+          &#64;
+        </button>
         <select
           class="rounded bg-surface-3 px-2 py-1 text-sm text-primary outline-none"
           [attr.aria-label]="'Notification level for #' + ch.name"
@@ -78,13 +115,28 @@ export class GuildNotifications {
   protected readonly guildLevel = computed<NotificationLevel>(
     () => this.settings()?.guildLevel ?? NOTIFICATION_LEVEL_DEFAULT,
   );
+  protected readonly guildSuppressEveryone = computed<boolean>(
+    () => this.settings()?.guildSuppressEveryone ?? false,
+  );
 
   protected channelLevel(channelId: string): NotificationLevel | null {
     return this.settings()?.channels.find((c) => c.channelId === channelId)?.level ?? null;
   }
 
+  protected channelSuppress(channelId: string): boolean {
+    return this.settings()?.channels.find((c) => c.channelId === channelId)?.suppressEveryone ?? false;
+  }
+
   protected onChannelChange(channelId: string, value: string): void {
     const level = value === 'default' ? null : (value as NotificationLevel);
     void this.store.setChannelLevel(this.guildId(), channelId, level);
+  }
+
+  protected onGuildSuppressChange(value: boolean): void {
+    void this.store.setGuildSuppressEveryone(this.guildId(), value);
+  }
+
+  protected onChannelSuppressToggle(channelId: string): void {
+    void this.store.setChannelSuppressEveryone(this.guildId(), channelId, !this.channelSuppress(channelId));
   }
 }

@@ -35,8 +35,11 @@
       {{ isMember() ? 'You’re a member of' : 'You’ve been invited to join' }}
     </p>
     <p class="text-sm font-semibold text-primary truncate-text">{{ p.guildName }}</p>
-    <p class="text-xs text-faint">
-      {{ p.memberCount }} {{ p.memberCount === 1 ? 'member' : 'members' }}
+    <p class="text-xs text-faint flex items-center gap-1.5">
+      <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+      {{ p.onlineCount }} Online
+      <span class="opacity-60">•</span>
+      {{ p.memberCount }} {{ p.memberCount === 1 ? 'Member' : 'Members' }}
     </p>
   </div>
 

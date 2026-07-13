@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MessageStore } from './message.store';
 import { MessageService } from '../services/message.service';
+import { SignalRService } from '../services/signalr.service';
 import { AuthService } from '../services/auth.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
@@ -35,6 +36,8 @@ describe('MessageStore', () => {
   };
   let auth: { currentUser: ReturnType<typeof vi.fn>; getAccessToken: ReturnType<typeof vi.fn> };
   let reactions: { add: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
+  // Default disconnected so sends take the REST fallback; a test flips isConnected to exercise the hub.
+  let signalr: { isConnected: boolean; sendMessage: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     service = {
@@ -42,6 +45,7 @@ describe('MessageStore', () => {
       sendMessage: vi.fn(),
       markRead: vi.fn().mockResolvedValue(undefined),
     };
+    signalr = { isConnected: false, sendMessage: vi.fn() };
     auth = {
       currentUser: vi.fn().mockReturnValue(AUTH_USER),
       getAccessToken: vi.fn().mockReturnValue('token'),
@@ -54,6 +58,7 @@ describe('MessageStore', () => {
       providers: [
         MessageStore,
         { provide: MessageService, useValue: service },
+        { provide: SignalRService, useValue: signalr },
         { provide: AuthService, useValue: auth },
         { provide: ReactionService, useValue: reactions },
         { provide: ToastService, useValue: { info: vi.fn() } },
@@ -232,9 +237,11 @@ describe('MessageStore', () => {
 
       await sendPromise;
 
-      // The ids reach the service as `attachmentIds` (not the old singular field).
+      // The ids reach the service as `attachmentIds` (not the old singular field), with a nonce.
       expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'look', {
         attachmentIds: ['42', '43'],
+        replyToId: undefined,
+        nonce: expect.any(String),
       });
     });
 
@@ -245,7 +252,25 @@ describe('MessageStore', () => {
 
       expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'plain', {
         attachmentIds: undefined,
+        replyToId: undefined,
+        nonce: expect.any(String),
       });
+    });
+
+    it('sends via the hub (returning the persisted id) when the socket is connected', async () => {
+      signalr.isConnected = true;
+      signalr.sendMessage.mockResolvedValue('700');
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('over the wire'));
+
+      expect(signalr.sendMessage).toHaveBeenCalledWith('1', '1', 'over the wire', {
+        attachmentIds: undefined,
+        replyToId: undefined,
+        nonce: expect.any(String),
+      });
+      // REST is untouched, and the optimistic bubble is reconciled to the hub-returned id.
+      expect(service.sendMessage).not.toHaveBeenCalled();
+      expect(store.messages().some((m) => m.messageId === '700' && !m.pending)).toBe(true);
     });
   });
 
@@ -284,6 +309,34 @@ describe('MessageStore', () => {
       store.appendMessage(msg);
 
       expect(store.messages().filter((m) => m.messageId === '888')).toHaveLength(1);
+    });
+
+    it('reconciles by nonce when the echo arrives before the send resolves (no duplicate)', async () => {
+      // Hold the send open so the live echo can beat the ack (the ordering the nonce guards against).
+      let resolveSend!: () => void;
+      service.sendMessage.mockReturnValue(
+        new Promise((res) => {
+          resolveSend = () => res({ messageId: '901', channelId: '1', guildId: '1' });
+        }),
+      );
+
+      const sendPromise = TestBed.runInInjectionContext(() => store.sendMessage('racy'));
+      const optimistic = store.messages().find((m) => m.pending);
+      expect(optimistic?.nonce).toBeDefined();
+
+      // The authoritative echo (carrying the same nonce) lands first.
+      store.appendMessage(makeMsg({ messageId: '901', content: 'racy', nonce: optimistic!.nonce }));
+
+      // Replaced in place: exactly one copy, real id, no longer pending.
+      const matches = store.messages().filter((m) => m.messageId === '901');
+      expect(matches).toHaveLength(1);
+      expect(matches[0].pending).toBeUndefined();
+      expect(store.messages().some((m) => m.pending)).toBe(false);
+
+      // The late ack must not resurrect a duplicate.
+      resolveSend();
+      await sendPromise;
+      expect(store.messages().filter((m) => m.messageId === '901')).toHaveLength(1);
     });
   });
 
@@ -468,6 +521,7 @@ describe('MessageStore', () => {
       expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'a reply', {
         attachmentIds: undefined,
         replyToId: '42',
+        nonce: expect.any(String),
       });
     });
 
@@ -479,6 +533,7 @@ describe('MessageStore', () => {
       expect(service.sendMessage).toHaveBeenCalledWith('1', '1', 'plain', {
         attachmentIds: undefined,
         replyToId: undefined,
+        nonce: expect.any(String),
       });
     });
 
@@ -496,6 +551,7 @@ describe('MessageStore', () => {
       expect(service.sendMessage).toHaveBeenLastCalledWith('1', '1', 'reply that fails', {
         attachmentIds: undefined,
         replyToId: '42',
+        nonce: expect.any(String),
       });
     });
 

@@ -234,6 +234,11 @@ export class MessageList {
   }
 
   /** The optional admin greeting carried by a system (member-join) message; null when blank. */
+  /** Short attribution timestamp for the forward-snapshot header ("Today at 3:04 PM", etc.). */
+  protected forwardTime(sentAt: number): string {
+    return formatMessageTime(sentAt);
+  }
+
   protected systemGreeting(group: MessageGroup): string | null {
     const content = group.items[0]?.msg.content?.trim();
     return content ? content : null;
