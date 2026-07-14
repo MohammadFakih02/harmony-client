@@ -21,7 +21,7 @@ import { FileService } from '../../../core/services/file.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SignalRService } from '../../../core/services/signalr.service';
 import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
-import { MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
+import { MentionAutocomplete, EmojiPicker, EmojiSuggest } from '../../../shared/ui';
 import { MentionCandidate } from '../../../core/models/member.models';
 import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
@@ -30,6 +30,15 @@ import {
   applyMention,
   detectMentionTrigger,
 } from '../../../shared/util/mention-trigger';
+import {
+  EmojiTrigger,
+  applyEmoji,
+  convertCompletedShortcode,
+  detectEmojiTrigger,
+} from '../../../shared/util/emoji-shortcode';
+import { EmojiItem, searchEmojis } from '../../../shared/util/emoji-data';
+import { pushRecent } from '../../../shared/util/emoji-recents';
+import { toggleWrap } from '../../../shared/util/format-toggle';
 import {
   FileKind,
   fileIcon,
@@ -57,7 +66,7 @@ interface StagedFile {
 @Component({
   selector: 'app-message-input',
   standalone: true,
-  imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete, EmojiPicker],
+  imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete, EmojiPicker, EmojiSuggest],
   templateUrl: './message-input.html',
 })
 export class MessageInput implements OnDestroy {
@@ -118,6 +127,35 @@ export class MessageInput implements OnDestroy {
     // Fuzzy match so "owner" finds "seed_owner" and a small typo still resolves.
     return fuzzyFilter(pool, trigger.query, (c) => c.username).slice(0, 10);
   });
+
+  // --- :shortcode emoji autocomplete (the emoji sibling of the '@' popup above) ---
+
+  protected readonly emojiTrigger = signal<EmojiTrigger | null>(null);
+  protected readonly emojiSuggestOpen = computed(() => this.emojiTrigger() !== null);
+  protected readonly emojiHighlightedIndex = signal(0);
+
+  protected readonly emojiSuggestions = computed<EmojiItem[]>(() => {
+    const trigger = this.emojiTrigger();
+    return trigger ? searchEmojis(trigger.query, 8) : [];
+  });
+
+  // --- formatting toolbar ---
+
+  /** Wraps in the markdown subset `markdown.ts` renders; `close` defaults to `open`. */
+  protected readonly formatActions: {
+    icon: string;
+    label: string;
+    open: string;
+    close?: string;
+  }[] = [
+    { icon: 'fa-bold', label: 'Bold', open: '**' },
+    { icon: 'fa-italic', label: 'Italic', open: '*' },
+    { icon: 'fa-underline', label: 'Underline', open: '__' },
+    { icon: 'fa-strikethrough', label: 'Strikethrough', open: '~~' },
+    { icon: 'fa-eye-slash', label: 'Spoiler', open: '||' },
+    { icon: 'fa-code', label: 'Inline code', open: '`' },
+    { icon: 'fa-file-code', label: 'Code block', open: '```\n', close: '\n```' },
+  ];
 
   // --- emoji picker ---
 
@@ -255,6 +293,21 @@ export class MessageInput implements OnDestroy {
       this.messageStore.activeChannelId();
       untracked(() => this.cooldownUntil.set(null));
     });
+
+    // Restore the server-authoritative cooldown on channel open: the gate's Redis TTL survives a
+    // leave/rejoin even though the local timer doesn't, so read the remaining seconds reported by
+    // the open load and rebuild the countdown from it. Gated on slowmode actually applying to us
+    // (moderators/DMs are exempt → slowmodeSeconds() is 0), so a stale key never blocks an exempt
+    // sender. Runs after the reset effect above (the store value lands once the load completes).
+    effect(() => {
+      const remaining = this.messageStore.slowmodeRemainingSeconds();
+      const applies = this.slowmodeSeconds() > 0;
+      untracked(() => {
+        if (remaining > 0 && applies) {
+          this.cooldownUntil.set(Date.now() + remaining * 1000);
+        }
+      });
+    });
   }
 
   ngOnDestroy(): void {
@@ -262,14 +315,39 @@ export class MessageInput implements OnDestroy {
   }
 
   onDraftInput(value: string): void {
-    this.draft.set(value);
     const el = this.draftInput()?.nativeElement;
     const caret = el?.selectionStart ?? value.length;
+
+    // A just-completed exact `:shortcode:` converts to its emoji in place.
+    const converted = convertCompletedShortcode(value, caret);
+    if (converted) {
+      this.draft.set(converted.text);
+      this.emojiTrigger.set(null);
+      this.restoreCaret(converted.caret);
+      this.signalTyping(converted.text);
+      return;
+    }
+
+    this.draft.set(value);
     const trigger = detectMentionTrigger(value, caret);
     if (trigger) this.closeEmoji(); // don't stack the emoji picker over the mention popup
     this.mentionTrigger.set(trigger);
     this.mentionHighlightedIndex.set(0);
+    const emojiTrigger = trigger ? null : detectEmojiTrigger(value, caret);
+    if (emojiTrigger) this.closeEmoji(); // ...nor over the shortcode popup
+    this.emojiTrigger.set(emojiTrigger);
+    this.emojiHighlightedIndex.set(0);
     this.signalTyping(value);
+  }
+
+  /** Refocuses the composer and parks the caret (collapsed) at `caret` after the DOM syncs. */
+  private restoreCaret(caret: number): void {
+    queueMicrotask(() => {
+      const input = this.draftInput()?.nativeElement;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
   }
 
   /** Sends a throttled "started typing" ping (or an immediate "stopped" once the composer empties). */
@@ -313,9 +391,46 @@ export class MessageInput implements OnDestroy {
     this.mentionTrigger.set(null);
   }
 
+  /** Replaces the `:query` trigger with the picked emoji and records it as a recent. */
+  selectEmojiSuggestion(emoji: EmojiItem): void {
+    const trigger = this.emojiTrigger();
+    if (!trigger) return;
+    const { text, caret } = applyEmoji(this.draft(), trigger, emoji.char);
+    this.draft.set(text);
+    this.emojiTrigger.set(null);
+    pushRecent(emoji.char);
+    this.restoreCaret(caret);
+  }
+
+  closeEmojiSuggest(): void {
+    this.emojiTrigger.set(null);
+  }
+
+  /**
+   * Toggle-wraps the current selection (or caret) in a markdown marker pair — the toolbar
+   * buttons and the Ctrl+B/I/U shortcuts. Selection survives, so toggles round-trip.
+   */
+  applyFormat(open: string, close?: string): void {
+    const el = this.draftInput()?.nativeElement;
+    const value = this.draft();
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const result = toggleWrap(value, start, end, open, close);
+    this.draft.set(result.text);
+    queueMicrotask(() => {
+      const input = this.draftInput()?.nativeElement;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
+  }
+
   toggleEmoji(): void {
     const opening = !this.emojiOpen();
-    if (opening) this.closeMentionAutocomplete(); // the two overlays share the composer origin
+    if (opening) {
+      this.closeMentionAutocomplete(); // the overlays share the composer origin — never stack
+      this.closeEmojiSuggest();
+    }
     this.emojiOpen.set(opening);
   }
 
@@ -372,6 +487,7 @@ export class MessageInput implements OnDestroy {
     this.draft.set('');
     this.stopTypingSignal(); // the message is on its way — clear our typing indicator for others
     this.closeMentionAutocomplete();
+    this.closeEmojiSuggest();
     // Clear staging up front; the optimistic message carries the ids and can be retried
     // (the ids are already confirmed, so retryMessage re-sends the same ones).
     const toRevoke = this.staged();
@@ -503,6 +619,49 @@ export class MessageInput implements OnDestroy {
           event.preventDefault();
           this.closeMentionAutocomplete();
           return;
+      }
+    }
+
+    if (this.emojiSuggestOpen()) {
+      const suggestions = this.emojiSuggestions();
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          this.emojiHighlightedIndex.set(
+            suggestions.length ? (this.emojiHighlightedIndex() + 1) % suggestions.length : 0,
+          );
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.emojiHighlightedIndex.set(
+            suggestions.length
+              ? (this.emojiHighlightedIndex() - 1 + suggestions.length) % suggestions.length
+              : 0,
+          );
+          return;
+        case 'Enter':
+        case 'Tab':
+          event.preventDefault();
+          if (suggestions.length > 0)
+            this.selectEmojiSuggestion(suggestions[this.emojiHighlightedIndex()]);
+          else this.closeEmojiSuggest();
+          return;
+        case 'Escape':
+          event.preventDefault();
+          this.closeEmojiSuggest();
+          return;
+      }
+    }
+
+    // Formatting shortcuts (Discord-style): Ctrl/Cmd + B / I / U.
+    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+      const marker = ({ b: '**', i: '*', u: '__' } as Record<string, string>)[
+        event.key.toLowerCase()
+      ];
+      if (marker) {
+        event.preventDefault();
+        this.applyFormat(marker);
+        return;
       }
     }
 

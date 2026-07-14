@@ -60,6 +60,9 @@ export interface MessageResponse {
 export interface ChannelMessagesResponse {
   messages: MessageResponse[];
   degraded: boolean;
+  // Whole seconds left on the caller's slowmode cooldown in this channel (0/absent = none).
+  // Only populated on a latest/open load — lets the composer restore the countdown across rejoin.
+  slowmodeRemainingSeconds?: number;
 }
 
 /**

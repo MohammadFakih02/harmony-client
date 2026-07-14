@@ -1,7 +1,7 @@
 import { Component, inject, effect, computed, signal, OnDestroy } from '@angular/core';
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
 import { Router } from '@angular/router';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, ConfirmService } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
@@ -9,6 +9,7 @@ import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { BlockStore } from '../../../core/stores/block.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { MuteStore } from '../../../core/stores/mute.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoleService } from '../../../core/services/role.service';
@@ -58,12 +59,14 @@ export class MemberSidebar implements OnDestroy {
     roleStore: this.roleStore,
     roleService: inject(RoleService),
     dmStore: inject(DmStore),
+    friendStore: inject(FriendStore),
     blockStore: inject(BlockStore),
     muteStore: inject(MuteStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: inject(Router),
     auth: this.auth,
+    confirm: inject(ConfirmService),
   };
 
   // Wall-clock signal so the timed-out indicator clears itself when a timeout lapses. A timeout

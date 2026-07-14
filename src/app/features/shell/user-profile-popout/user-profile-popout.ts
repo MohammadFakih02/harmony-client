@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { UiAvatar, UiProfileBanner, bannerGradient } from '../../../shared/ui';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -6,19 +6,16 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { ProfileStore } from '../../../core/stores/profile.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { FriendStore } from '../../../core/stores/friend.store';
+import { BlockStore } from '../../../core/stores/block.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { roleColorHex } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
-import { snowflakeToDate } from '../../../shared/util/snowflake';
-
-const fmtDate = (d: Date | null): string | null =>
-  d ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-
 /**
- * Clickable-user profile card: identity, presence + custom status, "Member Since", and the
+ * Clickable-user profile card: identity, presence + custom status, and the
  * member's roles as colour chips. A Message button opens a DM (hidden for yourself). Resolves
  * everything from the stores given a `userId` + `guildId`; falls back to the supplied identity
  * when the member record isn't loaded (or in a DM, where there are no roles). Anchored by the
@@ -42,6 +39,8 @@ export class UserProfilePopout {
   private readonly presenceStore = inject(PresenceStore);
   private readonly profileStore = inject(ProfileStore);
   private readonly dmStore = inject(DmStore);
+  private readonly friendStore = inject(FriendStore);
+  private readonly blockStore = inject(BlockStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly auth = inject(AuthService);
   private readonly profileModal = inject(ProfileModalService);
@@ -95,14 +94,30 @@ export class UserProfilePopout {
     bannerGradient(this.roleChips().find((r) => r.color)?.color),
   );
 
-  /** Account-creation date, from the snowflake — always known. */
-  protected readonly accountSince = computed(() => fmtDate(snowflakeToDate(this.userId())));
 
-  /** Guild join date — only when viewing a loaded guild member. */
-  protected readonly serverSince = computed(() => {
-    const joined = this.member()?.joinedAt;
-    return joined != null ? fmtDate(new Date(joined)) : null;
-  });
+  /** Add Friend — only for a stranger: not yourself, not a friend, no pending request, not blocked. */
+  protected readonly canAddFriend = computed(
+    () =>
+      !this.isSelf() &&
+      !!this.username() &&
+      !this.friendStore.friends().some((f) => f.id === this.userId()) &&
+      !this.friendStore.pending().some((p) => p.id === this.userId()) &&
+      !this.blockStore.isBlocked(this.userId()),
+  );
+  protected readonly sendingFriendRequest = signal(false);
+
+  async addFriend(): Promise<void> {
+    if (this.sendingFriendRequest()) return;
+    this.sendingFriendRequest.set(true);
+    try {
+      await this.friendStore.sendRequest(this.username());
+      this.toast.info(`Friend request sent to @${this.username()}`, 'fa-user-plus');
+    } catch {
+      this.toast.info('Could not send a friend request to this user.', 'fa-triangle-exclamation');
+    } finally {
+      this.sendingFriendRequest.set(false);
+    }
+  }
 
   async message(): Promise<void> {
     if (this.isSelf()) return;

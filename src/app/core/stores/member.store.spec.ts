@@ -132,6 +132,34 @@ describe('MemberStore', () => {
     expect(service.getCapabilities).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes cached guild capabilities live when a role is upserted (no page reload)', async () => {
+    await store.loadCapabilitiesIfNeeded('1');
+    expect(service.getCapabilities).toHaveBeenCalledTimes(1);
+
+    // A role's bits changed → re-resolve the caller's guild capabilities live.
+    TestBed.inject(GatewayEvents).emit({
+      type: 'RoleUpserted',
+      role: {
+        id: 'r1', guildId: '1', name: 'Mods', color: 0, permissionBits: 0,
+        position: 1, isHoisted: false, isMentionable: false, isDefault: false,
+      },
+    });
+    await Promise.resolve();
+
+    expect(service.getCapabilities).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT refetch capabilities for a guild whose caps are not cached (no-op guard)', async () => {
+    // Never loaded '1' → nothing cached to go stale, so a role change is a no-op here.
+    TestBed.inject(GatewayEvents).emit({
+      type: 'RoleDeleted',
+      payload: { guildId: '1', roleId: 'r1' },
+    });
+    await Promise.resolve();
+
+    expect(service.getCapabilities).not.toHaveBeenCalled();
+  });
+
   it('channelViewers() is null until loaded, then returns the cached set (fetched once)', async () => {
     expect(store.channelViewers('c1')).toBeNull();
     service.getChannelViewers.mockResolvedValue(['10', '20']);

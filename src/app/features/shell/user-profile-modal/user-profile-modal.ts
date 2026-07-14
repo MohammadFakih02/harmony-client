@@ -9,6 +9,8 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { PresenceStore } from '../../../core/stores/presence.store';
 import { ProfileStore } from '../../../core/stores/profile.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { FriendStore } from '../../../core/stores/friend.store';
+import { BlockStore } from '../../../core/stores/block.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { ToastService } from '../../../core/services/toast.service';
 import { roleColorHex } from '../../../core/models/role.models';
@@ -39,6 +41,8 @@ export class UserProfileModal {
   private readonly roleStore = inject(RoleStore);
   private readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);
+  private readonly friendStore = inject(FriendStore);
+  private readonly blockStore = inject(BlockStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -204,6 +208,34 @@ export class UserProfileModal {
       this.editingFriendNick.set(false);
     } finally {
       this.savingFriendNick.set(false);
+    }
+  }
+
+  /** Add Friend — only for a stranger: not yourself, not a friend, no pending request, not blocked. */
+  protected readonly canAddFriend = computed(() => {
+    const id = this.userId();
+    return (
+      !!id &&
+      !this.isSelf() &&
+      !!this.view()?.username &&
+      !this.friendStore.friends().some((f) => f.id === id) &&
+      !this.friendStore.pending().some((p) => p.id === id) &&
+      !this.blockStore.isBlocked(id)
+    );
+  });
+  protected readonly sendingFriendRequest = signal(false);
+
+  protected async addFriend(): Promise<void> {
+    const username = this.view()?.username;
+    if (!username || this.sendingFriendRequest()) return;
+    this.sendingFriendRequest.set(true);
+    try {
+      await this.friendStore.sendRequest(username);
+      this.toast.info(`Friend request sent to @${username}`, 'fa-user-plus');
+    } catch {
+      this.toast.info('Could not send a friend request to this user.', 'fa-triangle-exclamation');
+    } finally {
+      this.sendingFriendRequest.set(false);
     }
   }
 

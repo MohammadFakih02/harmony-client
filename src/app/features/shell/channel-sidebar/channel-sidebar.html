@@ -56,6 +56,7 @@
         <i class="fas fa-folder-plus w-4 text-center text-faint"></i> Create Category
       </button>
       }
+      @if (canOpenServerSettings()) {
       <button
         type="button"
         class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
@@ -63,6 +64,40 @@
       >
         <i class="fas fa-gear w-4 text-center text-faint"></i> Server Settings
       </button>
+      }
+
+      @if (canCreateInvite() || canManageChannels() || canOpenServerSettings()) {
+      <div class="h-px bg-border-subtle my-1"></div>
+      }
+      <p class="px-2.5 pt-0.5 pb-1 text-2xs font-bold uppercase tracking-wider text-faint">
+        Notifications
+      </p>
+      @for (opt of guildNotifLevels; track opt.value) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="setGuildNotif(opt.value)"
+      >
+        <i
+          class="fas fa-check w-4 text-center text-accent"
+          [class.invisible]="guildNotifLevel() !== opt.value"
+        ></i>
+        {{ opt.label }}
+      </button>
+      }
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="toggleGuildSuppress()"
+      >
+        <i
+          class="fas fa-check w-4 text-center text-accent"
+          [class.invisible]="!guildSuppressEveryone()"
+        ></i>
+        Suppress &#64;everyone
+      </button>
+
+      <div class="h-px bg-border-subtle my-1"></div>
       @if (selectedGuildMuted()) {
       <button
         type="button"
@@ -137,35 +172,12 @@
       @for (entry of channelStore.sidebarEntries(); track entryTrackId(entry)) {
       @if (entry.kind === 'category') {
       @let category = entry.category;
-      <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry" class="mb-1">
-        <!-- Category header -->
+      <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry" class="mb-2">
+        <!-- The whole block (header included, collapsed or not) is the category's drop list, so
+             dropping ON a category always means "into it"; only the margins between blocks belong
+             to the top-level list (= place between/above). -->
         <div
-          class="channel-category-header group flex items-center w-full pl-2 py-1"
-          (contextmenu)="openCategoryMenu($event, category)"
-        >
-          <button
-            class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
-            (click)="toggleCategory(category.id)"
-          >
-            <i
-              class="fas fa-chevron-right text-3xs shrink-0 transition-element"
-              [class.rotate-90]="!category.collapsed"
-            ></i>
-            <span class="flex-1 text-left">{{ category.name }}</span>
-          </button>
-          @if (canManageChannels()) {
-          <span class="opacity-0 group-hover:opacity-100 transition-micro">
-            <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
-              <i class="fas fa-plus"></i>
-            </ui-icon-button>
-          </span>
-          }
-        </div>
-
-        <!-- The category's channels — drag to reorder, across categories, or out to top level -->
-        @if (!category.collapsed) {
-        <div
-          class="flex flex-col gap-0.5 animate-slide-down"
+          class="channel-category-list rounded-md"
           cdkDropList
           [id]="categoryDropListId(category.id)"
           [cdkDropListData]="category.channels"
@@ -174,16 +186,44 @@
           [cdkDropListDisabled]="!canManageChannels()"
           (cdkDropListDropped)="onCategoryDrop($event, category)"
         >
-          @for (channel of category.channels; track channel.id) {
-          <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="channel">
-            <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: channel }" />
+          <!-- Category header -->
+          <div
+            class="channel-category-header group flex items-center w-full pl-2 py-1"
+            (contextmenu)="openCategoryMenu($event, category)"
+          >
+            <button
+              class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+              (click)="toggleCategory(category.id)"
+            >
+              <i
+                class="fas fa-chevron-right text-3xs shrink-0 transition-element"
+                [class.rotate-90]="!category.collapsed"
+              ></i>
+              <span class="flex-1 text-left">{{ category.name }}</span>
+            </button>
+            @if (canManageChannels()) {
+            <span class="opacity-0 group-hover:opacity-100 transition-micro">
+              <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
+                <i class="fas fa-plus"></i>
+              </ui-icon-button>
+            </span>
+            }
+          </div>
+
+          <!-- The category's channels — drag to reorder, across categories, or out to top level -->
+          @if (!category.collapsed) {
+          <div class="flex flex-col gap-0.5 animate-slide-down">
+            @for (channel of category.channels; track channel.id) {
+            <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="channel">
+              <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: channel }" />
+            </div>
+            }
+            @if (category.channels.length === 0) {
+            <p class="px-2 py-1 text-2xs text-faint italic">No channels yet</p>
+            }
           </div>
           }
-          @if (category.channels.length === 0) {
-          <p class="px-2 py-1 text-2xs text-faint italic">No channels yet</p>
-          }
         </div>
-        }
       </div>
       } @else {
       <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry.channel">
@@ -209,10 +249,16 @@
             class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative w-full text-left cursor-pointer"
             [class.bg-surface-3]="inThisVoice"
             [class.text-primary]="inThisVoice"
+            [class.ring-2]="voiceDropTarget() === channel.id"
+            [class.ring-accent]="voiceDropTarget() === channel.id"
+            [class.bg-accent-muted]="voiceDropTarget() === channel.id"
             [attr.aria-label]="'Join ' + channel.name"
             (contextmenu)="openChannelMenu($event, channel)"
             (click)="joinVoice(channel)"
             (keydown.enter)="joinVoice(channel)"
+            (dragover)="onVoiceDragOver($event, channel)"
+            (dragleave)="onVoiceDragLeave(channel)"
+            (drop)="onVoiceDrop($event, channel)"
           >
             @if (voiceStore.connectingChannelId() === channel.id) {
             <i class="fas fa-spinner fa-spin w-4 text-center shrink-0 text-faint text-sm"></i>
@@ -301,8 +347,17 @@
           @if (vps.length) {
           <div class="flex flex-col gap-0.5 ml-5 mt-0.5 mb-1 animate-slide-down">
             @for (p of vps; track p.userId) {
+            <!-- Draggable onto another voice row = move (self = join; others mirror MoveMembers).
+                 mousedown must not bubble: the row sits inside the channel block's cdkDrag, and a
+                 native drag here must never double as a channel reorder. -->
             <div
               class="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-fade-in"
+              [class.cursor-grab]="canDragVoice(p)"
+              [class.opacity-50]="voiceDrag()?.userId === p.userId"
+              [attr.draggable]="canDragVoice(p) ? true : null"
+              (mousedown)="$event.stopPropagation()"
+              (dragstart)="onVoiceDragStart($event, p)"
+              (dragend)="onVoiceDragEnd()"
               (contextmenu)="openVoiceUserMenu($event, p)"
             >
               <span

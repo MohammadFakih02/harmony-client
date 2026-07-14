@@ -41,6 +41,28 @@
 }
 
 <ng-template #row let-item let-hasSub="hasSub">
+  @if (item.slider) {
+  <!-- Slider row (per-user volume etc.) — label + live % on top, full-width range below. -->
+  <div class="flex flex-col gap-1 w-full px-2.5 py-1.5">
+    <div class="flex items-center gap-2.5 text-sm font-medium text-primary">
+      @if (item.icon) {
+      <i class="fas w-4 text-center text-xs shrink-0 text-faint" [ngClass]="item.icon"></i>
+      }
+      <span class="flex-1 truncate">{{ item.label }}</span>
+      <span class="shrink-0 text-xs text-faint tabular-nums">{{ sliderPct(item) }}%</span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      class="w-full accent-accent cursor-pointer"
+      [value]="sliderPct(item)"
+      (input)="onSliderInput(item, $event)"
+      [attr.aria-label]="item.label"
+    />
+  </div>
+  } @else {
   <button
     type="button"
     class="group/item flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 rounded-lg text-sm font-medium transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
@@ -71,4 +93,5 @@
     <i class="fas fa-chevron-right text-2xs text-faint group-hover/item:text-white shrink-0"></i>
     }
   </button>
+  }
 </ng-template>

@@ -90,6 +90,7 @@ export type GatewayEvent =
   | { type: 'RoleUpserted'; role: Role }
   | { type: 'RoleDeleted'; payload: RoleDeletedPayload }
   | { type: 'MemberRoleUpdated'; payload: MemberRoleUpdatedPayload }
+  | { type: 'ChannelOverridesChanged'; payload: { guildId: string; channelId: string } }
   | { type: 'DmChannelUpdated'; channelId: string }
   | { type: 'ProfileUpdated'; payload: ProfileUpdatedPayload }
   | { type: 'GuildInvitesChanged'; guildId: string }

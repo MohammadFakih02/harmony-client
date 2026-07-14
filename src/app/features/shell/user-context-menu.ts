@@ -4,6 +4,7 @@ import { GuildCapabilities, GuildMember } from '../../core/models/member.models'
 import { MemberStore } from '../../core/stores/member.store';
 import { RoleStore } from '../../core/stores/role.store';
 import { DmStore } from '../../core/stores/dm.store';
+import { FriendStore } from '../../core/stores/friend.store';
 import { BlockStore } from '../../core/stores/block.store';
 import { MuteStore } from '../../core/stores/mute.store';
 import { MUTE_DURATIONS } from '../../core/models/mute.models';
@@ -11,6 +12,7 @@ import { RoleService } from '../../core/services/role.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ConfirmService } from '../../shared/ui';
 
 /** The stores/services a user context menu needs — passed once so the builder stays a pure function. */
 export interface UserMenuDeps {
@@ -18,12 +20,14 @@ export interface UserMenuDeps {
   roleStore: InstanceType<typeof RoleStore>;
   roleService: RoleService;
   dmStore: InstanceType<typeof DmStore>;
+  friendStore: InstanceType<typeof FriendStore>;
   blockStore: InstanceType<typeof BlockStore>;
   muteStore: InstanceType<typeof MuteStore>;
   profileModal: ProfileModalService;
   toast: ToastService;
   router: Router;
   auth: AuthService;
+  confirm: ConfirmService;
 }
 
 export interface UserMenuTarget {
@@ -45,10 +49,10 @@ const TIMEOUT_PRESETS: { label: string; seconds: number }[] = [
 
 /**
  * Builds the entries for a user context menu (member sidebar rows + chat authors). Always offers
- * Profile / Message / Copy User ID; when the caller can moderate a non-owner, non-self guild member it
- * appends Roles ▸ / Timeout ▸ / Kick / Ban. Moderation logic lives in MemberStore/RoleService — the
- * builder only wires the actions. Role toggles are optimistic (revert + toast on failure) and keep the
- * menu open so several can be flipped in a row.
+ * Profile / Message (+ Add Friend for a stranger); when the caller can moderate a non-owner,
+ * non-self guild member it appends Roles ▸ / Timeout ▸ / Kick / Ban. Moderation logic lives in
+ * MemberStore/RoleService — the builder only wires the actions. Role toggles are optimistic
+ * (revert + toast on failure) and keep the menu open so several can be flipped in a row.
  */
 export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): ContextMenuEntry[] {
   const { userId, guildId, member, caps } = target;
@@ -75,18 +79,8 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
         }
       },
     });
+    appendAddFriendEntry(deps, target, entries);
   }
-
-  entries.push({
-    label: 'Copy User ID',
-    icon: 'fa-hashtag',
-    action: () => {
-      void navigator.clipboard?.writeText(userId).then(
-        () => deps.toast.info('Copied user ID'),
-        () => deps.toast.info('Copy failed', 'fa-triangle-exclamation'),
-      );
-    },
-  });
 
   // Moderation — only for a non-self, non-owner member the caller can act on.
   const moderatable =
@@ -141,10 +135,14 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
       label: 'Kick',
       icon: 'fa-user-slash',
       danger: true,
-      action: () => {
-        if (window.confirm(`Kick ${displayName(target)} from the server?`)) {
-          void run(deps, deps.memberStore.kick(gid, userId));
-        }
+      action: async () => {
+        const ok = await deps.confirm.confirm({
+          title: 'Kick Member',
+          message: `Kick ${displayName(target)} from the server?`,
+          confirmLabel: 'Kick',
+          danger: true,
+        });
+        if (ok) void run(deps, deps.memberStore.kick(gid, userId));
       },
     });
   }
@@ -154,10 +152,16 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
       label: 'Ban',
       icon: 'fa-ban',
       danger: true,
-      action: () => {
-        if (!window.confirm(`Ban ${displayName(target)} from the server?`)) return;
-        const reason = window.prompt('Reason for the ban (optional):', '')?.trim() || null;
-        void run(deps, deps.memberStore.ban(gid, userId, reason));
+      action: async () => {
+        const res = await deps.confirm.confirm({
+          title: 'Ban Member',
+          message: `Ban ${displayName(target)} from the server? They won't be able to rejoin unless unbanned.`,
+          confirmLabel: 'Ban',
+          danger: true,
+          input: { label: 'Reason (optional)', placeholder: 'Reason for the ban' },
+        });
+        if (!res) return;
+        void run(deps, deps.memberStore.ban(gid, userId, res.input || null));
       },
     });
   }
@@ -166,6 +170,38 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   appendMuteEntry(deps, target, entries, isSelf);
   appendBlockEntry(deps, target, entries, isSelf);
   return entries;
+}
+
+/**
+ * Add Friend — offered for a non-self user who isn't already a friend, has no pending request
+ * in either direction, and isn't blocked. Sends by username (the server resolves + validates).
+ */
+function appendAddFriendEntry(
+  deps: UserMenuDeps,
+  target: UserMenuTarget,
+  entries: ContextMenuEntry[],
+): void {
+  const { userId, username } = target;
+  if (
+    !username ||
+    deps.friendStore.friends().some((f) => f.id === userId) ||
+    deps.friendStore.pending().some((p) => p.id === userId) ||
+    deps.blockStore.isBlocked(userId)
+  ) {
+    return;
+  }
+  entries.push({
+    label: 'Add Friend',
+    icon: 'fa-user-plus',
+    action: async () => {
+      try {
+        await deps.friendStore.sendRequest(username);
+        deps.toast.info(`Friend request sent to @${username}`, 'fa-user-plus');
+      } catch {
+        deps.toast.info('Could not send a friend request to this user.', 'fa-triangle-exclamation');
+      }
+    },
+  });
 }
 
 /**
@@ -222,7 +258,13 @@ function appendBlockEntry(
           icon: 'fa-user-slash',
           danger: true,
           action: async () => {
-            if (!window.confirm(`Block ${displayName(target)}? Their messages will be hidden and any friendship removed.`)) return;
+            const ok = await deps.confirm.confirm({
+              title: 'Block User',
+              message: `Block ${displayName(target)}? Their messages will be hidden and any friendship removed.`,
+              confirmLabel: 'Block',
+              danger: true,
+            });
+            if (!ok) return;
             try {
               await deps.blockStore.block({
                 id: target.userId,

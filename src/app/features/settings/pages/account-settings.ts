@@ -57,7 +57,7 @@ import { MyEditableProfile } from '../../../core/models/user.models';
 
       <div class="px-4 pb-4">
         <!-- Avatar with camera overlay -->
-        <div class="relative z-10 inline-block rounded-full ring-[5px] ring-surface-2 bg-surface-2 -mt-10">
+        <div class="relative z-10 inline-block rounded-full p-1.25 bg-surface-2 -mt-10">
           <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="2xl" ringClass="border-surface-2" />
           <button
             type="button"

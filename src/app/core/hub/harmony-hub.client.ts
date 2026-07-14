@@ -267,6 +267,12 @@ export class HarmonyHubClient {
         },
       }));
 
+    this.connection.on('ChannelOverridesChanged', (p: { guildId: unknown; channelId: unknown }) =>
+      this.emit({
+        type: 'ChannelOverridesChanged',
+        payload: { guildId: String(p.guildId), channelId: String(p.channelId) },
+      }));
+
     this.connection.on('DmChannelUpdated', (p: { channelId: unknown }) =>
       this.emit({ type: 'DmChannelUpdated', channelId: String(p.channelId) }));
 

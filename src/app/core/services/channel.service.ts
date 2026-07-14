@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Channel, ChannelCapabilities } from '../models/channel.models';
+import { Channel, ChannelCapabilities, ChannelOverride } from '../models/channel.models';
 
 @Injectable({ providedIn: 'root' })
 export class ChannelService {
@@ -83,4 +83,51 @@ export class ChannelService {
       ),
     );
   }
+
+  // --- Permission overrides (ManageRoles; list is member-visible) ---
+
+  private overrides(guildId: string, channelId: string) {
+    return `${this.base}/guilds/${guildId}/channels/${channelId}/overrides`;
+  }
+
+  async listOverrides(guildId: string, channelId: string): Promise<ChannelOverride[]> {
+    const raw = await firstValueFrom(
+      this.http.get<Record<string, unknown>[]>(this.overrides(guildId, channelId)),
+    );
+    return raw.map(coerceOverride);
+  }
+
+  /** Creates or replaces the override for one role/member target (one PUT per target). */
+  async upsertOverride(
+    guildId: string,
+    channelId: string,
+    targetId: string,
+    body: { targetType: 'role' | 'user'; allowBits: number; denyBits: number },
+  ): Promise<ChannelOverride> {
+    const raw = await firstValueFrom(
+      this.http.put<Record<string, unknown>>(
+        `${this.overrides(guildId, channelId)}/${targetId}`,
+        body,
+      ),
+    );
+    return coerceOverride(raw);
+  }
+
+  deleteOverride(guildId: string, channelId: string, targetId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.overrides(guildId, channelId)}/${targetId}`),
+    );
+  }
+}
+
+/** Ids → strings, bits → numbers (REST serializes longs as numbers; tolerate strings too). */
+function coerceOverride(raw: Record<string, unknown>): ChannelOverride {
+  return {
+    id: String(raw['id']),
+    channelId: String(raw['channelId']),
+    targetId: String(raw['targetId']),
+    targetType: raw['targetType'] as 'role' | 'user',
+    allowBits: Number(raw['allowBits']),
+    denyBits: Number(raw['denyBits']),
+  };
 }
