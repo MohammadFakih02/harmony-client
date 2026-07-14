@@ -59,11 +59,20 @@ export class ContextMenu {
 
   protected async run(item: ContextMenuItem): Promise<void> {
     if (item.disabled || item.children?.length) return;
-    try {
-      await item.action?.();
-    } finally {
-      if (!item.keepOpen) this.close();
-    }
+    // Close BEFORE the action runs: actions that open a modal (block/kick/ban confirms) would
+    // otherwise leave the menu hanging underneath until the dialog resolves.
+    if (!item.keepOpen) this.close();
+    await item.action?.();
+  }
+
+  /** Live % for a slider row's readout. */
+  protected sliderPct(item: ContextMenuItem): number {
+    return Math.round((item.slider?.value() ?? 0) * 100);
+  }
+
+  protected onSliderInput(item: ContextMenuItem, event: Event): void {
+    const pct = Number((event.target as HTMLInputElement).value);
+    item.slider?.onInput(pct / 100);
   }
 
   protected close(event?: Event): void {

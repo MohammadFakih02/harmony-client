@@ -10,8 +10,15 @@ import { DmStore } from './dm.store';
 import { VoiceStore } from './voice.store';
 import { IncomingCallPayload, VoiceParticipant } from '../models/voice.models';
 
-/** Client-side ring window — both sides give up after this; the server's 75s key TTL backstops. */
-const RING_TIMEOUT_MS = 60_000;
+/** Client-side ring window — both sides give up after this; the server's 135s key TTL backstops. */
+const RING_TIMEOUT_MS = 120_000;
+
+/**
+ * How long you linger ALONE in a DM/group-DM call before auto-disconnecting — measured from when
+ * you become the only one left (an unanswered ring ending, or everyone else leaving). Guild voice
+ * channels are exempt (you can sit in one alone, Discord-style).
+ */
+const ALONE_TIMEOUT_MS = 300_000;
 
 interface CallState {
   /** The ring being shown to us (first ring wins while one is up). */
@@ -88,10 +95,10 @@ export const CallStore = signalStore(
           patchState(store, { outgoing: { channelId } });
           syncRingtone();
           outgoingTimer = setTimeout(() => {
-            // Nobody answered: clear first so the leave-effect doesn't double-cancel.
+            // Nobody answered within the ring window: stop ringing + fire the missed call, but STAY
+            // in the room — the alone-timer (onInit) auto-disconnects us 5 min after ringing ends.
             clearOutgoing();
             signalR.cancelCall(channelId, true);
-            void voiceStore.leave();
           }, RING_TIMEOUT_MS);
         },
 
@@ -177,7 +184,12 @@ export const CallStore = signalStore(
     },
   ),
   withHooks({
-    onInit(store, gateway = inject(GatewayEvents), voiceStore = inject(VoiceStore)) {
+    onInit(
+      store,
+      gateway = inject(GatewayEvents),
+      voiceStore = inject(VoiceStore),
+      dmStore = inject(DmStore),
+    ) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         switch (e.type) {
           case 'IncomingCall':
@@ -203,6 +215,28 @@ export const CallStore = signalStore(
       // path having to know about ringing.
       effect(() => {
         if (store.outgoing() && !voiceStore.inVoice()) store.hangUpWhileRinging();
+      });
+
+      // Auto-disconnect after ALONE_TIMEOUT_MS of being the only one left in a DM/group-DM call.
+      // Not armed while still actively ringing (that window belongs to the ring timeout) — so it
+      // covers both "nobody answered → ring ended → still alone" and "everyone else left the call".
+      let aloneTimer: ReturnType<typeof setTimeout> | null = null;
+      effect(() => {
+        const channelId = voiceStore.activeChannelId();
+        const aloneInDmCall =
+          !!channelId &&
+          !store.outgoing() &&
+          !!dmStore.find(channelId) &&
+          voiceStore.participantsOf(channelId).length <= 1;
+        if (aloneInDmCall) {
+          aloneTimer ??= setTimeout(() => {
+            aloneTimer = null;
+            void voiceStore.leave();
+          }, ALONE_TIMEOUT_MS);
+        } else if (aloneTimer) {
+          clearTimeout(aloneTimer);
+          aloneTimer = null;
+        }
       });
     },
   }),

@@ -11,7 +11,7 @@
   <div class="px-4">
     <!-- Avatar overlapping the banner + owner badge (relative z-10 keeps it above the banner) -->
     <div class="relative z-10 flex items-end justify-between -mt-10">
-      <div class="inline-block rounded-full ring-[5px] ring-surface bg-surface">
+      <div class="inline-block rounded-full p-1.25 bg-surface">
         <ui-avatar
           [src]="avatarKey()"
           [alt]="displayName()"
@@ -46,18 +46,9 @@
     </div>
     }
 
-    <div class="my-3 h-px bg-border-subtle"></div>
-
-    <!-- About me (from the shared profile cache) -->
-    @if (profile()?.bio; as bio) {
-    <div class="mb-3">
-      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">About Me</p>
-      <p class="text-xs text-muted whitespace-pre-wrap wrap-break-word line-clamp-6">{{ bio }}</p>
-    </div>
-    }
-
-    <!-- Roles -->
+    <!-- Roles (About Me + Member Since live in the full profile) -->
     @if (roleChips().length) {
+    <div class="my-3 h-px bg-border-subtle"></div>
     <div class="mb-3">
       <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
       <div class="flex flex-wrap gap-1">
@@ -75,20 +66,6 @@
       </div>
     </div>
     }
-
-    <!-- Member since — Harmony account date + guild join date -->
-    <div>
-      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
-      <div class="flex items-center gap-2 text-xs text-muted min-w-0">
-        <i class="fas fa-yin-yang text-faint shrink-0" title="Joined Harmony"></i>
-        <span class="shrink-0">{{ accountSince() }}</span>
-        @if (serverSince(); as since) {
-        <span class="w-1 h-1 rounded-full bg-border shrink-0"></span>
-        <i class="fas fa-users text-faint shrink-0" title="Joined this server"></i>
-        <span class="truncate">{{ since }}</span>
-        }
-      </div>
-    </div>
   </div>
 
   <!-- Actions -->
@@ -100,6 +77,16 @@
       (click)="message()"
     >
       <i class="fas fa-message text-xs"></i> Message
+    </button>
+    }
+    @if (canAddFriend()) {
+    <button
+      type="button"
+      class="w-full h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2 disabled:opacity-60"
+      [disabled]="sendingFriendRequest()"
+      (click)="addFriend()"
+    >
+      <i class="fas fa-user-plus text-2xs"></i> Add Friend
     </button>
     }
     <button

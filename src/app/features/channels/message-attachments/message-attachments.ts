@@ -107,7 +107,9 @@ export class MessageAttachments {
       {
         label: 'Open in Browser',
         icon: 'fa-arrow-up-right-from-square',
-        action: () => window.open(meta.url, '_blank', 'noopener'),
+        action: () => {
+          window.open(meta.url, '_blank', 'noopener');
+        },
       },
       {
         label: 'Copy Link',

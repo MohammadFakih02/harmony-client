@@ -8,21 +8,88 @@
     </div>
     <h2 class="text-white text-xl font-bold">{{ channel()?.name ?? 'Voice' }}</h2>
     <p class="text-white/50 text-sm -mt-1.5">No one is currently in voice. Ready to talk?</p>
+    <button
+      type="button"
+      class="mt-1 h-10 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
+      [disabled]="connecting()"
+      (click)="join()"
+    >
+      @if (connecting()) {
+      <i class="fas fa-spinner fa-spin"></i> Connecting
+      } @else {
+      Join Voice
+      }
+    </button>
   </div>
   } @else {
+  <!-- Channel identity strip: name + live occupancy (gradient so it never fights the tiles) -->
+  <div
+    class="absolute top-0 inset-x-0 z-10 flex items-center gap-2.5 px-5 pt-4 pb-8 bg-linear-to-b from-black/60 to-transparent pointer-events-none"
+  >
+    <i class="fas fa-volume-high text-white/70 text-sm shrink-0"></i>
+    <h2 class="text-white font-semibold text-sm truncate">{{ channel()?.name }}</h2>
+    <span class="flex items-center gap-1 text-white/50 text-xs font-medium tabular-nums shrink-0">
+      <i class="fas fa-user text-2xs"></i
+      >{{ participants().length }}@if (channel()?.userLimit) {<span class="opacity-70">/{{ channel()!.userLimit }}</span>}
+    </span>
+  </div>
+
   <!-- Participant tiles (camera/avatar + dedicated screenshare tiles) -->
-  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-6 pb-24">
+  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-6 pt-14 pb-28">
     <div class="grid gap-3 w-full max-w-4xl grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
       @for (t of tiles(); track t.id) {
-      <app-voice-tile [tile]="t" [channelId]="channel()!.id" (focusRequested)="expand(t.id)" />
+      <app-voice-tile
+        [tile]="t"
+        [channelId]="channel()!.id"
+        [showControls]="connected()"
+        (focusRequested)="expand(t.id)"
+      />
       }
     </div>
   </div>
   }
 
-  <!-- Bottom controls: join while spectating, call controls while connected -->
-  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
-    @if (connected()) {
+  <!-- Bottom controls: a docked pill while connected, a floating Join while spectating an occupied room -->
+  @if (connected()) {
+  <div
+    class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-black/50 backdrop-blur-md ring-1 ring-white/10"
+  >
+    <!-- Mic / deafen read Discord's language: red with a slash when OFF (danger + lock when
+         server-imposed — the store no-ops while it's on); neutral dark when live. -->
+    @let srvMuted = voiceStore.selfServerMuted();
+    <button
+      type="button"
+      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
+      [class]="srvMuted ? 'bg-danger text-white cursor-not-allowed' : voiceStore.selfMuted() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted() || srvMuted"
+      [attr.aria-disabled]="srvMuted"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-microphone]="!voiceStore.selfMuted() && !srvMuted"
+        [class.fa-microphone-slash]="voiceStore.selfMuted() || srvMuted"
+      ></i>
+    </button>
+    @let srvDeafened = voiceStore.selfServerDeafened();
+    <button
+      type="button"
+      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
+      [class]="srvDeafened ? 'bg-danger text-white cursor-not-allowed' : voiceStore.selfDeafened() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened() || srvDeafened"
+      [attr.aria-disabled]="srvDeafened"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-headphones]="!voiceStore.selfDeafened() && !srvDeafened"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened() || srvDeafened"
+      ></i>
+    </button>
     @if (canUseVideo()) {
     <button
       type="button"
@@ -53,41 +120,6 @@
       <i class="fas fa-display text-base"></i>
     </button>
     }
-    <!-- A server mute/deafen locks its toggle (danger + lock; the store no-ops while it's on). -->
-    @let srvMuted = voiceStore.selfServerMuted();
-    <button
-      type="button"
-      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
-      [class]="srvMuted ? 'bg-danger/80 text-white cursor-not-allowed' : voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-label]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-pressed]="voiceStore.selfMuted() || srvMuted"
-      [attr.aria-disabled]="srvMuted"
-      (click)="toggleMute()"
-    >
-      <i
-        class="fas text-base"
-        [class.fa-microphone]="!voiceStore.selfMuted() && !srvMuted"
-        [class.fa-microphone-slash]="voiceStore.selfMuted() || srvMuted"
-      ></i>
-    </button>
-    @let srvDeafened = voiceStore.selfServerDeafened();
-    <button
-      type="button"
-      class="w-12 h-12 rounded-full flex items-center justify-center transition-micro"
-      [class]="srvDeafened ? 'bg-danger/80 text-white cursor-not-allowed' : voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-label]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-pressed]="voiceStore.selfDeafened() || srvDeafened"
-      [attr.aria-disabled]="srvDeafened"
-      (click)="toggleDeafen()"
-    >
-      <i
-        class="fas text-base"
-        [class.fa-headphones]="!voiceStore.selfDeafened() && !srvDeafened"
-        [class.fa-headphones-simple]="voiceStore.selfDeafened() || srvDeafened"
-      ></i>
-    </button>
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
@@ -97,6 +129,7 @@
     >
       <i class="fas fa-expand text-base"></i>
     </button>
+    <div class="w-px h-8 bg-white/15 mx-0.5"></div>
     <button
       type="button"
       class="w-12 h-12 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
@@ -106,7 +139,9 @@
     >
       <i class="fas fa-phone-slash text-base"></i>
     </button>
-    } @else {
+  </div>
+  } @else if (participants().length) {
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2">
     <button
       type="button"
       class="h-11 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
@@ -119,6 +154,6 @@
       Join Voice
       }
     </button>
-    }
   </div>
+  }
 </div>

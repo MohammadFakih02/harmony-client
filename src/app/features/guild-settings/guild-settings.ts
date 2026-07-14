@@ -5,27 +5,26 @@ import { Channel } from '../../core/models/channel.models';
 import { ChannelService } from '../../core/services/channel.service';
 import { GuildStore } from '../../core/stores/guild.store';
 import { MemberStore } from '../../core/stores/member.store';
-import { GuildNotificationSettingsStore } from '../../core/stores/guild-notification-settings.store';
-import { GuildNotifications } from './pages/guild-notifications';
 import { GuildOverview } from './pages/guild-overview';
 import { GuildWelcome } from './pages/guild-welcome';
 import { GuildRoles } from './pages/guild-roles';
 import { GuildBans } from './pages/guild-bans';
 import { GuildAuditLog } from './pages/guild-audit-log';
 
-type Tab = 'notifications' | 'overview' | 'welcome' | 'roles' | 'bans' | 'audit';
+type Tab = 'overview' | 'welcome' | 'roles' | 'bans' | 'audit';
 
 /**
  * Full-screen guild settings overlay (route `guilds/:guildId/settings`), mirroring the user-settings
- * shell. Notifications is a personal preference open to every member; Overview/Welcome need ManageGuild,
- * Roles needs ManageRoles, Bans needs BanMembers, Audit Log needs ViewAuditLog — each hidden otherwise.
+ * shell — admin-only config: Overview/Welcome need ManageGuild, Roles needs ManageRoles, Bans needs
+ * BanMembers, Audit Log needs ViewAuditLog — each hidden otherwise. Personal notification prefs live
+ * in the server dropdown now, NOT here, so a member with no admin panes is bounced out on open.
  * Esc / ✕ returns to the previous screen. (The admin panes here consolidate the old header modals.)
  */
 @Component({
   selector: 'app-guild-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [GuildNotifications, GuildOverview, GuildWelcome, GuildRoles, GuildBans, GuildAuditLog],
+  imports: [GuildOverview, GuildWelcome, GuildRoles, GuildBans, GuildAuditLog],
   templateUrl: './guild-settings.html',
 })
 export class GuildSettings implements OnInit {
@@ -35,11 +34,10 @@ export class GuildSettings implements OnInit {
   private readonly channelService = inject(ChannelService);
   private readonly guildStore = inject(GuildStore);
   private readonly memberStore = inject(MemberStore);
-  private readonly notificationSettings = inject(GuildNotificationSettingsStore);
 
   protected readonly guildId = this.route.snapshot.paramMap.get('guildId')!;
   protected readonly textChannels = signal<Channel[]>([]);
-  protected readonly activeTab = signal<Tab>('notifications');
+  protected readonly activeTab = signal<Tab>('overview');
 
   protected readonly guildName = computed(
     () => this.guildStore.guilds().find((g) => g.id === this.guildId)?.name ?? 'Server',
@@ -63,9 +61,23 @@ export class GuildSettings implements OnInit {
     }
     await Promise.all([
       this.memberStore.loadCapabilitiesIfNeeded(this.guildId),
-      this.notificationSettings.load(this.guildId),
       this.loadChannels(),
     ]);
+
+    // Personal notification prefs left this page (they're in the server dropdown now), so a member
+    // with no admin pane has nothing here — bounce out. Otherwise land on their first available tab.
+    const first = this.firstAccessibleTab();
+    if (first === null) this.close();
+    else this.activeTab.set(first);
+  }
+
+  /** The highest-priority settings tab the caller can actually open, or null if they have none. */
+  private firstAccessibleTab(): Tab | null {
+    if (this.canManageGuild()) return 'overview';
+    if (this.canManageRoles()) return 'roles';
+    if (this.canBan()) return 'bans';
+    if (this.canViewAuditLog()) return 'audit';
+    return null;
   }
 
   private async loadChannels(): Promise<void> {

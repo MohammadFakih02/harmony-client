@@ -19,7 +19,7 @@ import { ContextMenuService } from '../../core/services/context-menu.service';
 import { AuthService } from '../../core/services/auth.service';
 import { buildUserMenu, UserMenuDeps } from '../shell/user-context-menu';
 import { ContextMenuEntry } from '../../core/models/context-menu.models';
-import { UiAvatar } from '../../shared/ui';
+import { UiAvatar, ConfirmService } from '../../shared/ui';
 import { NotificationBell } from '../shell/notification-bell/notification-bell';
 import { UserProfilePopout } from '../shell/user-profile-popout/user-profile-popout';
 
@@ -44,12 +44,14 @@ export class Friends {
     roleStore: inject(RoleStore),
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    friendStore: this.friendStore,
     blockStore: inject(BlockStore),
     muteStore: inject(MuteStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: this.router,
     auth: inject(AuthService),
+    confirm: inject(ConfirmService),
   };
 
   /** Friend display name: the caller's private nickname ?? the friend's username. */

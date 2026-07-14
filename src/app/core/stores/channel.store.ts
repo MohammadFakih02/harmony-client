@@ -5,6 +5,7 @@ import { Channel, ChannelCapabilities, ChannelCategory, SidebarEntry } from '../
 import { GatewayEvents } from '../hub/gateway-events';
 import { ChannelService } from '../services/channel.service';
 import { GuildStore } from './guild.store';
+import { AuthService } from '../services/auth.service';
 
 interface ChannelState {
   channelsByGuild: Record<string, Channel[]>;
@@ -136,6 +137,30 @@ export const ChannelStore = signalStore(
         // Leave the cached/null value → the input stays optimistically enabled; the server
         // still enforces.
       }
+    },
+
+    /**
+     * Re-fetch the OPEN channel's capabilities after a role change in its guild, so the composer
+     * (canSend) and the pin/react/manage gates update live without re-opening the channel. A no-op
+     * unless the currently-selected channel belongs to the changed guild. `loadCapabilities` is
+     * itself stale-guarded (it ignores its response if the user switches channels mid-flight).
+     */
+    refreshOpenChannelCaps(guildId: string): void {
+      const channelId = store.selectedChannelId();
+      if (!channelId || store.selectedChannel()?.guildId !== guildId) return;
+      void this.loadCapabilities(guildId, channelId);
+    },
+
+    /**
+     * A role change in `guildId` can alter BOTH which channels I can see (a role's ViewChannel bit
+     * or a channel override — e.g. an admin role that unlocks a hidden #staff) and my capabilities
+     * in the open channel. `getGuildChannels` is server-filtered to visible channels, so reloading
+     * makes newly-visible channels appear (and revoked ones vanish) live — no page refresh. Only
+     * touches guilds already loaded; the open channel's caps re-resolve alongside.
+     */
+    applyRoleChange(guildId: string): void {
+      if (store.channelsByGuild()[guildId]) void this.loadChannels(guildId);
+      this.refreshOpenChannelCaps(guildId);
     },
 
     /** Record the channel a user was last on in a guild, so re-entering the guild returns there. */
@@ -309,7 +334,7 @@ export const ChannelStore = signalStore(
   withHooks({
     // Channel CRUD arrives for every guild we've joined — the add/update/remove methods are
     // keyed by the channel's own guildId, so no cache guard is needed here.
-    onInit(store, gateway = inject(GatewayEvents)) {
+    onInit(store, gateway = inject(GatewayEvents), auth = inject(AuthService)) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         switch (e.type) {
           case 'ChannelCreated':
@@ -320,6 +345,24 @@ export const ChannelStore = signalStore(
             break;
           case 'ChannelDeleted':
             store.removeChannel(e.channelId);
+            break;
+          case 'RoleUpserted':
+            // A role's bits/overrides changed → my visible channel set + open-channel gates may shift.
+            store.applyRoleChange(e.role.guildId);
+            break;
+          case 'RoleDeleted':
+            store.applyRoleChange(e.payload.guildId);
+            break;
+          case 'ChannelOverridesChanged':
+            // A channel override can grant/revoke ViewChannel or any per-channel gate — same
+            // resync as a role change (server-filtered channel list + open-channel caps).
+            store.applyRoleChange(e.payload.guildId);
+            break;
+          case 'MemberRoleUpdated':
+            // Only MY assignment changes affect MY visible channels / capabilities (e.g. being
+            // granted a role that unlocks a hidden channel → it appears without a refresh).
+            if (e.payload.userId === auth.currentUser()?.id)
+              store.applyRoleChange(e.payload.guildId);
             break;
         }
       });

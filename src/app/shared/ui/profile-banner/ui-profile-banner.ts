@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import { publicFileUrl } from '../../util/public-file-url';
 
 /** Accent-gradient fallback — the same recipe as the `.profile-banner` CSS class / role gradients. */
@@ -22,7 +22,13 @@ export function bannerGradient(color?: string | null): string {
   },
   template: `
     @if (imageUrl(); as url) {
-    <img [src]="url" [alt]="alt()" class="absolute inset-0 w-full h-full object-cover" />
+    <img
+      [src]="url"
+      [alt]="alt()"
+      class="absolute inset-0 w-full h-full object-cover transition-opacity duration-150"
+      [class.opacity-0]="!imageLoaded()"
+      (load)="imageLoaded.set(true)"
+    />
     }
     <ng-content />
   `,
@@ -37,7 +43,11 @@ export class UiProfileBanner {
   readonly alt = input('');
 
   protected readonly imageUrl = computed(() => publicFileUrl(this.bannerKey()));
-  protected readonly background = computed(() =>
-    this.bannerKey() ? null : this.bannerColor() || this.fallback(),
-  );
+  /** Painted even under an image — the loading flash shows this instead of a transparent hole. */
+  protected readonly background = computed(() => this.bannerColor() || this.fallback());
+  /** Resets whenever the image URL changes, so a new banner fades in over the colour again. */
+  protected readonly imageLoaded = linkedSignal({
+    source: this.imageUrl,
+    computation: () => false,
+  });
 }

@@ -74,6 +74,44 @@ describe('ChannelStore', () => {
     expect(store.currentCapabilities()).toEqual(fresh);
   });
 
+  it('reloads channels + open-channel caps live when a role changes in its guild', async () => {
+    const caps = {
+      canView: true, canSend: true, canAttach: true, canManageMessages: false,
+      canManageChannels: false, canPin: false, canReact: true, canUseVideo: false,
+      canStream: false, timedOut: false,
+    };
+    service.getGuildChannels.mockResolvedValue([makeChannel({ id: 'c1', name: 'general', guildId: '1' })]);
+    service.getCapabilities.mockResolvedValue(caps);
+    await TestBed.runInInjectionContext(() => store.loadChannels('1'));
+    guildStore.selectGuild('1');
+    store.selectChannel('c1');
+    await TestBed.runInInjectionContext(() => store.loadCapabilities('1', 'c1'));
+    expect(service.getGuildChannels).toHaveBeenCalledTimes(1);
+    expect(service.getCapabilities).toHaveBeenCalledTimes(1);
+
+    // A role's bits/overrides changed in this guild → the visible channel list AND the open
+    // channel's gates re-resolve live (e.g. a role that unlocks a hidden channel appears).
+    TestBed.inject(GatewayEvents).emit({
+      type: 'RoleUpserted',
+      role: {
+        id: 'r1', guildId: '1', name: 'Mods', color: 0, permissionBits: 0,
+        position: 1, isHoisted: false, isMentionable: false, isDefault: false,
+      },
+    });
+    await Promise.resolve();
+    expect(service.getGuildChannels).toHaveBeenCalledTimes(2);
+    expect(service.getCapabilities).toHaveBeenCalledTimes(2);
+
+    // A role change in a DIFFERENT (unloaded) guild touches nothing here.
+    TestBed.inject(GatewayEvents).emit({
+      type: 'RoleDeleted',
+      payload: { guildId: '999', roleId: 'r9' },
+    });
+    await Promise.resolve();
+    expect(service.getGuildChannels).toHaveBeenCalledTimes(2);
+    expect(service.getCapabilities).toHaveBeenCalledTimes(2);
+  });
+
   it('reorderChannels() re-sorts optimistically and persists 0..n positions', async () => {
     service.getGuildChannels.mockResolvedValue([
       makeChannel({ id: '10', name: 'general', guildId: '1', position: 0 }),

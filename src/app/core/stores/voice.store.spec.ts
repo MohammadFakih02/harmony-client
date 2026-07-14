@@ -34,6 +34,7 @@ describe('VoiceStore', () => {
     setDeafened: ReturnType<typeof vi.fn>;
     setCameraEnabled: ReturnType<typeof vi.fn>;
     setScreenShareEnabled: ReturnType<typeof vi.fn>;
+    syncWatchedStreams: ReturnType<typeof vi.fn>;
     speakingUserIds: ReturnType<typeof signal<ReadonlySet<string>>>;
     localScreenShareOn: ReturnType<typeof signal<boolean>>;
   };
@@ -57,6 +58,7 @@ describe('VoiceStore', () => {
       // The real service resolves to the *achieved* state (device error / picker-cancel keeps the old one).
       setCameraEnabled: vi.fn(async (on: boolean) => on),
       setScreenShareEnabled: vi.fn(async (on: boolean) => on),
+      syncWatchedStreams: vi.fn(),
       speakingUserIds: signal<ReadonlySet<string>>(new Set()),
       localScreenShareOn: signal(false),
     };
@@ -116,6 +118,18 @@ describe('VoiceStore', () => {
     expect(store.participantsOf('c1').map((p) => p.userId)).toEqual(['me']);
   });
 
+  it('join() goes active immediately without waiting on the getParticipants round trip', async () => {
+    // getParticipants never resolves — join must still connect us with an optimistic self entry.
+    voice.getParticipants.mockReturnValue(new Promise<never>(() => {}));
+
+    await store.join('c1');
+
+    expect(store.activeChannelId()).toBe('c1');
+    expect(store.connecting()).toBe(false);
+    expect(store.participantsOf('c1').map((p) => p.userId)).toEqual(['me']);
+    expect(signalR.joinVoice).toHaveBeenCalledWith('c1');
+  });
+
   it('join() is a no-op when already in that channel', async () => {
     await store.join('c1');
     voice.connect.mockClear();
@@ -130,6 +144,43 @@ describe('VoiceStore', () => {
     expect(store.activeChannelId()).toBeNull();
     expect(store.connecting()).toBe(false);
     expect(voice.disconnect).toHaveBeenCalled();
+  });
+
+  it('cancelJoin() while connecting aborts the in-flight join', async () => {
+    let resolveConnect!: () => void;
+    voice.connect.mockReturnValue(new Promise<void>((r) => (resolveConnect = r)));
+
+    const joinPromise = store.join('c1');
+    expect(store.connecting()).toBe(true);
+    expect(store.connectingChannelId()).toBe('c1');
+
+    await store.cancelJoin();
+    expect(store.connecting()).toBe(false);
+    expect(store.connectingChannelId()).toBeNull();
+    expect(voice.disconnect).toHaveBeenCalled();
+
+    // The media connect resolves late — join must bail without going active or signaling a join.
+    resolveConnect();
+    await joinPromise;
+    expect(store.activeChannelId()).toBeNull();
+    expect(store.inVoice()).toBe(false);
+    expect(signalR.joinVoice).not.toHaveBeenCalled();
+  });
+
+  it('leave() during connecting routes to cancelJoin', async () => {
+    let resolveConnect!: () => void;
+    voice.connect.mockReturnValue(new Promise<void>((r) => (resolveConnect = r)));
+
+    const joinPromise = store.join('c1');
+    expect(store.connecting()).toBe(true);
+
+    await store.leave();
+    expect(store.connecting()).toBe(false);
+    expect(store.connectingChannelId()).toBeNull();
+
+    resolveConnect();
+    await joinPromise;
+    expect(signalR.joinVoice).not.toHaveBeenCalled();
   });
 
   it('leave() tears down media + signaling and clears state', async () => {
@@ -321,6 +372,27 @@ describe('VoiceStore', () => {
     expect(signalR.leaveVoice).not.toHaveBeenCalled();
   });
 
+  it('VoiceForceMoved reconnects even when the LiveKit kick raced ahead (drop first)', async () => {
+    await store.join('c1');
+    // The store registered an onEnded (2nd connect arg); simulate the server's LiveKit removal
+    // firing BEFORE the VoiceForceMoved signal — the unexpected drop resets our active channel.
+    const onEnded = voice.connect.mock.calls[0][1] as () => void;
+    voice.connect.mockClear();
+    onEnded();
+    expect(store.activeChannelId()).toBeNull();
+
+    // The move signal arrives within the grace window — we still reconnect (lastRoomChannelId
+    // remembers we held the source room) and the deferred leave is cancelled.
+    TestBed.inject(GatewayEvents).emit({
+      type: 'VoiceForceMoved',
+      payload: { fromChannelId: 'c1', toChannelId: 'c2', guildId: 'g1' },
+    });
+    await vi.waitFor(() => expect(store.activeChannelId()).toBe('c2'));
+
+    expect(voice.connect).toHaveBeenCalledWith('c2', expect.any(Function), null);
+    expect(signalR.leaveVoice).not.toHaveBeenCalled();
+  });
+
   it('VoiceForceMoved for a room we are not in is ignored', async () => {
     await store.join('c1');
     voice.connect.mockClear();
@@ -367,5 +439,113 @@ describe('VoiceStore', () => {
 
     await store.leave();
     expect(store.isWatchingStream('u2')).toBe(false);
+  });
+
+  it('toggleWatchStream syncs the watch set into the media layer (stream-audio gating)', () => {
+    store.toggleWatchStream('u2');
+    TestBed.tick(); // flush the sync effect
+
+    expect(voice.syncWatchedStreams).toHaveBeenLastCalledWith(new Set(['u2']));
+
+    store.toggleWatchStream('u2');
+    TestBed.tick();
+    expect(voice.syncWatchedStreams).toHaveBeenLastCalledWith(new Set());
+  });
+
+  // --- alone-in-guild-channel media suspension (phantom presence) ---
+
+  it('suspends media after 5 min alone in a guild channel — signaling and UI stay connected', async () => {
+    vi.useFakeTimers();
+    channelsByGuild.set({ g1: [{ id: 'c1', bitrate: null }] });
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+    voice.disconnect.mockClear();
+
+    TestBed.tick(); // arm the alone-timer effect
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    expect(voice.disconnect).toHaveBeenCalled(); // the media room dropped…
+    expect(store.mediaSuspended()).toBe(true);
+    expect(store.activeChannelId()).toBe('c1'); // …but we still look (and count as) connected
+    expect(store.participantsOf('c1').map((p) => p.userId)).toEqual(['me']);
+    expect(signalR.leaveVoice).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('the first joiner auto-resumes suspended media, re-applying the mute state', async () => {
+    vi.useFakeTimers();
+    channelsByGuild.set({ g1: [{ id: 'c1', bitrate: null }] });
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+    store.toggleMute(); // the toggle the user still sees must survive the resume
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(store.mediaSuspended()).toBe(true);
+    voice.connect.mockClear();
+    voice.setMicMuted.mockClear();
+
+    TestBed.inject(GatewayEvents).emit({
+      type: 'VoiceParticipantJoined',
+      payload: participant({ userId: 'u2' }),
+    });
+    await vi.advanceTimersByTimeAsync(0); // flush the async resume
+
+    expect(store.mediaSuspended()).toBe(false);
+    expect(voice.connect).toHaveBeenCalledWith('c1', expect.any(Function), null);
+    expect(voice.setMicMuted).toHaveBeenCalledWith(true);
+    expect(store.activeChannelId()).toBe('c1');
+    expect(signalR.leaveVoice).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not suspend while your own camera or screenshare is on', async () => {
+    vi.useFakeTimers();
+    channelsByGuild.set({ g1: [{ id: 'c1', bitrate: null }] });
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+    await store.toggleCamera();
+    voice.disconnect.mockClear();
+
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    expect(store.mediaSuspended()).toBe(false);
+    expect(voice.disconnect).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not suspend a DM call (CallStore owns the DM alone-timeout)', async () => {
+    vi.useFakeTimers();
+    voice.getParticipants.mockResolvedValue([
+      participant({ userId: 'me', channelId: 'dm1', guildId: null }),
+    ]);
+    await store.join('dm1');
+    voice.disconnect.mockClear();
+
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    expect(store.mediaSuspended()).toBe(false);
+    expect(voice.disconnect).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('leave() while suspended leaves cleanly without reconnecting', async () => {
+    vi.useFakeTimers();
+    channelsByGuild.set({ g1: [{ id: 'c1', bitrate: null }] });
+    voice.getParticipants.mockResolvedValue([participant({ userId: 'me' })]);
+    await store.join('c1');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(store.mediaSuspended()).toBe(true);
+    voice.connect.mockClear();
+
+    await store.leave();
+
+    expect(signalR.leaveVoice).toHaveBeenCalledWith('c1');
+    expect(store.activeChannelId()).toBeNull();
+    expect(store.mediaSuspended()).toBe(false);
+    expect(voice.connect).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

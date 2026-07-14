@@ -11,7 +11,6 @@ export interface VoiceMenuDeps extends UserMenuDeps {
   voiceService: VoiceService;
 }
 
-const VOLUME_PRESETS = [0, 25, 50, 75, 100];
 
 /**
  * Context menu for a voice participant (sidebar roster rows + stage/overlay tiles). Prepends the
@@ -43,16 +42,24 @@ export function buildVoiceParticipantMenu(
           voiceService.setParticipantLocalMuted(userId, !voiceService.locallyMutedUserIds().has(userId)),
       },
       {
-        label: 'Volume',
+        label: participant.isStreaming ? 'Voice Volume' : 'Volume',
         icon: 'fa-volume-high',
-        children: VOLUME_PRESETS.map((pct) => ({
-          label: `${pct}%`,
-          keepOpen: true,
-          checked: () => Math.round((voiceService.volumes().get(userId) ?? 1) * 100) === pct,
-          action: () => voiceService.setParticipantVolume(userId, pct / 100),
-        })),
+        slider: {
+          value: () => voiceService.volumes().get(userId) ?? 1,
+          onInput: (v) => voiceService.setParticipantVolume(userId, v),
+        },
       },
     );
+    if (participant.isStreaming) {
+      voiceSection.push({
+        label: 'Stream Volume',
+        icon: 'fa-display',
+        slider: {
+          value: () => voiceService.screenVolumes().get(userId) ?? 1,
+          onInput: (v) => voiceService.setParticipantScreenVolume(userId, v),
+        },
+      });
+    }
     if (participant.isVideoOn) {
       voiceSection.push({
         label: voiceStore.isVideoHidden(userId) ? 'Show Video' : 'Hide Video for Me',
@@ -113,8 +120,11 @@ export function buildVoiceParticipantMenu(
   return entries;
 }
 
-/** Awaits a voice moderation invoke and toasts the hub's rejection reason (permission/room checks). */
-async function runVoiceMod(deps: VoiceMenuDeps, action: Promise<void>): Promise<void> {
+/**
+ * Awaits a voice moderation invoke and toasts the hub's rejection reason (permission/room checks).
+ * Shared with the sidebar's drag-to-move (same failure surface: a HubException per rejected move).
+ */
+export async function runVoiceMod(deps: VoiceMenuDeps, action: Promise<void>): Promise<void> {
   try {
     await action;
   } catch (err) {

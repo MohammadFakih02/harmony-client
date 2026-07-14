@@ -7,6 +7,7 @@ import { RoleService } from '../../../core/services/role.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { VoiceService } from '../../../core/services/voice.service';
 import { BlockStore } from '../../../core/stores/block.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -14,7 +15,7 @@ import { MuteStore } from '../../../core/stores/mute.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { VoiceStore } from '../../../core/stores/voice.store';
-import { UiAvatar } from '../../../shared/ui';
+import { UiAvatar, ConfirmService } from '../../../shared/ui';
 import { CallTile } from '../call-tiles';
 import { VideoTrackDirective } from '../video-track.directive';
 import { buildVoiceParticipantMenu, VoiceMenuDeps } from '../voice-user-menu';
@@ -24,9 +25,9 @@ import { buildVoiceParticipantMenu, VoiceMenuDeps } from '../voice-user-menu';
  * overlay. A `camera` tile shows the participant's video when they have the camera on (avatar
  * otherwise) plus the speaking ring and name pill; a `screen` tile shows their screenshare.
  * Members resolve via the *participant's* guildId (not the selected guild), so the overlay stays
- * correct while browsing another guild mid-call. `showControls` (overlay only) adds hover
- * controls on remote tiles: mute-for-me + a local volume slider — client-side preferences that
- * never touch the remote user's state.
+ * correct while browsing another guild mid-call. `showControls` (overlay + connected stage) adds
+ * hover controls on remote tiles: mute-for-me + a local volume slider — client-side preferences
+ * that never touch the remote user's state.
  */
 @Component({
   selector: 'app-voice-tile',
@@ -49,19 +50,21 @@ export class VoiceTile {
     roleStore: inject(RoleStore),
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    friendStore: inject(FriendStore),
     blockStore: inject(BlockStore),
     muteStore: inject(MuteStore),
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: inject(Router),
     auth: this.auth,
+    confirm: inject(ConfirmService),
     voiceStore: this.voiceStore,
     voiceService: this.voice,
   };
 
   readonly tile = input.required<CallTile>();
   readonly channelId = input.required<string>();
-  /** Overlay-only: reveal the per-tile local mute/volume controls on remote tiles. */
+  /** Reveal the per-tile local mute/volume controls on remote tiles (overlay + connected stage). */
   readonly showControls = input(false);
   /** Focused rendering in the overlay (fills the stage instead of an aspect box). */
   readonly emphasized = input(false);
@@ -138,7 +141,14 @@ export class VoiceTile {
     this.voice.locallyMutedUserIds().has(this.tile().userId),
   );
 
-  protected readonly volume = computed(() => this.voice.volumes().get(this.tile().userId) ?? 1);
+  // A screen tile's slider governs the screen-share audio; a camera/avatar tile's governs the mic —
+  // the two are independent (VoiceService keeps a separate volume map per source).
+  protected readonly volume = computed(() => {
+    const userId = this.tile().userId;
+    return this.tile().kind === 'screen'
+      ? (this.voice.screenVolumes().get(userId) ?? 1)
+      : (this.voice.volumes().get(userId) ?? 1);
+  });
 
   protected toggleLocalMute(event: Event): void {
     event.stopPropagation();
@@ -147,7 +157,12 @@ export class VoiceTile {
 
   protected onVolumeInput(event: Event): void {
     event.stopPropagation();
-    this.voice.setParticipantVolume(this.tile().userId, Number((event.target as HTMLInputElement).value));
+    const value = Number((event.target as HTMLInputElement).value);
+    if (this.tile().kind === 'screen') {
+      this.voice.setParticipantScreenVolume(this.tile().userId, value);
+    } else {
+      this.voice.setParticipantVolume(this.tile().userId, value);
+    }
   }
 
   protected watchStream(event: Event): void {

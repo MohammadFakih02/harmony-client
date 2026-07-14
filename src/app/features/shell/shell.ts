@@ -36,10 +36,11 @@ import { MemberSidebar } from './member-sidebar/member-sidebar';
 import { NotificationBell } from './notification-bell/notification-bell';
 import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
+import { ConnectionBanner } from './connection-banner';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { CallOverlay } from '../voice/call-overlay/call-overlay';
 import { IncomingCall } from '../voice/incoming-call/incoming-call';
-import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu } from '../../shared/ui';
+import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu, ConfirmDialog } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
   DirectMessageChannel,
@@ -79,7 +80,9 @@ import {
     UiProfileBanner,
     Lightbox,
     ToastContainer,
+    ConfirmDialog,
     UserProfileModal,
+    ConnectionBanner,
     ContextMenu,
     OverlayModule,
     FormsModule,
@@ -444,7 +447,11 @@ export class ShellComponent implements OnInit, OnDestroy {
                 const actor = this.notificationStore.actors()[e.payload.actorId];
                 this.toast.pushReply(actor?.username ?? 'Someone', channelName, route);
               } else {
-                this.toast.pushMention(channelName, route);
+                // 1:1 DM → "mentioned by {person}"; guild channel / group DM → "mentioned in {place}".
+                const direct =
+                  !e.payload.guildId &&
+                  this.dmStore.find(e.payload.channelId)?.isGroup === false;
+                this.toast.pushMention(channelName, route, direct);
               }
             }
           }

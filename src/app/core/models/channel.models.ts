@@ -30,6 +30,20 @@ export type SidebarEntry =
   | { kind: 'category'; category: ChannelCategory }
   | { kind: 'channel'; channel: Channel };
 
+/**
+ * A channel permission override — an allow/deny bit pair layered on top of a target role's or
+ * member's resolved guild permissions ((perms & ~deny) | allow). Bits are ≤ 1<<26, so plain JS
+ * bitwise ops are safe; the service coerces them to numbers on read.
+ */
+export interface ChannelOverride {
+  id: string;
+  channelId: string;
+  targetId: string;
+  targetType: 'role' | 'user';
+  allowBits: number;
+  denyBits: number;
+}
+
 /** The caller's effective capabilities in a channel (computed server-side). */
 export interface ChannelCapabilities {
   canView: boolean;

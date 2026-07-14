@@ -187,7 +187,9 @@ describe('MessageStore', () => {
       await sendPromise;
     });
 
-    it('replaces the pending entry with the real ID after REST response', async () => {
+    it('replaces the pending entry with the real ID after REST response (socket down)', async () => {
+      // Default harness: signalr.isConnected === false → REST fallback. No echo will arrive until
+      // a reload, so confirmSent clears `pending` on the ack rather than strand the bubble grey.
       service.sendMessage.mockResolvedValue({ messageId: '500', channelId: '1', guildId: '1' });
 
       await TestBed.runInInjectionContext(() => store.sendMessage('hello'));
@@ -195,10 +197,21 @@ describe('MessageStore', () => {
       const msgs = store.messages();
       const entry = msgs.find((m) => m.messageId === '500');
       expect(entry).toBeDefined();
-      // A successful POST clears `pending` immediately (no longer waits for the
-      // SignalR echo) — see message.store confirmSent().
       expect(entry?.pending).toBe(false);
       expect(store.realIdToTempId()['500']).toBeDefined();
+    });
+
+    it('keeps the bubble pending after the hub ack until the echo confirms persistence', async () => {
+      // Socket up → an authoritative MessageReceived echo is coming, so publish-ack alone must NOT
+      // un-grey the bubble (a Scylla-down send would otherwise look sent before it failed).
+      signalr.isConnected = true;
+      signalr.sendMessage.mockResolvedValue('501');
+
+      await TestBed.runInInjectionContext(() => store.sendMessage('hello live'));
+
+      const entry = store.messages().find((m) => m.messageId === '501');
+      expect(entry?.pending).toBe(true);
+      expect(store.realIdToTempId()['501']).toBeDefined();
     });
 
     it('marks the entry as failed when the REST call throws', async () => {
@@ -268,9 +281,10 @@ describe('MessageStore', () => {
         replyToId: undefined,
         nonce: expect.any(String),
       });
-      // REST is untouched, and the optimistic bubble is reconciled to the hub-returned id.
+      // REST is untouched, and the optimistic bubble adopts the hub-returned id (still pending
+      // until the echo confirms persistence — see confirmSent()).
       expect(service.sendMessage).not.toHaveBeenCalled();
-      expect(store.messages().some((m) => m.messageId === '700' && !m.pending)).toBe(true);
+      expect(store.messages().some((m) => m.messageId === '700')).toBe(true);
     });
   });
 

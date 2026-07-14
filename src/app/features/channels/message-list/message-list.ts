@@ -4,7 +4,7 @@ import {
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CdkOverlayOrigin, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
-import { UiAvatar, MentionAutocomplete, EmojiPicker } from '../../../shared/ui';
+import { UiAvatar, MentionAutocomplete, EmojiPicker, ConfirmService } from '../../../shared/ui';
 import { MessageStore } from '../../../core/stores/message.store';
 import { PinStore } from '../../../core/stores/pin.store';
 import { ChannelStore } from '../../../core/stores/channel.store';
@@ -13,6 +13,7 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { BlockStore } from '../../../core/stores/block.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { MuteStore } from '../../../core/stores/mute.store';
 import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { Router } from '@angular/router';
@@ -167,17 +168,20 @@ export class MessageList {
   private readonly injector = inject(Injector);
   private readonly unreadStore = inject(UnreadStore);
   private readonly contextMenu = inject(ContextMenuService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly userMenuDeps: UserMenuDeps = {
     memberStore: this.memberStore,
     roleStore: this.roleStore,
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    friendStore: inject(FriendStore),
     blockStore: this.blockStore,
     muteStore: this.muteStore,
     profileModal: inject(ProfileModalService),
     toast: this.toast,
     router: inject(Router),
     auth: this.auth,
+    confirm: this.confirmService,
   };
 
   // Mention candidates for chip rendering — consumed by <app-message-content> to decide which
@@ -207,10 +211,18 @@ export class MessageList {
   // message (keyed on content so an edit re-scans) to keep the regex out of the group recompute.
   private readonly inviteCodeCache = new WeakMap<MessageResponse, { content: string; codes: string[] }>();
   private inviteCodesOf(msg: MessageResponse): string[] {
-    if (msg.isDeleted || !msg.content) return [];
+    if (msg.isDeleted) return [];
     const cached = this.inviteCodeCache.get(msg);
     if (cached && cached.content === msg.content) return cached.codes;
     const codes = extractInviteCodes(msg.content);
+    // A forwarded message carries the original's text in the server-built snapshot (rendered as a
+    // plain quote); surface any invite links there as embeds too, so forwarding an invite still
+    // shows the join card rather than a bare link.
+    if (msg.forward?.content) {
+      for (const code of extractInviteCodes(msg.forward.content)) {
+        if (!codes.includes(code)) codes.push(code);
+      }
+    }
     this.inviteCodeCache.set(msg, { content: msg.content, codes });
     return codes;
   }
@@ -401,10 +413,14 @@ export class MessageList {
   // MessageStore window cap, so natural-flow rendering stays cheap and scrollHeight is always exact.
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
 
-  private prevCount = 0;
   private prevTailSignature = '';
   private isInitialLoad = true;
   private atBottom = true;
+  // While a jump is landing (until this wall-clock ms), scroll-driven content loads are suppressed.
+  // Swapping in an anchored window clamps the scroll and the smooth-scroll animation fires a burst of
+  // scroll events; without this guard they trigger loadNewer / scroll-to-bottom and instantly yank the
+  // view off the jump target — the "jump then jitter straight back" bug, worst for old messages.
+  private jumpSettleUntil = 0;
 
   protected readonly messageGroups = computed<MessageGroup[]>(() => {
     const msgs = this.messageStore.messages();
@@ -547,14 +563,23 @@ export class MessageList {
    * group element). No-op if the message isn't in the loaded window. Returns whether it scrolled.
    */
   private scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition): boolean {
-    const group = this.messageGroups().find((g) =>
-      g.items.some((i) => i.msg.messageId === messageId),
-    );
-    if (!group) return false;
-    const el = this.scroller()?.nativeElement?.querySelector<HTMLElement>(
-      `[data-group="${group.firstMessageId}"]`,
-    );
+    const root = this.scroller()?.nativeElement;
+    if (!root) return false;
+    // Prefer the exact message row (data-message); fall back to its group container. Targeting the
+    // row lands precisely on a message inside a burst instead of the burst's first message.
+    const el =
+      root.querySelector<HTMLElement>(`[data-message="${messageId}"]`) ??
+      (() => {
+        const group = this.messageGroups().find((g) =>
+          g.items.some((i) => i.msg.messageId === messageId),
+        );
+        return group
+          ? root.querySelector<HTMLElement>(`[data-group="${group.firstMessageId}"]`)
+          : null;
+      })();
     if (!el) return false;
+    // Cover the smooth-scroll animation: onScroll must not fire content loads while it runs.
+    this.jumpSettleUntil = Date.now() + 700;
     el.scrollIntoView({ behavior: 'smooth', block });
     return true;
   }
@@ -760,7 +785,11 @@ export class MessageList {
       this.jumpTimer = setTimeout(() => this.jumpHighlightId.set(null), 2000);
       return;
     }
-    if (attempt < 5) requestAnimationFrame(() => this.jumpToMessage(messageId, attempt + 1));
+    // The target's DOM may not be committed yet when jumping into a freshly-loaded window (an
+    // anchored pin/search load, larger lists, images reserving height) — retry across enough frames
+    // (~0.3s) that a slow layout settles before we give up. Too few frames was the intermittent
+    // "jump-to-pin sometimes does nothing".
+    if (attempt < 20) requestAnimationFrame(() => this.jumpToMessage(messageId, attempt + 1));
   }
 
   /** Returns to the live tail from a historical (anchored) view — the "Jump to Present" pill. */
@@ -858,16 +887,28 @@ export class MessageList {
     const content = this.editDraft().trim();
     this.cancelEdit();
     if (!content || content === msg.content) return;
-    await this.messageService
-      .editMessage(msg.guildId, msg.channelId, msg.messageId, content)
-      .catch(() => {});
+    try {
+      await this.messageService.editMessage(msg.guildId, msg.channelId, msg.messageId, content);
+    } catch {
+      // Don't swallow — a failed edit that shows nothing reads as "can't edit". The authoritative
+      // change still arrives via the MessageEdited broadcast on success.
+      this.toast.info('Could not edit message', 'fa-triangle-exclamation');
+    }
   }
 
   protected async deleteMsg(msg: MessageResponse): Promise<void> {
-    if (!window.confirm('Delete this message?')) return;
-    await this.messageService
-      .deleteMessage(msg.guildId, msg.channelId, msg.messageId)
-      .catch(() => {});
+    const ok = await this.confirmService.confirm({
+      title: 'Delete Message',
+      message: "Delete this message? This can't be undone.",
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await this.messageService.deleteMessage(msg.guildId, msg.channelId, msg.messageId);
+    } catch {
+      this.toast.info('Could not delete message', 'fa-triangle-exclamation');
+    }
   }
 
   protected onEditKeydown(event: KeyboardEvent, msg: MessageResponse): void {
@@ -956,14 +997,14 @@ export class MessageList {
         const msgs = this.messageStore.messages();
         const last = msgs[msgs.length - 1];
 
-        // Signature changes when a message is added/removed OR the tail message's
-        // optimistic state flips (e.g. my pending message transitions to failed,
-        // which also re-groups it and would otherwise jump the viewport).
-        const signature = `${msgs.length}|${last?.messageId ?? ''}|${last?.pending ?? false}|${last?.failed ?? false}`;
+        // Signature changes when a message is added/removed, the tail message's optimistic state
+        // flips (pending→failed re-groups it), it's edited, OR its reaction pills change — the last
+        // matters because a reaction landing on the bottom message adds a pill row that would push
+        // it off-screen unless we re-pin to the bottom.
+        const reactionSig = last?.reactions?.map((r) => `${r.emoji}:${r.count}`).join(',') ?? '';
+        const signature = `${msgs.length}|${last?.messageId ?? ''}|${last?.pending ?? false}|${last?.failed ?? false}|${last?.editedAt ?? ''}|${reactionSig}`;
         if (signature === this.prevTailSignature) return;
-        const grew = msgs.length > this.prevCount;
         this.prevTailSignature = signature;
-        this.prevCount = msgs.length;
 
         if (!last) return;
 
@@ -972,11 +1013,12 @@ export class MessageList {
         // keeps the message (and its Retry button) in view at the bottom.
         const isMine = last.userId === myId || last.pending === true || last.failed === true;
 
-        // Initial load OR my own message OR a new message while already at the bottom
-        // → pin to bottom. (Loading older history scrolls from the top, must NOT yank; and while
-        // anchored to a historical window the jump effect owns scrolling, so never auto-bottom.)
+        // Initial load OR my own message OR any change to the tail message while already at the
+        // bottom (a new message, an edit that grows it, or a reaction pill row appearing) → pin to
+        // bottom. (Loading older history scrolls from the top, must NOT yank; and while anchored to a
+        // historical window the jump effect owns scrolling, so never auto-bottom.)
         if (
-          (this.isInitialLoad || isMine || (grew && this.atBottom)) &&
+          (this.isInitialLoad || isMine || this.atBottom) &&
           !this.messageStore.anchored()
         ) {
           this.isInitialLoad = false;
@@ -993,6 +1035,9 @@ export class MessageList {
       () => {
         const req = this.messageStore.jumpRequest();
         if (!req) return;
+        // Guard immediately (before the DOM even re-renders): loading an anchored window replaces the
+        // list and clamps the scroll, which fires onScroll before the centre-scroll below runs.
+        this.jumpSettleUntil = Date.now() + 1000;
         queueMicrotask(() => this.jumpToMessage(req.messageId));
       },
       { injector: this.injector },
@@ -1018,6 +1063,12 @@ export class MessageList {
     this.scrollToBottom();
   }
 
+  /** Degraded-banner Retry: re-run the latest-page load (repaints from cache, refreshes `degraded`). */
+  protected retryLoad(): void {
+    const channelId = this.messageStore.activeChannelId();
+    if (channelId) void this.messageStore.loadMessages(this.messageStore.activeGuildId(), channelId);
+  }
+
   /** Container scroll handler: tracks bottom-anchoring and triggers older-history loads near the top. */
   protected onScroll(): void {
     const el = this.scroller()?.nativeElement;
@@ -1034,6 +1085,10 @@ export class MessageList {
     if (this.atBottom && !wasAtBottom && this.messageStore.unreadOnOpen() > 0) {
       this.messageStore.dismissUnreadBanner();
     }
+
+    // A jump is still landing → suppress every scroll-driven content load below (the loads + the
+    // resulting scroll-to-bottom are exactly what yank the view off the freshly-jumped target).
+    if (Date.now() < this.jumpSettleUntil) return;
 
     // Bound the loaded window while pinned to the live bottom (this fires after each programmatic
     // scroll-to-bottom too). Dropping the oldest, off-screen messages keeps the view put — the

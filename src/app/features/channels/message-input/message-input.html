@@ -82,6 +82,22 @@
   </div>
   }
 
+  <!-- Formatting toolbar — toggle-wraps the selection in the markdown the renderer supports. -->
+  <div class="flex items-center gap-0.5 -mb-1.5">
+    @for (action of formatActions; track action.label) {
+    <button
+      type="button"
+      [title]="action.label"
+      [attr.aria-label]="action.label"
+      class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+      (mousedown)="$event.preventDefault()"
+      (click)="applyFormat(action.open, action.close)"
+    >
+      <i class="fas {{ action.icon }} text-xs"></i>
+    </button>
+    }
+  </div>
+
   <div class="flex items-end gap-2">
     <div
       #composerOrigin
@@ -146,6 +162,22 @@
         [candidates]="mentionCandidates()"
         [highlightedIndex]="mentionHighlightedIndex()"
         (select)="selectMention($event)"
+      />
+    </ng-template>
+
+    <!-- :shortcode emoji autocomplete (same anchor as the mention popup; never open together) -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="composerOrigin"
+      [cdkConnectedOverlayOpen]="emojiSuggestOpen()"
+      [cdkConnectedOverlayPositions]="mentionOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="closeEmojiSuggest()"
+    >
+      <app-emoji-suggest
+        [candidates]="emojiSuggestions()"
+        [highlightedIndex]="emojiHighlightedIndex()"
+        (select)="selectEmojiSuggestion($event)"
       />
     </ng-template>
 

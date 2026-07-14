@@ -91,6 +91,9 @@ interface MessageState {
   // A cross-channel jump target parked while the router navigates to another channel; the channel
   // component consumes it after the route settles and loads the around-window instead of the latest.
   pendingJump: { guildId: string | null; channelId: string; messageId: string } | null;
+  // Whole seconds left on the caller's slowmode cooldown, from the latest/open load. The composer
+  // restores its countdown from this so leaving and rejoining a channel no longer loses the timer.
+  slowmodeRemainingSeconds: number;
 }
 
 let _jumpNonce = 0;
@@ -111,6 +114,7 @@ export const MessageStore = signalStore(
     jumpRequest: null,
     anchored: false,
     pendingJump: null,
+    slowmodeRemainingSeconds: 0,
   }),
   withMethods((
     store,
@@ -189,13 +193,18 @@ export const MessageStore = signalStore(
           messages: store.messages().filter((m) => m.tempId !== tempId),
         });
       } else {
-        // A successful POST means the server accepted the message, so it's no
-        // longer "pending" — clear it now rather than waiting for the SignalR
-        // echo (which may be delayed/reordered). The echo will later swap in the
-        // authoritative payload via appendMessage, but the message is no longer grey.
+        // Publish-ack (RabbitMQ accepted the message) is NOT persistence — the Scylla write
+        // happens asynchronously in the consumer, and the authoritative `MessageReceived` echo
+        // is the only true "it's saved" signal. When the socket is live an echo is coming, so we
+        // KEEP the bubble grey/`pending`: it un-greys when the echo swaps in the authoritative
+        // payload (nonce-reconciled in appendMessage, ~100ms healthy) — or flips to failed+retry
+        // if the consumer can't persist (e.g. Scylla down). That's what stops a never-persisted
+        // send from looking sent. On the REST fallback (socket down) NO echo will arrive until a
+        // reload, so there we clear `pending` on the ack as before rather than strand it grey.
+        const awaitEcho = signalr.isConnected;
         patchState(store, {
           messages: store.messages().map((m) =>
-            m.tempId === tempId ? { ...m, messageId: realId, pending: false } : m,
+            m.tempId === tempId ? { ...m, messageId: realId, ...(awaitEcho ? {} : { pending: false }) } : m,
           ),
           realIdToTempId: { ...store.realIdToTempId(), [realId]: tempId },
         });
@@ -222,6 +231,7 @@ export const MessageStore = signalStore(
         degraded: response.degraded,
         anchored: false,
         realIdToTempId: {},
+        slowmodeRemainingSeconds: response.slowmodeRemainingSeconds ?? 0,
       });
     };
 
@@ -239,6 +249,7 @@ export const MessageStore = signalStore(
         hasMore: true,
         anchored: false,
         realIdToTempId: {},
+        slowmodeRemainingSeconds: 0, // cleared until the fresh load reports this channel's cooldown
       });
       try {
         await fetchLatestInto(guildId, channelId);
@@ -553,6 +564,7 @@ export const MessageStore = signalStore(
         jumpRequest: null,
         anchored: false,
         pendingJump: null,
+        slowmodeRemainingSeconds: 0,
       });
     },
 

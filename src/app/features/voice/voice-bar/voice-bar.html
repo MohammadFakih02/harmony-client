@@ -25,7 +25,11 @@
         }
       </span>
     </button>
-    @if (!voiceStore.connecting()) {
+    @if (voiceStore.connecting()) {
+    <ui-icon-button size="md" hover="surface-3" label="Cancel" (click)="disconnect()">
+      <i class="fas fa-xmark text-danger"></i>
+    </ui-icon-button>
+    } @else {
     <ui-icon-button size="md" hover="surface-3" label="Disconnect" (click)="disconnect()">
       <i class="fas fa-phone-slash text-danger"></i>
     </ui-icon-button>

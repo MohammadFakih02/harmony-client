@@ -34,11 +34,15 @@ export class ToastService {
     if (this.mention?.id === id) this.mention = null;
   }
 
-  /** A mention arrived for a channel you're not viewing. */
-  pushMention(channelName: string | null, route: unknown[]): void {
+  /**
+   * A mention arrived for a channel you're not viewing. `direct` = a 1:1 DM, where the name is a
+   * person, so it reads "by {name}"; everywhere else (guild channels, group DMs) the name is a
+   * place, so it reads "in {name}".
+   */
+  pushMention(channelName: string | null, route: unknown[], direct = false): void {
     const count = (this.mention?.count ?? 0) + 1;
     const title = count === 1 ? 'You were mentioned' : `You were mentioned ${count} times`;
-    const body = count === 1 && channelName ? `in ${channelName}` : null;
+    const body = count === 1 && channelName ? `${direct ? 'by' : 'in'} ${channelName}` : null;
 
     if (this.mention && this.toasts().some((t) => t.id === this.mention!.id)) {
       const id = this.mention.id;

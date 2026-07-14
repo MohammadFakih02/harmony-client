@@ -17,6 +17,13 @@ describe('ToastService', () => {
     expect(toasts[0].body).toBe('in #general');
   });
 
+  it('a 1:1 DM mention reads "by {name}" instead of "in {name}"', () => {
+    service.pushMention('alice', ['/app/dm', '7'], true);
+    const toasts = service.toasts();
+    expect(toasts[0].title).toBe('You were mentioned');
+    expect(toasts[0].body).toBe('by alice');
+  });
+
   it('aggregates repeated mentions into one count toast', () => {
     service.pushMention('#general', ['a']);
     service.pushMention('#random', ['b']);
