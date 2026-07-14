@@ -39,7 +39,7 @@
       <div class="px-4 pb-4">
         <!-- ===== Avatar overlapping the banner + owner badge ===== -->
         <div class="relative z-10 flex items-end justify-between -mt-10">
-          <div class="inline-block rounded-full ring-[5px] ring-surface bg-surface">
+          <div class="inline-block rounded-full p-1.25 bg-surface">
             <ui-avatar
               [src]="v.avatarKey"
               [alt]="v.username"
@@ -259,6 +259,16 @@
           <p class="w-full h-9 rounded-lg text-xs text-muted bg-surface-2 flex items-center justify-center gap-1.5">
             <i class="fas fa-user-lock"></i> Only accepts messages from friends
           </p>
+          }
+          @if (canAddFriend()) {
+          <button
+            type="button"
+            class="w-full h-9 rounded-lg text-sm font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2 disabled:opacity-60"
+            [disabled]="sendingFriendRequest()"
+            (click)="addFriend()"
+          >
+            <i class="fas fa-user-plus text-xs"></i> Add Friend
+          </button>
           }
         </div>
       </div>

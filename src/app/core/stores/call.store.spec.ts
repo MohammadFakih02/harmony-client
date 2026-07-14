@@ -91,6 +91,7 @@ describe('CallStore', () => {
             getParticipants: vi.fn().mockResolvedValue([]),
             setMicMuted: vi.fn(),
             setDeafened: vi.fn(),
+            syncWatchedStreams: vi.fn(),
             speakingUserIds: signal<ReadonlySet<string>>(new Set()),
             localScreenShareOn: signal(false),
           },
@@ -144,9 +145,9 @@ describe('CallStore', () => {
     expect(ringtone.stop).toHaveBeenCalled();
   });
 
-  it('an unanswered ring auto-dismisses after 60s', () => {
+  it('an unanswered ring auto-dismisses after the 2-min ring window', () => {
     gateway.emit({ type: 'IncomingCall', payload: ring() });
-    vi.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(120_000);
 
     expect(store.incoming()).toBeNull();
   });
@@ -204,12 +205,33 @@ describe('CallStore', () => {
     expect(voiceStore.activeChannelId()).toBe('dm1');
   });
 
-  it('an unanswered outgoing ring times out: cancelCall(missed) + leave', async () => {
+  it('an unanswered outgoing ring times out: cancelCall(missed) but stays in the call', async () => {
     await store.startCall('dm1');
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(120_000);
 
     expect(store.outgoing()).toBeNull();
     expect(signalR.cancelCall).toHaveBeenCalledWith('dm1', true);
+    // We stay put — the alone-timer (not the ring timeout) governs the eventual auto-disconnect.
+    expect(voiceStore.activeChannelId()).toBe('dm1');
+  });
+
+  it('auto-disconnects after 5 min alone in a DM call', async () => {
+    await store.startCall('dm1');
+    // Two people in the room (me + caller); the callee answering clears the outgoing ring.
+    gateway.emit({ type: 'VoiceParticipantJoined', payload: participant({ userId: 'me' }) });
+    gateway.emit({ type: 'VoiceParticipantJoined', payload: participant({ userId: 'caller' }) });
+    expect(store.outgoing()).toBeNull();
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(voiceStore.activeChannelId()).toBe('dm1'); // not alone → no auto-leave
+
+    // The other participant leaves → we're alone → auto-disconnect after the 5-min window.
+    gateway.emit({
+      type: 'VoiceParticipantLeft',
+      payload: { channelId: 'dm1', guildId: null, userId: 'caller' },
+    });
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300_000);
     expect(voiceStore.activeChannelId()).toBeNull();
   });
 

@@ -13,6 +13,14 @@ export interface ContextMenuItem {
   keepOpen?: boolean; // don't close the menu after the action (checkable submenu items)
   children?: ContextMenuEntry[]; // one-level submenu
   action?: () => void | Promise<void>;
+  /**
+   * Inline slider row (e.g. per-user volume): renders a labeled 0–100% range input instead of a
+   * button. Implicitly keep-open; `action`/`checked`/`children` are ignored on a slider row.
+   */
+  slider?: {
+    value: () => number; // current value 0..1 (reactive getter)
+    onInput: (value: number) => void; // fired live while dragging, with 0..1
+  };
 }
 
 export interface ContextMenuSeparator {

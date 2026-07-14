@@ -1,3 +1,10 @@
+// While a drag is inside a category's drop list (its whole block, header included), tint the
+// block so "this drop goes INTO the category" is visible — the untinted margins between blocks
+// are the top-level "place between" zones.
+.channel-category-list.cdk-drop-list-dragging {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
 .channel-item {
   position: relative;
   overflow: hidden;

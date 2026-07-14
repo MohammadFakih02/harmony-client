@@ -39,11 +39,18 @@
 </button>
 }
 
-<!-- Degraded banner -->
+<!-- Degraded banner (message reads partially failed — Scylla circuit open etc.) -->
 @if (messageStore.degraded()) {
 <div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs shrink-0">
   <i class="fas fa-triangle-exclamation shrink-0"></i>
   <span>Couldn't load all messages — some history may be missing.</span>
+  <button
+    type="button"
+    class="ml-auto shrink-0 px-2 py-0.5 rounded-md font-semibold hover:bg-warning hover:text-bg transition-micro"
+    (click)="retryLoad()"
+  >
+    Retry
+  </button>
 </div>
 }
 
@@ -178,7 +185,7 @@
       </div>
       @for (item of group.items; track item.msg.messageId) {
       @let msg = item.msg;
-      <div class="relative group/msg" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
+      <div class="relative group/msg" [attr.data-message]="msg.messageId" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <div class="relative" cdkOverlayOrigin #editOrigin="cdkOverlayOrigin">
@@ -251,8 +258,9 @@
           }
         </button>
         }
-        <!-- Forward snapshot (attributed quote of the original) — server-built, above the note -->
-        @if (msg.forward; as fwd) {
+        <!-- Forward snapshot (attributed quote of the original) — server-built, above the note.
+             Hidden once the message is deleted (the snapshot isn't part of the "Message deleted" row). -->
+        @if (!msg.isDeleted && msg.forward; as fwd) {
         <div class="mb-1 border-l-2 border-border pl-2.5 py-0.5 max-w-full">
           <div class="flex items-center gap-1.5 text-2xs text-faint">
             <i class="fas fa-share text-2xs shrink-0"></i>

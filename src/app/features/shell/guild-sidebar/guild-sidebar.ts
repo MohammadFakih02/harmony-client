@@ -6,11 +6,12 @@ import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { UiModal } from '../../../shared/ui';
+import { UiModal, ConfirmService } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MuteStore } from '../../../core/stores/mute.store';
+import { MemberStore } from '../../../core/stores/member.store';
 import { MUTE_DURATIONS } from '../../../core/models/mute.models';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
@@ -37,13 +38,21 @@ export class GuildSidebar {
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
   protected readonly muteStore = inject(MuteStore);
+  private readonly memberStore = inject(MemberStore);
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
+  private readonly confirmService = inject(ConfirmService);
 
   /** Right-click a rail icon — the server dropdown's actions, reachable without opening the server. */
   protected openGuildMenu(event: MouseEvent, guild: GuildSummary): void {
     const owner = guild.ownerId === this.auth.currentUser()?.id;
     const muted = this.muteStore.isMuted('guild', guild.id);
+    // Same gate as the channel-sidebar dropdown: only members with an actual settings pane see the
+    // entry. Caps for a not-yet-visited guild aren't cached — kick a load so the next open is right.
+    const caps = this.memberStore.capabilitiesOf(guild.id);
+    if (!caps) void this.memberStore.loadCapabilitiesIfNeeded(guild.id);
+    const canOpenSettings =
+      !!caps && (caps.canManageGuild || caps.canManageRoles || caps.canBan || caps.canViewAuditLog);
     const entries: ContextMenuEntry[] = [
       muted
         ? {
@@ -60,11 +69,15 @@ export class GuildSidebar {
             })),
           },
       { separator: true },
-      {
-        label: 'Server Settings',
-        icon: 'fa-gear',
-        action: () => void this.router.navigate(['/app/guilds', guild.id, 'settings']),
-      },
+      ...(canOpenSettings
+        ? [
+            {
+              label: 'Server Settings',
+              icon: 'fa-gear',
+              action: () => void this.router.navigate(['/app/guilds', guild.id, 'settings']),
+            } satisfies ContextMenuEntry,
+          ]
+        : []),
       {
         label: 'Copy Server ID',
         icon: 'fa-hashtag',
@@ -92,7 +105,13 @@ export class GuildSidebar {
     const message = owner
       ? `Delete “${guild.name}”? This permanently removes the server for everyone.`
       : `Leave “${guild.name}”?`;
-    if (!window.confirm(message)) return;
+    const ok = await this.confirmService.confirm({
+      title: owner ? 'Delete Server' : 'Leave Server',
+      message,
+      confirmLabel: owner ? 'Delete Server' : 'Leave',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       if (owner) await this.guildStore.deleteGuild(guild.id);
       else await this.guildStore.leaveGuild(guild.id);

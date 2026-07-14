@@ -1,20 +1,24 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import {
+// livekit-client is a ~heavy dependency; import ONLY types statically (erased at build) and load
+// the runtime module (Room/RoomEvent/Track) lazily on first voice use — see loadLk(). This keeps
+// the whole library out of the eager /app shell chunk for users who never open a call.
+import type {
+  LocalTrackPublication,
   LocalVideoTrack,
+  RemoteParticipant,
   RemoteTrack,
+  RemoteTrackPublication,
   RemoteVideoTrack,
   Room,
-  RoomEvent,
   Track,
-  type LocalTrackPublication,
-  type RemoteParticipant,
-  type RemoteTrackPublication,
 } from 'livekit-client';
 import { environment } from '../../../environments/environment';
 import { VoiceParticipant, VoiceTokenResponse } from '../models/voice.models';
 import { VoicePrefsService } from './voice-prefs.service';
+
+type LiveKitModule = typeof import('livekit-client');
 
 /** The attachable video tracks a participant is publishing, camera and screenshare slotted apart. */
 export interface ParticipantVideoTracks {
@@ -36,16 +40,25 @@ export class VoiceService {
   private readonly prefs = inject(VoicePrefsService);
   private readonly base = environment.apiUrl;
 
+  // Lazily-loaded livekit-client runtime module (Room/RoomEvent/Track), cached after first use.
+  private lk: LiveKitModule | null = null;
   private room: Room | null = null;
   // Bumped by every disconnect()/new connect(); an in-flight connect() whose epoch is stale by the
   // time the socket opens tears its Room down instead of keeping it — otherwise a leave-during-join
   // leaks a live Room nobody references, whose reconnect loop hammers the LiveKit wss endpoint.
   private connectEpoch = 0;
-  // trackSid → the hidden <audio> playing it + whose it is, so we can detach on unsubscribe /
-  // cleanup and apply per-user local mute/volume.
-  private readonly audioEls = new Map<string, { el: HTMLMediaElement; identity: string }>();
+  // trackSid → the hidden <audio> playing it, whose it is, and which source it is (mic vs the
+  // participant's screen-share audio), so we can detach on unsubscribe / cleanup and apply the
+  // right per-user local mute/volume (voice and stream audio have independent volume).
+  private readonly audioEls = new Map<
+    string,
+    { el: HTMLMediaElement; identity: string; source: 'mic' | 'screen' }
+  >();
   private deafened = false;
   private onEnded: (() => void) | null = null;
+  // userIds whose screenshare AUDIO this viewer consumes — stream audio is watch-gated (synced
+  // from the store's click-to-watch set), so non-watchers neither hear nor download it.
+  private watchedStreams: ReadonlySet<string> = new Set();
 
   /** userIds currently speaking (LiveKit active-speaker detection) — drives the roster highlight. */
   readonly speakingUserIds = signal<ReadonlySet<string>>(new Set());
@@ -59,11 +72,19 @@ export class VoiceService {
    */
   readonly localScreenShareOn = signal(false);
 
-  /** Per-user local volume (0..1) — a client-side preference, kept for the whole session. */
+  /** Per-user local voice (mic) volume (0..1) — a client-side preference, kept for the whole session. */
   readonly volumes = signal<ReadonlyMap<string, number>>(new Map());
+
+  /** Per-user local screen-share *audio* volume (0..1), independent of their mic — session-scoped. */
+  readonly screenVolumes = signal<ReadonlyMap<string, number>>(new Map());
 
   /** Users locally muted "for me" — a client-side preference, kept for the whole session. */
   readonly locallyMutedUserIds = signal<ReadonlySet<string>>(new Set());
+
+  /** Loads (once, then cached) the livekit-client runtime module — the lazy code-split boundary. */
+  private async loadLk(): Promise<LiveKitModule> {
+    return (this.lk ??= await import('livekit-client'));
+  }
 
   /** Mints a channel-scoped LiveKit token (+ the Cloud URL and room name) from the API. */
   getToken(channelId: string): Promise<VoiceTokenResponse> {
@@ -108,9 +129,10 @@ export class VoiceService {
     await this.disconnect();
     const epoch = ++this.connectEpoch;
 
-    const { token, url } = await this.getToken(channelId);
+    // Load livekit-client + the token in parallel — first-call chunk fetch overlaps the API RTT.
+    const [lk, { token, url }] = await Promise.all([this.loadLk(), this.getToken(channelId)]);
     const prefs = this.prefs.prefs();
-    const room = new Room({
+    const room = new lk.Room({
       adaptiveStream: true,
       dynacast: true,
       // Device + audio-processing preferences apply at track creation; a null deviceId falls
@@ -160,6 +182,13 @@ export class VoiceService {
   }
 
   private wire(room: Room): void {
+    // Runtime enums off the lazily-loaded module (wire only runs after connect() loaded it).
+    const { RoomEvent, Track } = this.lk!;
+    const slotOf = (pub: { source: Track.Source }): 'camera' | 'screen' =>
+      pub.source === Track.Source.ScreenShare ? 'screen' : 'camera';
+    const audioSourceOf = (pub: { source: Track.Source }): 'mic' | 'screen' =>
+      pub.source === Track.Source.ScreenShareAudio ? 'screen' : 'mic';
+
     room.on(
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
@@ -168,12 +197,19 @@ export class VoiceService {
           return;
         }
         if (track.kind !== Track.Kind.Audio || !track.sid) return;
+        const source = audioSourceOf(pub);
+        // Watch-gated stream audio: not watching → drop the auto-subscription instead of
+        // attaching, so the audio is neither heard nor downloaded until the viewer opts in.
+        if (source === 'screen' && !this.watchedStreams.has(participant.identity)) {
+          pub.setSubscribed(false);
+          return;
+        }
         const el = track.attach();
         el.muted = this.isSilenced(participant.identity);
-        el.volume = this.volumes().get(participant.identity) ?? 1;
+        el.volume = this.volumeFor(participant.identity, source);
         el.style.display = 'none';
         document.body.appendChild(el);
-        this.audioEls.set(track.sid, { el, identity: participant.identity });
+        this.audioEls.set(track.sid, { el, identity: participant.identity, source });
       },
     );
 
@@ -303,8 +339,9 @@ export class VoiceService {
   }
 
   /** Enumerates local media devices of a kind (labels need a prior permission grant). */
-  listDevices(kind: MediaDeviceKind): Promise<MediaDeviceInfo[]> {
-    return Room.getLocalDevices(kind, false).catch(() => []);
+  async listDevices(kind: MediaDeviceKind): Promise<MediaDeviceInfo[]> {
+    const lk = await this.loadLk();
+    return lk.Room.getLocalDevices(kind, false).catch(() => []);
   }
 
   /**
@@ -316,13 +353,47 @@ export class VoiceService {
     await this.room.switchActiveDevice(kind, deviceId ?? 'default').catch(() => {});
   }
 
-  /** Sets a per-user local playback volume (0..1). A client-side preference only. */
+  /** Sets a per-user local voice (mic) playback volume (0..1). A client-side preference only. */
   setParticipantVolume(userId: string, volume: number): void {
     const clamped = Math.min(1, Math.max(0, volume));
     const next = new Map(this.volumes());
     next.set(userId, clamped);
     this.volumes.set(next);
     this.applyAudioPrefs();
+  }
+
+  /** Sets a per-user local screen-share *audio* volume (0..1), independent of their mic volume. */
+  setParticipantScreenVolume(userId: string, volume: number): void {
+    const clamped = Math.min(1, Math.max(0, volume));
+    const next = new Map(this.screenVolumes());
+    next.set(userId, clamped);
+    this.screenVolumes.set(next);
+    this.applyAudioPrefs();
+  }
+
+  /** The local playback volume to apply for a participant's audio of a given source. */
+  private volumeFor(identity: string, source: 'mic' | 'screen'): number {
+    const map = source === 'screen' ? this.screenVolumes() : this.volumes();
+    return map.get(identity) ?? 1;
+  }
+
+  /**
+   * Applies the click-to-watch set to stream AUDIO: a stream's audio track stays subscribed only
+   * while this viewer is watching it (the video side is already covered — adaptiveStream pauses
+   * unattached tracks and dynacast then pauses the publisher's upload). Called by the store
+   * whenever the watched set changes; new publications are gated at TrackSubscribed.
+   */
+  syncWatchedStreams(watched: ReadonlySet<string>): void {
+    this.watchedStreams = watched;
+    if (!this.room || !this.lk) return;
+    const screenAudio = this.lk.Track.Source.ScreenShareAudio;
+    for (const p of this.room.remoteParticipants.values()) {
+      for (const pub of p.audioTrackPublications.values()) {
+        if (pub.source === screenAudio) {
+          pub.setSubscribed(watched.has(p.identity));
+        }
+      }
+    }
   }
 
   /** Mutes/unmutes a user "for me" — silences their audio locally without touching their state. */
@@ -339,11 +410,11 @@ export class VoiceService {
     return this.deafened || this.locallyMutedUserIds().has(identity);
   }
 
-  /** Re-applies deafen + per-user mute/volume onto every attached audio element. */
+  /** Re-applies deafen + per-user mute/volume onto every attached audio element (voice + stream). */
   private applyAudioPrefs(): void {
-    for (const { el, identity } of this.audioEls.values()) {
+    for (const { el, identity, source } of this.audioEls.values()) {
       el.muted = this.isSilenced(identity);
-      el.volume = this.volumes().get(identity) ?? 1;
+      el.volume = this.volumeFor(identity, source);
     }
   }
 
@@ -363,7 +434,3 @@ export class VoiceService {
   }
 }
 
-/** Camera vs screenshare slot of a publication (screen-share audio never reaches the video path). */
-function slotOf(pub: { source: Track.Source }): 'camera' | 'screen' {
-  return pub.source === Track.Source.ScreenShare ? 'screen' : 'camera';
-}

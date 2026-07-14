@@ -4,6 +4,7 @@ import { patchState, signalStore, withHooks, withMethods, withState } from '@ngr
 import { GuildCapabilities, GuildMember } from '../models/member.models';
 import { GatewayEvents } from '../hub/gateway-events';
 import { MemberService } from '../services/member.service';
+import { AuthService } from '../services/auth.service';
 
 interface MemberState {
   byGuild: Record<string, GuildMember[]>;
@@ -95,6 +96,22 @@ export const MemberStore = signalStore(
           // Leave unset → the UI hides moderation actions (fail-closed for management UI).
         }
       });
+    },
+
+    /**
+     * Force-refreshes a guild's cached capabilities after a role change, so the moderation/settings
+     * UI (manage guild/roles, ban, audit-log, manage channels) updates live without a page reload.
+     * A no-op when the guild's caps aren't cached — they'll load fresh on next demand anyway.
+     * Keeps the stale value on failure; the server still enforces regardless of the UI.
+     */
+    async refreshCapabilities(guildId: string): Promise<void> {
+      if (!store.capsByGuild()[guildId]) return;
+      try {
+        const caps = await service.getCapabilities(guildId);
+        patchState(store, { capsByGuild: { ...store.capsByGuild(), [guildId]: caps } });
+      } catch {
+        // Leave the cached value in place.
+      }
     },
 
     /** Adds a member to local state (invite redeem via SignalR). Cache-guarded + idempotent — a
@@ -211,7 +228,7 @@ export const MemberStore = signalStore(
     // Own member moderation/role events off the gateway stream. Each apply-method cache-guards on
     // the guild being loaded, so events for unloaded guilds are ignored. `Kicked` targets only the
     // affected user (navigation) and stays in the shell.
-    onInit(store, gateway = inject(GatewayEvents)) {
+    onInit(store, gateway = inject(GatewayEvents), auth = inject(AuthService)) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         switch (e.type) {
           case 'MemberJoined':
@@ -228,8 +245,19 @@ export const MemberStore = signalStore(
               communicationDisabledUntil: e.payload.communicationDisabledUntil,
             });
             break;
+          case 'RoleUpserted':
+            // A role's permission bits may have changed — any holder's resolved guild capabilities
+            // can shift, so refresh live (rare admin action; cheap and only if caps are cached).
+            store.refreshCapabilities(e.role.guildId);
+            break;
+          case 'RoleDeleted':
+            store.refreshCapabilities(e.payload.guildId);
+            break;
           case 'MemberRoleUpdated':
             store.applyMemberRoleUpdated(e.payload.guildId, e.payload.userId, e.payload.roleIds);
+            // If MY role assignments changed, my own capabilities may have shifted.
+            if (e.payload.userId === auth.currentUser()?.id)
+              store.refreshCapabilities(e.payload.guildId);
             break;
           case 'ProfileUpdated':
             store.applyAvatar(e.payload.userId, e.payload.avatarKey);

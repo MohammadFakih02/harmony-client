@@ -3,6 +3,7 @@ import { HttpClient } from "@angular/common/http";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { environment } from "../../../environments/environment";
+import { PushService } from "./push.service";
 
 export interface User {
   id: string;
@@ -32,6 +33,7 @@ export class AuthService {
   constructor(
     private http: HttpClient,
     private router: Router,
+    private push: PushService,
   ) {}
 
   async register(
@@ -69,6 +71,11 @@ export class AuthService {
   }
 
   async logout(): Promise<void> {
+    // Tear down this browser's push subscription BEFORE we drop the session, so a
+    // logged-out browser stops receiving pushes (a killed endpoint 410s server-side
+    // and gets pruned). Best-effort — disable() swallows its own errors and must
+    // never block logout.
+    await this.push.disable().catch(() => {});
     try {
       await firstValueFrom(
         this.http.post(

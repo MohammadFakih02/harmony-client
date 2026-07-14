@@ -28,22 +28,25 @@ import {
   dmLabel,
   dmPeer,
 } from '../../../core/models/direct-message.models';
-import { UiAvatar, UiIconButton } from '../../../shared/ui';
+import { UiAvatar, UiIconButton, ConfirmService } from '../../../shared/ui';
 import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
 import { VoiceBar } from '../../voice/voice-bar/voice-bar';
-import { buildVoiceParticipantMenu, VoiceMenuDeps } from '../../voice/voice-user-menu';
+import { buildVoiceParticipantMenu, runVoiceMod, VoiceMenuDeps } from '../../voice/voice-user-menu';
+import { buildUserMenu } from '../user-context-menu';
 import { VoiceService } from '../../../core/services/voice.service';
 import { RoleStore } from '../../../core/stores/role.store';
 import { RoleService } from '../../../core/services/role.service';
 import { BlockStore } from '../../../core/stores/block.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
 import {
+  NOTIFICATION_LEVEL_DEFAULT,
   NOTIFICATION_LEVEL_OPTIONS,
   NotificationLevel,
 } from '../../../core/models/notification-setting.models';
@@ -96,17 +99,20 @@ export class ChannelSidebar {
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
   protected readonly voiceService = inject(VoiceService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly voiceMenuDeps: VoiceMenuDeps = {
     memberStore: this.memberStore,
     roleStore: inject(RoleStore),
     roleService: inject(RoleService),
     dmStore: this.dmStore,
+    friendStore: inject(FriendStore),
     blockStore: inject(BlockStore),
     muteStore: this.muteStore,
     profileModal: inject(ProfileModalService),
     toast: inject(ToastService),
     router: this.router,
     auth: this.auth,
+    confirm: this.confirmService,
     voiceStore: this.voiceStore,
     voiceService: this.voiceService,
   };
@@ -249,7 +255,13 @@ export class ChannelSidebar {
   private async renameCategory(categoryId: string, currentName: string): Promise<void> {
     const guildId = this.guildStore.selectedGuildId();
     if (!guildId) return;
-    const name = window.prompt('Category name', currentName)?.trim();
+    const res = await this.confirmService.confirm({
+      title: 'Rename Category',
+      message: '',
+      confirmLabel: 'Rename',
+      input: { label: 'Category name', value: currentName },
+    });
+    const name = res?.input;
     if (!name || name === currentName) return;
     try {
       await this.channelStore.saveChannel(guildId, categoryId, { name });
@@ -261,7 +273,13 @@ export class ChannelSidebar {
   private async deleteCategory(categoryId: string, name: string): Promise<void> {
     const guildId = this.guildStore.selectedGuildId();
     if (!guildId) return;
-    if (!window.confirm(`Delete category "${name}"? Its channels move to the top level.`)) return;
+    const ok = await this.confirmService.confirm({
+      title: 'Delete Category',
+      message: `Delete "${name}"? Its channels move to the top level.`,
+      confirmLabel: 'Delete Category',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await this.channelStore.deleteChannel(guildId, categoryId);
     } catch {
@@ -350,7 +368,10 @@ export class ChannelSidebar {
     }
 
     const ids = category.channels.filter((c) => c.id !== moved.id).map((c) => c.id);
-    ids.splice(event.currentIndex, 0, moved.id);
+    // A collapsed category renders no rows (CDK always reports index 0) — append at the end
+    // instead, and expand so the drop visibly landed.
+    ids.splice(category.collapsed ? ids.length : event.currentIndex, 0, moved.id);
+    if (category.collapsed) this.channelStore.toggleCategory(category.id);
     void this.channelStore
       .moveToCategory(guildId, moved.id, category.id)
       .then(() => this.channelStore.reorderChannels(guildId, ids))
@@ -377,7 +398,13 @@ export class ChannelSidebar {
   private async deleteChannel(channel: Channel): Promise<void> {
     const guildId = this.guildStore.selectedGuildId();
     if (!guildId) return;
-    if (!window.confirm(`Delete #${channel.name}? This can't be undone.`)) return;
+    const ok = await this.confirmService.confirm({
+      title: 'Delete Channel',
+      message: `Delete #${channel.name}? This can't be undone.`,
+      confirmLabel: 'Delete Channel',
+      danger: true,
+    });
+    if (!ok) return;
     const wasActive = this.channelStore.selectedChannelId() === channel.id;
     try {
       await this.channelStore.deleteChannel(guildId, channel.id);
@@ -473,6 +500,56 @@ export class ChannelSidebar {
     );
   }
 
+  // --- Drag a voice participant onto another voice channel row to move them (native HTML5 DnD;
+  // deliberately NOT CDK — the channel rows already live inside the CDK reorder drop lists). ---
+
+  /** The participant currently being dragged, and the voice row currently hovered as a target. */
+  protected readonly voiceDrag = signal<VoiceParticipant | null>(null);
+  protected readonly voiceDropTarget = signal<string | null>(null);
+
+  /** You can always drag yourself (it's just a join); dragging others mirrors the server's MoveMembers gate. */
+  protected canDragVoice(p: VoiceParticipant): boolean {
+    if (p.userId === this.auth.currentUser()?.id) return true;
+    const guildId = this.guildStore.selectedGuildId();
+    return !!guildId && !!this.memberStore.capabilitiesOf(guildId)?.canMoveMembers;
+  }
+
+  protected onVoiceDragStart(event: DragEvent, p: VoiceParticipant): void {
+    // Firefox refuses to start a drag without data; the payload itself is unused.
+    event.dataTransfer?.setData('text/plain', p.userId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    this.voiceDrag.set(p);
+  }
+
+  protected onVoiceDragEnd(): void {
+    this.voiceDrag.set(null);
+    this.voiceDropTarget.set(null);
+  }
+
+  protected onVoiceDragOver(event: DragEvent, channel: Channel): void {
+    const drag = this.voiceDrag();
+    if (!drag || drag.channelId === channel.id) return;
+    event.preventDefault(); // marks the row as a valid drop target
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.voiceDropTarget.set(channel.id);
+  }
+
+  protected onVoiceDragLeave(channel: Channel): void {
+    if (this.voiceDropTarget() === channel.id) this.voiceDropTarget.set(null);
+  }
+
+  protected onVoiceDrop(event: DragEvent, channel: Channel): void {
+    event.preventDefault();
+    const drag = this.voiceDrag();
+    this.onVoiceDragEnd();
+    if (!drag || drag.channelId === channel.id) return;
+    if (drag.userId === this.auth.currentUser()?.id) {
+      void this.voiceStore.join(channel.id); // handles its own failures (resets + logs)
+    } else {
+      void runVoiceMod(this.voiceMenuDeps, this.voiceStore.moveParticipant(drag.userId, channel.id));
+    }
+  }
+
   // Guild-level capabilities (resolved server-side, loaded by the shell) — gate management UI.
   // Channel create/settings need ManageChannels; the invite affordance needs CreateInvite.
   protected readonly canManageChannels = computed(
@@ -490,12 +567,19 @@ export class ChannelSidebar {
   // duplicates these). Actions gate on the resolved capabilities.
   protected readonly showServerMenu = signal(false);
   protected readonly serverMenuPositions: ConnectionPositionPair[] = [
-    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+    { originX: 'center', originY: 'bottom', overlayX: 'center', overlayY: 'top', offsetY: 4 },
   ];
   protected readonly showInviteModal = signal(false);
 
   toggleServerMenu(): void {
-    this.showServerMenu.set(!this.showServerMenu());
+    const opening = !this.showServerMenu();
+    if (opening) {
+      // Load the caller's notification settings so the level/suppress controls in the dropdown
+      // render their current state (the server dropdown is now the single home for these prefs).
+      const guildId = this.guildStore.selectedGuildId();
+      if (guildId) void this.guildNotif.load(guildId);
+    }
+    this.showServerMenu.set(opening);
   }
 
   openInvitePeople(): void {
@@ -532,6 +616,42 @@ export class ChannelSidebar {
     if (guildId) void this.muteStore.remove('guild', guildId);
   }
 
+  // ---- Guild-level personal notification prefs (co-located with Mute Server in the dropdown, so
+  //      the server dropdown is the single "home" for these — no longer split into Server Settings) ----
+  protected readonly guildNotifLevels = NOTIFICATION_LEVEL_OPTIONS;
+
+  protected readonly guildNotifLevel = computed<NotificationLevel>(() => {
+    const guildId = this.guildStore.selectedGuildId();
+    return (
+      (guildId ? this.guildNotif.settingsOf(guildId)?.guildLevel : null) ?? NOTIFICATION_LEVEL_DEFAULT
+    );
+  });
+
+  protected readonly guildSuppressEveryone = computed<boolean>(() => {
+    const guildId = this.guildStore.selectedGuildId();
+    return !!(guildId && this.guildNotif.settingsOf(guildId)?.guildSuppressEveryone);
+  });
+
+  setGuildNotif(level: NotificationLevel): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.guildNotif.setGuildLevel(guildId, level);
+  }
+
+  toggleGuildSuppress(): void {
+    const guildId = this.guildStore.selectedGuildId();
+    if (guildId) void this.guildNotif.setGuildSuppressEveryone(guildId, !this.guildSuppressEveryone());
+  }
+
+  /**
+   * Server Settings is now admin-only config — personal notification prefs moved into this dropdown.
+   * Only show the entry to members who actually have a settings pane (Overview/Welcome → ManageGuild,
+   * Roles → ManageRoles, Bans → BanMembers, Audit → ViewAuditLog); everyone else has nothing there.
+   */
+  protected readonly canOpenServerSettings = computed(() => {
+    const caps = this.memberStore.capabilitiesOf(this.guildStore.selectedGuildId() ?? '');
+    return !!caps && (caps.canManageGuild || caps.canManageRoles || caps.canBan || caps.canViewAuditLog);
+  });
+
   /** Owner → delete the server; member → leave it. Both confirm first, then navigate home. */
   async leaveOrDeleteServer(): Promise<void> {
     this.showServerMenu.set(false);
@@ -542,7 +662,13 @@ export class ChannelSidebar {
     const message = owner
       ? `Delete “${guild.name}”? This permanently removes the server for everyone.`
       : `Leave “${guild.name}”?`;
-    if (!window.confirm(message)) return;
+    const ok = await this.confirmService.confirm({
+      title: owner ? 'Delete Server' : 'Leave Server',
+      message,
+      confirmLabel: owner ? 'Delete Server' : 'Leave',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       if (owner) await this.guildStore.deleteGuild(guildId);
       else await this.guildStore.leaveGuild(guildId);
@@ -620,7 +746,23 @@ export class ChannelSidebar {
    *  + Close/Leave, plus Copy Channel ID (everything the hover ✕ does, plus what it can't). */
   protected openDmMenu(event: MouseEvent, dm: DirectMessageChannel): void {
     const muted = this.muteStore.isMuted('channel', dm.channelId);
+    // A 1:1 DM row is a *user* as much as a channel — lead with the same shared user menu the
+    // friends page opens (profile / block / etc.), then the channel section. Groups have no
+    // single peer, so they keep the channel-only menu.
+    const peer = dmPeer(dm);
+    const userSection: ContextMenuEntry[] =
+      !dm.isGroup && peer
+        ? [
+            ...buildUserMenu(this.voiceMenuDeps, {
+              userId: peer.userId,
+              guildId: null,
+              username: peer.username,
+            }),
+            { separator: true },
+          ]
+        : [];
     const entries: ContextMenuEntry[] = [
+      ...userSection,
       muted
         ? {
             label: 'Unmute Conversation',

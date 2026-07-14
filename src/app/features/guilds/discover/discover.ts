@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { GuildService } from '../../../core/services/guild.service';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { GuildSummary } from '../../../core/models/guild.models';
-import { UiProfileBanner } from '../../../shared/ui';
+import { UiProfileBanner, ConfirmService } from '../../../shared/ui';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { extractApiError } from '../../../shared/util/api-error';
 
@@ -108,6 +108,7 @@ export class Discover implements OnInit {
   private readonly guildService = inject(GuildService);
   private readonly guildStore = inject(GuildStore);
   private readonly router = inject(Router);
+  private readonly confirmService = inject(ConfirmService);
 
   protected readonly query = signal('');
   protected readonly results = signal<GuildSummary[]>([]);
@@ -173,7 +174,7 @@ export class Discover implements OnInit {
       if (message.toLowerCase().includes('already a member')) {
         void this.router.navigate(['/app/guilds', guild.id]);
       } else {
-        window.alert(message);
+        void this.confirmService.notice({ title: "Couldn't Join Server", message });
       }
     } finally {
       this.joiningId.set(null);

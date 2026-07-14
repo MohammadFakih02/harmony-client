@@ -5,19 +5,6 @@
       {{ guildName() }}
     </p>
     <div class="mb-5 space-y-0.5">
-      <button
-        type="button"
-        class="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm font-medium transition-colors"
-        [class.bg-accent-muted]="activeTab() === 'notifications'"
-        [class.text-primary]="activeTab() === 'notifications'"
-        [class.text-muted]="activeTab() !== 'notifications'"
-        [class.hover:bg-surface-3]="activeTab() !== 'notifications'"
-        (click)="activeTab.set('notifications')"
-      >
-        <i class="fas fa-bell w-4 text-center"></i>
-        <span class="truncate">Notifications</span>
-      </button>
-
       @if (canManageGuild()) {
       <button
         type="button"
@@ -93,11 +80,6 @@
   <!-- Content pane -->
   <div class="relative flex-1 overflow-y-auto">
     @switch (activeTab()) {
-      @case ('notifications') {
-      <div class="mx-auto max-w-2xl px-10 py-12">
-        <app-guild-notifications [guildId]="guildId" [textChannels]="textChannels()" />
-      </div>
-      }
       @case ('overview') {
       @if (canManageGuild()) {
       <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-overview [guildId]="guildId" /></div>
