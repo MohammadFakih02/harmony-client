@@ -15,6 +15,7 @@ import { SignalRService } from '../services/signalr.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
 import { extractApiError } from '../../shared/util/api-error';
+import { compareSnowflakes } from '../../shared/util/snowflake';
 
 let _tempIdCounter = -1;
 const nextTempId = (): number => _tempIdCounter--;
@@ -54,6 +55,28 @@ function applyReactionDelta(
   const next = [...pills];
   next[idx] = { ...cur, count, meReacted: isMe ? false : cur.meReacted };
   return next;
+}
+
+/**
+ * Inserts a live message at its chronological position rather than blindly appending. Snowflake ids
+ * are time-ordered, so an id sort IS a chronological sort, and the stream renders correctly no matter
+ * what order the broadcasts arrive in. That matters because the ordering this used to rely on — the
+ * Scylla consumer dispatching one message at a time — is a single-instance property: two API tasks are
+ * competing consumers on the same queue and interleave freely.
+ *
+ * My own un-acked sends sit at the tail carrying a negative placeholder id, so they are excluded from
+ * the ordered region entirely — sorting them by id would fling them to the top of the channel. Past
+ * that suffix the scan runs backwards, so the overwhelmingly common case (a message newer than
+ * everything loaded) costs one comparison.
+ */
+function insertByTimeOrder(list: MessageResponse[], msg: MessageResponse): MessageResponse[] {
+  let end = list.length;
+  while (end > 0 && list[end - 1].tempId !== undefined) end--;
+
+  let i = end;
+  while (i > 0 && compareSnowflakes(list[i - 1].messageId, msg.messageId) > 0) i--;
+
+  return [...list.slice(0, i), msg, ...list.slice(i)];
 }
 
 // The message list renders in a plain scroll container (no virtualization), so the loaded window
@@ -475,7 +498,7 @@ export const MessageStore = signalStore(
           // A live message that mentions me lights up until I leave/rejoin the channel.
           const highlight = myId && msg.mentionIds.includes(myId);
           patchState(store, {
-            messages: [...store.messages(), msg],
+            messages: insertByTimeOrder(store.messages(), msg),
             ...(highlight
               ? { mentionHighlights: { ...store.mentionHighlights(), [msg.messageId]: true as const } }
               : {}),

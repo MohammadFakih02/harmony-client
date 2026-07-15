@@ -21,3 +21,18 @@ export function snowflakeToDate(id: string): Date | null {
   const ms = snowflakeToMs(id);
   return ms === null ? null : new Date(ms);
 }
+
+/**
+ * Orders two snowflake ids chronologically. They exceed Number.MAX_SAFE_INTEGER, so they compare as
+ * BigInts rather than parsed numbers. An unparseable id sorts as equal, leaving the caller's existing
+ * order untouched rather than throwing.
+ */
+export function compareSnowflakes(a: string, b: string): number {
+  try {
+    const x = BigInt(a);
+    const y = BigInt(b);
+    return x < y ? -1 : x > y ? 1 : 0;
+  } catch {
+    return 0;
+  }
+}

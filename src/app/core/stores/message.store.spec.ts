@@ -354,6 +354,59 @@ describe('MessageStore', () => {
     });
   });
 
+  // Live messages are placed by snowflake id, not by arrival order — the consumer's one-at-a-time
+  // dispatch only holds for a single API instance, and competing consumers interleave freely.
+  describe('appendMessage() — chronological placement', () => {
+    beforeEach(async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '300' }), makeMsg({ messageId: '100' })],
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+    });
+
+    it('appends a newer message to the tail (the common case)', () => {
+      store.appendMessage(makeMsg({ messageId: '400' }));
+
+      expect(store.messages().map((m) => m.messageId)).toEqual(['100', '300', '400']);
+    });
+
+    it('places a message that arrives out of order at its chronological position', () => {
+      store.appendMessage(makeMsg({ messageId: '200' }));
+
+      expect(store.messages().map((m) => m.messageId)).toEqual(['100', '200', '300']);
+    });
+
+    it('orders by numeric id, not lexicographically (snowflakes exceed MAX_SAFE_INTEGER)', () => {
+      // '99' sorts after '300' as a string but before it as a number, and real snowflakes are far
+      // too large to compare as parsed numbers at all.
+      store.appendMessage(makeMsg({ messageId: '99' }));
+      store.appendMessage(makeMsg({ messageId: '9007199254740993000' }));
+
+      expect(store.messages().map((m) => m.messageId)).toEqual([
+        '99',
+        '100',
+        '300',
+        '9007199254740993000',
+      ]);
+    });
+
+    it('keeps my own un-echoed bubble pinned below live messages', async () => {
+      // Socket up → the bubble stays pending until its echo lands (the primary send path).
+      signalr.isConnected = true;
+      signalr.sendMessage.mockResolvedValue('777');
+      await TestBed.runInInjectionContext(() => store.sendMessage('mine'));
+
+      store.appendMessage(makeMsg({ messageId: '200', userId: '99' }));
+
+      // The out-of-order message sorts among the real ones; my bubble stays last rather than being
+      // ordered by the id it is still waiting on.
+      const msgs = store.messages();
+      expect(msgs.map((m) => m.messageId)).toEqual(['100', '200', '300', '777']);
+      expect(msgs[msgs.length - 1].pending).toBe(true);
+    });
+  });
+
   describe('trimToWindow()', () => {
     it('is a no-op at or under the cap', async () => {
       service.getMessages.mockResolvedValue({
