@@ -173,14 +173,24 @@ export const MemberStore = signalStore(
       this.patchMember(guildId, userId, { roleIds });
     },
 
-    /** Applies a user's avatar change across EVERY loaded guild (a profile change isn't guild-scoped). */
-    applyAvatar(userId: string, avatarKey: string | null): void {
+    /** Applies a user's avatar and/or username change across EVERY loaded guild (a profile change
+     * isn't guild-scoped). Username is applied only when non-null — a server nickname (separate
+     * field) still takes display precedence, this just keeps the underlying username in sync. */
+    applyAvatar(userId: string, avatarKey: string | null, username?: string | null): void {
       const byGuild = store.byGuild();
       const next: Record<string, GuildMember[]> = {};
       let changed = false;
       for (const [guildId, list] of Object.entries(byGuild)) {
-        if (list.some((m) => m.userId === userId && m.avatarKey !== avatarKey)) {
-          next[guildId] = list.map((m) => (m.userId === userId ? { ...m, avatarKey } : m));
+        if (
+          list.some(
+            (m) =>
+              m.userId === userId &&
+              (m.avatarKey !== avatarKey || (username != null && m.username !== username)),
+          )
+        ) {
+          next[guildId] = list.map((m) =>
+            m.userId === userId ? { ...m, avatarKey, ...(username != null ? { username } : {}) } : m,
+          );
           changed = true;
         } else {
           next[guildId] = list;
@@ -260,7 +270,7 @@ export const MemberStore = signalStore(
               store.refreshCapabilities(e.payload.guildId);
             break;
           case 'ProfileUpdated':
-            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey, e.payload.username);
             break;
         }
       });

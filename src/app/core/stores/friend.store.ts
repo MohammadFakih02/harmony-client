@@ -92,14 +92,18 @@ export const FriendStore = signalStore(
         });
       },
 
-      /** Patches a friend's/pending user's avatar when they change it live. */
-      applyAvatar(userId: string, avatarKey: string | null): void {
-        const patch = <T extends { id: string; avatarKey: string | null }>(list: T[]): T[] =>
-          list.map((x) => (x.id === userId ? { ...x, avatarKey } : x));
-        if (
-          store.friends().some((f) => f.id === userId && f.avatarKey !== avatarKey) ||
-          store.pending().some((p) => p.id === userId && p.avatarKey !== avatarKey)
-        ) {
+      /** Patches a friend's/pending user's avatar and/or username when they change it live. */
+      applyAvatar(userId: string, avatarKey: string | null, username?: string | null): void {
+        const patch = <T extends { id: string; username: string; avatarKey: string | null }>(
+          list: T[],
+        ): T[] =>
+          list.map((x) =>
+            x.id === userId ? { ...x, avatarKey, ...(username != null ? { username } : {}) } : x,
+          );
+        const changed = (x: { id: string; username: string; avatarKey: string | null }) =>
+          x.id === userId &&
+          (x.avatarKey !== avatarKey || (username != null && x.username !== username));
+        if (store.friends().some(changed) || store.pending().some(changed)) {
           patchState(store, {
             friends: patch(store.friends()),
             pending: patch(store.pending()),
@@ -123,7 +127,7 @@ export const FriendStore = signalStore(
             store.applyFriendRemoved(e.payload);
             break;
           case 'ProfileUpdated':
-            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey, e.payload.username);
             break;
         }
       });

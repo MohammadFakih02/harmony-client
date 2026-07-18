@@ -51,6 +51,7 @@ export interface TypingEvent {
 export interface ProfileUpdatedPayload {
   userId: string;
   avatarKey: string | null;
+  username: string | null;
 }
 
 /**

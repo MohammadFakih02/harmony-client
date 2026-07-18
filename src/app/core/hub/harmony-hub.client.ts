@@ -276,14 +276,18 @@ export class HarmonyHubClient {
     this.connection.on('DmChannelUpdated', (p: { channelId: unknown }) =>
       this.emit({ type: 'DmChannelUpdated', channelId: String(p.channelId) }));
 
-    this.connection.on('ProfileUpdated', (p: { userId: unknown; avatarKey: unknown }) =>
-      this.emit({
-        type: 'ProfileUpdated',
-        payload: {
-          userId: String(p.userId),
-          avatarKey: p.avatarKey != null ? String(p.avatarKey) : null,
-        },
-      }));
+    this.connection.on(
+      'ProfileUpdated',
+      (p: { userId: unknown; avatarKey: unknown; username: unknown }) =>
+        this.emit({
+          type: 'ProfileUpdated',
+          payload: {
+            userId: String(p.userId),
+            avatarKey: p.avatarKey != null ? String(p.avatarKey) : null,
+            username: p.username != null ? String(p.username) : null,
+          },
+        }),
+    );
 
     this.connection.on('GuildInvitesChanged', (p: { guildId: unknown }) =>
       this.emit({ type: 'GuildInvitesChanged', guildId: String(p.guildId) }));

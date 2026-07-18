@@ -1,0 +1,43 @@
+<div class="fixed inset-0 flex items-center justify-center bg-surface-2 p-4">
+  <div
+    class="bg-surface rounded-2xl shadow-modal border border-border-subtle w-full max-w-sm p-8 flex flex-col items-center gap-5 text-center"
+  >
+    @if (state() === 'verifying') {
+    <i class="fas fa-yin-yang animate-spin text-2xl text-muted"></i>
+    <p class="text-sm text-muted">Confirming your new email…</p>
+    } @else if (state() === 'success') {
+    <div
+      class="w-16 h-16 rounded-3xl bg-success/15 flex items-center justify-center text-success text-2xl"
+    >
+      <i class="fas fa-check"></i>
+    </div>
+    <h2 class="text-lg font-bold text-primary">Email changed</h2>
+    <p class="text-sm text-muted">
+      @if (email()) { Your account's email is now <span class="text-primary font-medium">{{ email() }}</span>. }
+      @else { Your account's email has been updated. }
+    </p>
+    <button
+      type="button"
+      class="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 transition-micro"
+      (click)="continue()"
+    >
+      Continue to Harmony
+    </button>
+    } @else {
+    <div
+      class="w-16 h-16 rounded-3xl bg-danger/15 flex items-center justify-center text-danger text-2xl"
+    >
+      <i class="fas fa-triangle-exclamation"></i>
+    </div>
+    <h2 class="text-lg font-bold text-primary">Confirmation failed</h2>
+    <p class="text-sm text-muted">{{ error() || 'This link may have expired or already been used.' }}</p>
+    <button
+      type="button"
+      class="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 transition-micro"
+      (click)="continue()"
+    >
+      Go to Harmony
+    </button>
+    }
+  </div>
+</div>

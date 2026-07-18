@@ -117,6 +117,12 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
         [checked]="isPublic()"
         (toggled)="isPublic.set($event)"
       />
+      <app-settings-toggle
+        label="Require Verified Email"
+        description="Only members with a verified email address can join this server."
+        [checked]="requireVerifiedEmail()"
+        (toggled)="requireVerifiedEmail.set($event)"
+      />
     </div>
 
     <div class="mt-6 flex items-center gap-3">
@@ -151,6 +157,7 @@ export class GuildOverview implements OnInit {
   protected readonly name = signal('');
   protected readonly description = signal('');
   protected readonly isPublic = signal(false);
+  protected readonly requireVerifiedEmail = signal(false);
   protected readonly saving = signal(false);
   protected readonly uploading = signal<'icon' | 'banner' | null>(null);
 
@@ -174,7 +181,8 @@ export class GuildOverview implements OnInit {
     return (
       this.name() !== g.name ||
       this.description() !== (g.description ?? '') ||
-      this.isPublic() !== g.isPublic
+      this.isPublic() !== g.isPublic ||
+      this.requireVerifiedEmail() !== g.requireVerifiedEmail
     );
   });
 
@@ -190,6 +198,7 @@ export class GuildOverview implements OnInit {
     this.name.set(g.name);
     this.description.set(g.description ?? '');
     this.isPublic.set(g.isPublic);
+    this.requireVerifiedEmail.set(g.requireVerifiedEmail);
     this.iconKey.set(g.iconKey);
     this.bannerKey.set(g.bannerKey);
   }
@@ -202,6 +211,7 @@ export class GuildOverview implements OnInit {
         name: this.name().trim(),
         description: this.description().trim() || null,
         isPublic: this.isPublic(),
+        requireVerifiedEmail: this.requireVerifiedEmail(),
       });
       this.guildStore.applyGuildUpdate(updated);
     } finally {

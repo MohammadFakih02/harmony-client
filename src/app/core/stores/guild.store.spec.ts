@@ -15,6 +15,7 @@ const makeGuild = (id: string, name: string): GuildSummary => ({
   welcomeChannelId: null,
   welcomeMessage: null,
   systemMessagesEnabled: true,
+  requireVerifiedEmail: false,
 });
 
 describe('GuildStore', () => {
