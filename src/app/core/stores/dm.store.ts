@@ -102,18 +102,28 @@ export const DmStore = signalStore(
         await refetch();
       },
 
-      /** Patches a participant's avatar across all DM/group channels they're in. */
-      applyAvatar(userId: string, avatarKey: string | null): void {
+      /** Patches a participant's avatar and/or username across all DM/group channels they're in.
+       * Either field may be null/undefined to leave it untouched (a ProfileUpdated event carries
+       * only the field(s) that actually changed). */
+      applyAvatar(userId: string, avatarKey: string | null, username?: string | null): void {
         let changed = false;
         const dms = store.dms().map((dm) => {
-          if (!dm.participants.some((p) => p.userId === userId && p.avatarKey !== avatarKey)) {
+          if (
+            !dm.participants.some(
+              (p) =>
+                p.userId === userId &&
+                (p.avatarKey !== avatarKey || (username != null && p.username !== username)),
+            )
+          ) {
             return dm;
           }
           changed = true;
           return {
             ...dm,
             participants: dm.participants.map((p) =>
-              p.userId === userId ? { ...p, avatarKey } : p,
+              p.userId === userId
+                ? { ...p, avatarKey, ...(username != null ? { username } : {}) }
+                : p,
             ),
           };
         });
@@ -140,7 +150,7 @@ export const DmStore = signalStore(
             if (e.payload.guildId == null) void store.ensureVisible(e.payload.channelId);
             break;
           case 'ProfileUpdated':
-            store.applyAvatar(e.payload.userId, e.payload.avatarKey);
+            store.applyAvatar(e.payload.userId, e.payload.avatarKey, e.payload.username);
             break;
         }
       });

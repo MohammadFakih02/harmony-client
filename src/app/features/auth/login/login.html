@@ -22,7 +22,8 @@
       </div>
     }
 
-    <!-- Form -->
+    @if (!challengeToken()) {
+    <!-- Step 1: password -->
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-4">
       <ui-input
         formControlName="identifier"
@@ -41,12 +42,28 @@
         inputId="password"
         [error]="passwordError"
       />
+      <p class="text-right -mt-2">
+        <a
+          routerLink="/forgot-password"
+          class="text-sm text-accent-light hover:text-accent font-medium transition-colors"
+        >
+          Forgot password?
+        </a>
+      </p>
       <div class="pt-2">
         <ui-button type="submit" variant="primary" [block]="true" [loading]="loading()">
           {{ loading() ? 'Signing in...' : 'Sign in' }}
         </ui-button>
       </div>
     </form>
+
+    <div class="flex items-center gap-3 my-6">
+      <div class="flex-1 h-px bg-border"></div>
+      <span class="text-xs text-muted">OR</span>
+      <div class="flex-1 h-px bg-border"></div>
+    </div>
+
+    <app-google-sign-in-button (credential)="onGoogleCredential($event)" />
 
     <!-- Footer -->
     <p class="text-center text-sm text-muted mt-6">
@@ -58,5 +75,68 @@
         Create one
       </a>
     </p>
+    } @else {
+    <!-- Step 2: email-code 2FA challenge -->
+    <div class="text-center mb-5">
+      <p class="text-sm text-muted">
+        Enter the 6-digit code we emailed you to finish signing in.
+      </p>
+    </div>
+
+    <input
+      type="text"
+      inputmode="numeric"
+      autocomplete="one-time-code"
+      maxlength="6"
+      placeholder="000000"
+      class="w-full text-center text-2xl font-mono tracking-[0.5em] px-4 py-3 rounded-lg bg-bg border border-border text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+      [ngModel]="code()"
+      (ngModelChange)="code.set($event)"
+      (keydown.enter)="onVerifyCode()"
+    />
+
+    <label class="flex items-center gap-2 mt-4 text-sm text-muted cursor-pointer select-none">
+      <input
+        type="checkbox"
+        class="rounded border-border accent-accent"
+        [ngModel]="rememberDevice()"
+        (ngModelChange)="rememberDevice.set($event)"
+      />
+      Remember this device for 30 days
+    </label>
+
+    <div class="pt-4">
+      <ui-button
+        type="button"
+        variant="primary"
+        [block]="true"
+        [loading]="verifying()"
+        [disabled]="code().length !== 6"
+        (click)="onVerifyCode()"
+      >
+        {{ verifying() ? 'Verifying...' : 'Verify' }}
+      </ui-button>
+    </div>
+
+    <div class="flex items-center justify-between mt-4 text-sm">
+      <button
+        type="button"
+        class="text-muted hover:text-primary transition-colors"
+        (click)="backToPassword()"
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        class="text-accent-light hover:text-accent font-medium transition-colors disabled:opacity-50 disabled:hover:text-accent-light"
+        [disabled]="resending() || resendCooldown() > 0"
+        (click)="onResendCode()"
+      >
+        @if (resendCooldown() > 0) { Resend code ({{ resendCooldown() }}s) }
+        @else if (resending()) { Sending… }
+        @else { Resend code }
+      </button>
+    </div>
+    }
   </div>
 </div>

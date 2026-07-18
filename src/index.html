@@ -14,6 +14,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 
+  <!-- Google Identity Services — powers the "Sign in with Google" button (GoogleSignInButton).
+       ?hl=en pins the library's language; without it GIS renders the button in the
+       browser/OS locale (and can ignore renderButton's `locale` option). -->
+  <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
+
   <!-- Apply the saved theme + background BEFORE first paint, so there's no
        white flash and no wrong-theme flash while Angular boots. -->
   <script>

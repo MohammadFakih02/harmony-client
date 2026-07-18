@@ -65,7 +65,10 @@ export const ProfileStore = signalStore(
     onInit(store, gateway = inject(GatewayEvents)) {
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         if (e.type === 'ProfileUpdated')
-          store.patch(e.payload.userId, { avatarKey: e.payload.avatarKey });
+          store.patch(e.payload.userId, {
+            avatarKey: e.payload.avatarKey,
+            ...(e.payload.username != null ? { username: e.payload.username } : {}),
+          });
       });
     },
   }),

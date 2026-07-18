@@ -471,10 +471,13 @@ export class ShellComponent implements OnInit, OnDestroy {
           break;
 
         case 'ProfileUpdated':
-          // The stores patch member/DM/friend avatars themselves; the deck (our own avatar) lives on
-          // AuthService, so sync it for our OTHER tabs when it's us.
+          // The stores patch member/DM/friend avatars themselves; the deck (our own avatar/username)
+          // lives on AuthService, so sync it for our OTHER tabs when it's us.
           if (e.payload.userId === this.auth.currentUser()?.id) {
-            this.auth.patchCurrentUser({ avatarKey: e.payload.avatarKey });
+            this.auth.patchCurrentUser({
+              avatarKey: e.payload.avatarKey,
+              ...(e.payload.username != null ? { username: e.payload.username } : {}),
+            });
           }
           break;
       }

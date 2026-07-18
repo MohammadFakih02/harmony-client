@@ -61,6 +61,10 @@ function isAuthEndpoint(url: string): boolean {
     url.includes("/auth/login") ||
     url.includes("/auth/register") ||
     url.includes("/auth/refresh") ||
-    url.includes("/auth/logout")
+    url.includes("/auth/logout") ||
+    // 2FA challenge/resend are anonymous (no access token exists yet at this point in the flow)
+    // but still set cookies — same "manages its own withCredentials" category as login/register.
+    url.includes("/auth/2fa/verify") ||
+    url.includes("/auth/2fa/resend")
   );
 }
