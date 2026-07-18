@@ -66,6 +66,14 @@
       </div>
     </form>
 
+    <div class="flex items-center gap-3 my-6">
+      <div class="flex-1 h-px bg-border"></div>
+      <span class="text-xs text-muted">OR</span>
+      <div class="flex-1 h-px bg-border"></div>
+    </div>
+
+    <app-google-sign-in-button (credential)="onGoogleCredential($event)" />
+
     <!-- Footer -->
     <p class="text-center text-sm text-muted mt-6">
       Already have an account?

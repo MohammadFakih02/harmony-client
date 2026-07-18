@@ -11,4 +11,6 @@ export interface GuildSummary {
   welcomeChannelId: string | null;
   welcomeMessage: string | null;
   systemMessagesEnabled: boolean;
+  // Requires a verified email address to join (invite redeem or discovery join). Opt-in per guild.
+  requireVerifiedEmail: boolean;
 }

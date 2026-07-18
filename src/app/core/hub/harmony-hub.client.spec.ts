@@ -168,17 +168,17 @@ describe('HarmonyHubClient', () => {
     });
   });
 
-  it('emits ProfileUpdated coercing userId to a string, keeping a null avatar', () => {
-    conn.emit('ProfileUpdated', { userId: 7, avatarKey: 'avatars/7/9' });
+  it('emits ProfileUpdated coercing userId to a string, keeping a null avatar/username', () => {
+    conn.emit('ProfileUpdated', { userId: 7, avatarKey: 'avatars/7/9', username: null });
     expect(events[0]).toEqual({
       type: 'ProfileUpdated',
-      payload: { userId: '7', avatarKey: 'avatars/7/9' },
+      payload: { userId: '7', avatarKey: 'avatars/7/9', username: null },
     });
 
-    conn.emit('ProfileUpdated', { userId: 7, avatarKey: null });
+    conn.emit('ProfileUpdated', { userId: 7, avatarKey: null, username: 'newname' });
     expect(events[1]).toEqual({
       type: 'ProfileUpdated',
-      payload: { userId: '7', avatarKey: null },
+      payload: { userId: '7', avatarKey: null, username: 'newname' },
     });
   });
 

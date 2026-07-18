@@ -22,7 +22,12 @@ export class GuildService {
   /** Update guild metadata (ManageGuild). Returns the full updated guild. */
   updateGuild(
     guildId: string,
-    patch: { name?: string; description?: string | null; isPublic?: boolean },
+    patch: {
+      name?: string;
+      description?: string | null;
+      isPublic?: boolean;
+      requireVerifiedEmail?: boolean;
+    },
   ): Promise<GuildSummary> {
     return firstValueFrom(this.http.patch<GuildSummary>(`${this.base}/guilds/${guildId}`, patch));
   }

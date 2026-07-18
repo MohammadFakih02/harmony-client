@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { UiButton, UiInput } from '../../../shared/ui';
+import { GoogleSignInButton, UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
@@ -14,7 +14,7 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput],
+  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton],
   templateUrl: './register.html',
 })
 export class RegisterComponent {
@@ -42,6 +42,21 @@ export class RegisterComponent {
       password: ['', [Validators.required, Validators.minLength(8)]],
       confirmPassword: ['', Validators.required],
     }, { validators: passwordMatchValidator });
+  }
+
+  protected async onGoogleCredential(idToken: string): Promise<void> {
+    if (this.loading()) return;
+
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      await this.authService.loginWithGoogle(idToken);
+      this.router.navigate(['/app']);
+    } catch (err) {
+      this.error.set(extractApiError(err));
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   async onSubmit(): Promise<void> {

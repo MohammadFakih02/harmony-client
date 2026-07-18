@@ -12,3 +12,4 @@ export { UiModal } from './modal/ui-modal';
 export { ConfirmDialog } from './confirm/confirm-dialog';
 export { ConfirmService } from './confirm/confirm.service';
 export { UiProfileBanner, bannerGradient } from './profile-banner/ui-profile-banner';
+export { GoogleSignInButton } from './google-sign-in-button/google-sign-in-button';

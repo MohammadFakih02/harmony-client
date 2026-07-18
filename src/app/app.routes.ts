@@ -15,6 +15,19 @@ export const routes: Routes = [
       import('./features/auth/register/register').then(m => m.RegisterComponent),
   },
   {
+    path: 'forgot-password',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/forgot-password/forgot-password').then(m => m.ForgotPassword),
+  },
+  {
+    // Public reset-password landing — no guard, anonymous link (works whether or not this
+    // browser has a session; the reset endpoint itself doesn't touch this browser's session).
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/reset-password/reset-password').then(m => m.ResetPassword),
+  },
+  {
     path: 'app',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -75,6 +88,22 @@ export const routes: Routes = [
     path: 'invite/:code',
     loadComponent: () =>
       import('./features/guilds/invite-landing/invite-landing').then((m) => m.InviteLanding),
+  },
+  {
+    // Public verification-email landing — no guard, works logged-in or out (the confirm
+    // endpoint itself is anonymous; a same-session match patches emailVerified locally).
+    path: 'verify-email',
+    loadComponent: () =>
+      import('./features/auth/verify-email/verify-email').then((m) => m.VerifyEmail),
+  },
+  {
+    // Public change-email confirmation landing — no guard, same reasoning as verify-email: the
+    // link is opened from a mail client that may carry no session.
+    path: 'confirm-email-change',
+    loadComponent: () =>
+      import('./features/auth/confirm-email-change/confirm-email-change').then(
+        (m) => m.ConfirmEmailChange,
+      ),
   },
   {
     path: '',
