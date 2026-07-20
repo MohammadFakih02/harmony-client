@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { UiAvatar, UiButton, UiProfileBanner } from '../../../shared/ui';
+import { ImageCropperModal, UiAvatar, UiButton, UiProfileBanner } from '../../../shared/ui';
 import { AuthService } from '../../../core/services/auth.service';
 import { UserService } from '../../../core/services/user.service';
 import { FileService } from '../../../core/services/file.service';
@@ -37,6 +37,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     UiAvatar,
     UiButton,
     UiProfileBanner,
+    ImageCropperModal,
     Enable2faModal,
     ChangePasswordModal,
     ChangeEmailModal,
@@ -371,6 +372,17 @@ import { extractApiError } from '../../../shared/util/api-error';
     />
     }
 
+    @if (cropRequest(); as crop) {
+    <app-image-cropper-modal
+      [file]="crop.file"
+      [aspect]="crop.kind === 'avatar' ? 1 : 3.5"
+      [outputWidth]="crop.kind === 'avatar' ? 512 : 1280"
+      [heading]="crop.kind === 'avatar' ? 'Crop Avatar' : 'Crop Banner'"
+      (cropped)="onCropped(crop.kind, $event)"
+      (close)="cropRequest.set(null)"
+    />
+    }
+
     <input
       #avatarInput
       type="file"
@@ -419,6 +431,7 @@ export class AccountSettings implements OnInit, OnDestroy {
 
   protected readonly twoFactorEnabled = computed(() => this.auth.currentUser()?.twoFactorEnabled ?? false);
   protected readonly hasPassword = computed(() => this.auth.currentUser()?.hasPassword ?? true);
+  protected readonly cropRequest = signal<{ kind: 'avatar' | 'banner'; file: File } | null>(null);
   protected readonly showPasswordModal = signal(false);
   protected readonly showEmailModal = signal(false);
   protected readonly showUsernameModal = signal(false);
@@ -590,6 +603,21 @@ export class AccountSettings implements OnInit, OnDestroy {
       return;
     }
 
+    // GIFs bypass the cropper — cropping would flatten the animation (the server skips them too).
+    if (file.type === 'image/gif') {
+      await this.uploadAsset(kind, file);
+      return;
+    }
+    this.cropRequest.set({ kind, file });
+  }
+
+  protected async onCropped(kind: 'avatar' | 'banner', file: File): Promise<void> {
+    this.cropRequest.set(null);
+    await this.uploadAsset(kind, file);
+  }
+
+  /** The presign → PUT → confirm pipeline, shared by the crop flow and the GIF bypass. */
+  private async uploadAsset(kind: 'avatar' | 'banner', file: File): Promise<void> {
     this.uploading.set(kind);
     try {
       const presign = await this.userService.presignAsset(kind, {

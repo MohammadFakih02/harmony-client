@@ -173,20 +173,11 @@
       @if (entry.kind === 'category') {
       @let category = entry.category;
       <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="entry" class="mb-2">
-        <!-- The whole block (header included, collapsed or not) is the category's drop list, so
-             dropping ON a category always means "into it"; only the margins between blocks belong
-             to the top-level list (= place between/above). -->
-        <div
-          class="channel-category-list rounded-md"
-          cdkDropList
-          [id]="categoryDropListId(category.id)"
-          [cdkDropListData]="category.channels"
-          [cdkDropListConnectedTo]="connectedDropListIds()"
-          [cdkDropListEnterPredicate]="channelOnlyPredicate"
-          [cdkDropListDisabled]="!canManageChannels()"
-          (cdkDropListDropped)="onCategoryDrop($event, category)"
-        >
-          <!-- Category header -->
+        <div class="channel-category-list rounded-md">
+          <!-- Category header — deliberately OUTSIDE the category's drop list: dropping on or
+               above a header belongs to the top-level list ("place above the block"), which is
+               what makes dropping above the FIRST category possible at all. Only the rows below
+               mean "into the category". -->
           <div
             class="channel-category-header group flex items-center w-full pl-2 py-1"
             (contextmenu)="openCategoryMenu($event, category)"
@@ -210,9 +201,22 @@
             }
           </div>
 
-          <!-- The category's channels — drag to reorder, across categories, or out to top level -->
-          @if (!category.collapsed) {
-          <div class="flex flex-col gap-0.5 animate-slide-down">
+          <!-- The category's channels ARE the drop list (rows as DIRECT children — CDK measures
+               drag items off the list's children, an extra wrapper breaks sorting/transfer). The
+               list element must always exist, even collapsed, so the @if lives INSIDE it; when
+               collapsed it renders empty and the scss :empty strip keeps it a drop target. -->
+          <div
+            cdkDropList
+            [id]="categoryDropListId(category.id)"
+            [cdkDropListData]="category.channels"
+            [cdkDropListConnectedTo]="connectedDropListIds()"
+            [cdkDropListEnterPredicate]="channelOnlyPredicate"
+            [cdkDropListDisabled]="!canManageChannels()"
+            (cdkDropListDropped)="onCategoryDrop($event, category)"
+            class="channel-category-rows flex flex-col gap-0.5"
+            [class.animate-slide-down]="!category.collapsed"
+          >
+            @if (!category.collapsed) {
             @for (channel of category.channels; track channel.id) {
             <div cdkDrag cdkDragLockAxis="y" [cdkDragData]="channel">
               <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: channel }" />
@@ -221,8 +225,8 @@
             @if (category.channels.length === 0) {
             <p class="px-2 py-1 text-2xs text-faint italic">No channels yet</p>
             }
+            }
           </div>
-          }
         </div>
       </div>
       } @else {

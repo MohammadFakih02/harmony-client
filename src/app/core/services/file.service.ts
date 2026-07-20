@@ -104,4 +104,20 @@ export class FileService {
       this.http.get<FileDownloadResponse>(`${this.files(guildId, channelId)}/${fileId}`),
     );
   }
+
+  /**
+   * Batch form of getDownload for prewarming a whole message page in one round trip.
+   * Ids that don't resolve (deleted/foreign files) are silently omitted by the server.
+   */
+  getDownloads(
+    guildId: string | null,
+    channelId: string,
+    fileIds: string[],
+  ): Promise<FileDownloadResponse[]> {
+    return firstValueFrom(
+      this.http.post<FileDownloadResponse[]>(`${this.files(guildId, channelId)}/batch`, {
+        fileIds,
+      }),
+    );
+  }
 }

@@ -1,4 +1,9 @@
-import { MentionContext, buildMentionSets, matchMentionAt } from './mention-match';
+import {
+  MentionContext,
+  buildMentionSets,
+  matchMentionAt,
+  mentionContextEquals,
+} from './mention-match';
 
 const guildCtx: MentionContext = {
   sets: buildMentionSets(
@@ -45,5 +50,41 @@ describe('matchMentionAt', () => {
 
   it('returns null for an unknown token', () => {
     expect(at('@stranger')).toBeNull();
+  });
+});
+
+describe('mentionContextEquals', () => {
+  const build = (): MentionContext => ({
+    sets: buildMentionSets(['alice', 'john'], [{ name: 'Admin', color: '#00ff00' }]),
+    guild: true,
+  });
+
+  it('treats two independently-built identical contexts as equal', () => {
+    expect(mentionContextEquals(build(), build())).toBe(true);
+  });
+
+  it('detects a changed guild flag', () => {
+    expect(mentionContextEquals(build(), { ...build(), guild: false })).toBe(false);
+  });
+
+  it('detects an added or renamed member', () => {
+    const b: MentionContext = {
+      sets: buildMentionSets(['alice', 'john', 'newbie'], [{ name: 'Admin', color: '#00ff00' }]),
+      guild: true,
+    };
+    expect(mentionContextEquals(build(), b)).toBe(false);
+    const renamed: MentionContext = {
+      sets: buildMentionSets(['alice', 'johnny'], [{ name: 'Admin', color: '#00ff00' }]),
+      guild: true,
+    };
+    expect(mentionContextEquals(build(), renamed)).toBe(false);
+  });
+
+  it('detects a changed role colour even when names match', () => {
+    const b: MentionContext = {
+      sets: buildMentionSets(['alice', 'john'], [{ name: 'Admin', color: '#ff0000' }]),
+      guild: true,
+    };
+    expect(mentionContextEquals(build(), b)).toBe(false);
   });
 });
