@@ -1,8 +1,18 @@
-// While a drag is inside a category's drop list (its whole block, header included), tint the
-// block so "this drop goes INTO the category" is visible — the untinted margins between blocks
-// are the top-level "place between" zones.
-.channel-category-list.cdk-drop-list-dragging {
+// While a drag is inside a category's rows list, tint the whole block so "this drop goes INTO
+// the category" is visible — the header strip and the margins between blocks are top-level
+// "place between/above" zones. (The drop list is the rows container, not the block, so the
+// header can act as a top-level target; :has() lifts the tint back onto the block.)
+.channel-category-list:has(> .channel-category-rows.cdk-drop-list-dragging) {
   background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+// A collapsed category renders its rows list empty (zero height) — keep a thin permanent strip
+// so it stays a drop target. This must be PERMANENT, not gated on .cdk-drop-list-receiving:
+// CDK caches the list's rect synchronously at drag start, before Angular can apply the receiving
+// class, so a conditional strip would measure as zero-height and never receive. (:empty only
+// matches the collapsed case — an expanded empty category renders the "No channels yet" row.)
+.channel-category-rows:empty {
+  min-height: 8px;
 }
 
 .channel-item {

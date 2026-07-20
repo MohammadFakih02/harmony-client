@@ -11,6 +11,7 @@
       @case ('underline') {<span class="underline"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
       @case ('strike') {<span class="line-through"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
       @case ('spoiler') {<span appSpoiler><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></span>}
+      @case ('blockquote') {<blockquote class="border-l-4 border-surface-3 rounded-sm pl-3 my-0.5"><ng-container *ngTemplateOutlet="render; context: { $implicit: node.children || [] }" /></blockquote>}
     }
   }
 </ng-template>

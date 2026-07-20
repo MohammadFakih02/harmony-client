@@ -13,3 +13,4 @@ export { ConfirmDialog } from './confirm/confirm-dialog';
 export { ConfirmService } from './confirm/confirm.service';
 export { UiProfileBanner, bannerGradient } from './profile-banner/ui-profile-banner';
 export { GoogleSignInButton } from './google-sign-in-button/google-sign-in-button';
+export { ImageCropperModal } from './image-cropper/image-cropper-modal';

@@ -19,7 +19,7 @@ import { LocalSettingsStore } from '../../../core/stores/local-settings.store';
 import { Router } from '@angular/router';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { memberColor, roleColorHex } from '../../../core/models/role.models';
-import { MentionContext, buildMentionSets } from '../../../shared/util/mention-match';
+import { MentionContext, buildMentionSets, mentionContextEquals } from '../../../shared/util/mention-match';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessageService } from '../../../core/services/message.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -92,6 +92,10 @@ const GROUP_BREAK_MS = 5 * 60 * 1000;
 const LOAD_OLDER_THRESHOLD_PX = 100;
 // While anchored (viewing history), scrolling this close to the bottom loads the next newer page.
 const LOAD_NEWER_THRESHOLD_PX = 120;
+// The off-viewport window trims (deep-history browsing) only run when the edge being cut is at
+// least this far outside the viewport (~1.5 screens) — removal that close could shift what's
+// visible; beyond it, cutting is imperceptible.
+const TRIM_MARGIN_PX = 1200;
 
 function formatMessageTime(sentAt: number): string {
   const d = new Date(sentAt);
@@ -187,6 +191,8 @@ export class MessageList {
   // Mention candidates for chip rendering — consumed by <app-message-content> to decide which
   // @tokens become chips (and to colour role chips). In a guild: member usernames + server
   // nicknames, plus the non-default roles. In a DM: the participant usernames only.
+  // Custom equality: member/presence stores re-emit on every routine update; without it the new
+  // (identical) object's identity would make EVERY message re-parse its markdown synchronously.
   protected readonly mentionContext = computed<MentionContext>(() => {
     const guildId = this.messageStore.activeGuildId();
     if (guildId) {
@@ -205,7 +211,7 @@ export class MessageList {
     const dm = channelId ? this.dmStore.find(channelId) : undefined;
     const names = dm ? dm.participants.map((p) => p.username) : [];
     return { sets: buildMentionSets(names, []), guild: false };
-  });
+  }, { equal: mentionContextEquals });
 
   // Invite codes from any full invite links in the message → inline embed cards. Memoized per
   // message (keyed on content so an edit re-scans) to keep the regex out of the group recompute.
@@ -1111,7 +1117,7 @@ export class MessageList {
       el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_NEWER_THRESHOLD_PX &&
       !this.messageStore.isLoading()
     ) {
-      void this.messageStore.loadNewer();
+      void this.loadNewerPreservingPosition();
     }
   }
 
@@ -1119,6 +1125,10 @@ export class MessageList {
    * Loads older history and preserves the visual position. In a natural-flow container, prepending
    * messages shifts everything down by the added height; we counter it by re-anchoring scrollTop by
    * the exact scrollHeight delta so the message under the viewport stays put.
+   *
+   * After re-anchoring, the loaded window is trimmed at its NEWEST edge (when it's far below the
+   * viewport) so deep-history browsing keeps the DOM bounded instead of growing a page per scroll —
+   * removal strictly below the viewport never moves what's visible.
    */
   private async loadOlderPreservingPosition(): Promise<void> {
     const el = this.scroller()?.nativeElement;
@@ -1128,7 +1138,30 @@ export class MessageList {
     await this.messageStore.loadOlder();
     requestAnimationFrame(() => {
       const el2 = this.scroller()?.nativeElement;
-      if (el2) el2.scrollTop = el2.scrollHeight - prevHeight + prevTop;
+      if (!el2) return;
+      el2.scrollTop = el2.scrollHeight - prevHeight + prevTop;
+      if (el2.scrollHeight - el2.scrollTop - el2.clientHeight > TRIM_MARGIN_PX) {
+        this.messageStore.trimToWindowKeepingOldest();
+      }
+    });
+  }
+
+  /**
+   * The anchored-mode "load newer" with the mirror trim: appending below the viewport moves
+   * nothing, but the over-cap trim then cuts the OLDEST edge (existing trimToWindow), which
+   * shifts content up by the removed height — so scrollTop is re-anchored by the exact
+   * scrollHeight delta, keeping the message under the viewport put.
+   */
+  private async loadNewerPreservingPosition(): Promise<void> {
+    await this.messageStore.loadNewer();
+    const el = this.scroller()?.nativeElement;
+    if (!el || el.scrollTop <= TRIM_MARGIN_PX) return;
+    const prevHeight = el.scrollHeight;
+    const prevTop = el.scrollTop;
+    this.messageStore.trimToWindow();
+    requestAnimationFrame(() => {
+      const el2 = this.scroller()?.nativeElement;
+      if (el2) el2.scrollTop = prevTop - (prevHeight - el2.scrollHeight);
     });
   }
 }

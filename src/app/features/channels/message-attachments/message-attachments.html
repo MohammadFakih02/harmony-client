@@ -12,8 +12,9 @@
             (click)="open(att.meta)"
             (contextmenu)="openAttachmentMenu($event, att)"
           >
+            <!-- Inline preview uses the WebP thumbnail when one exists; the lightbox opens the original. -->
             <img
-              [src]="att.meta.url"
+              [src]="att.meta.thumbnailUrl || att.meta.url"
               [alt]="att.meta.filename"
               loading="lazy"
               class="w-full h-full object-cover"

@@ -292,10 +292,15 @@ export class ChannelSidebar {
 
   protected readonly TOP_LEVEL_LIST_ID = 'channel-top-level';
 
-  /** Every drop-list id (top level + each category), so cdkDropListConnectedTo links them all. */
+  /**
+   * Every drop-list id (each category + top level), so cdkDropListConnectedTo links them all.
+   * ORDER IS LOAD-BEARING: CDK resolves a cross-list transfer to the FIRST connected list whose
+   * rect contains the pointer, and the top-level list's rect contains every category list (they're
+   * DOM-nested inside it). Top-level must come LAST or it steals every into-a-category drop.
+   */
   protected readonly connectedDropListIds = computed(() => [
-    this.TOP_LEVEL_LIST_ID,
     ...this.channelStore.currentCategories().map((c) => this.categoryDropListId(c.id)),
+    this.TOP_LEVEL_LIST_ID,
   ]);
 
   protected categoryDropListId(categoryId: string): string {

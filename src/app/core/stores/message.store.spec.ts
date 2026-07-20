@@ -5,6 +5,7 @@ import { SignalRService } from '../services/signalr.service';
 import { AuthService } from '../services/auth.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
+import { FileStore } from './file.store';
 import { MessageResponse } from '../models/message.models';
 
 const makeMsg = (overrides: Partial<MessageResponse> & { messageId: string }): MessageResponse => ({
@@ -38,6 +39,7 @@ describe('MessageStore', () => {
   let reactions: { add: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
   // Default disconnected so sends take the REST fallback; a test flips isConnected to exercise the hub.
   let signalr: { isConnected: boolean; sendMessage: ReturnType<typeof vi.fn> };
+  let fileStore: { resolveMany: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     service = {
@@ -54,6 +56,7 @@ describe('MessageStore', () => {
       add: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
     };
+    fileStore = { resolveMany: vi.fn().mockResolvedValue(undefined) };
     TestBed.configureTestingModule({
       providers: [
         MessageStore,
@@ -62,6 +65,7 @@ describe('MessageStore', () => {
         { provide: AuthService, useValue: auth },
         { provide: ReactionService, useValue: reactions },
         { provide: ToastService, useValue: { info: vi.fn() } },
+        { provide: FileStore, useValue: fileStore },
       ],
     });
     store = TestBed.inject(MessageStore);
@@ -99,6 +103,38 @@ describe('MessageStore', () => {
       await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
 
       expect(store.degraded()).toBe(true);
+    });
+
+    it('prewarms the page attachments in one batch before the messages become visible', async () => {
+      let messagesAtPrewarm: MessageResponse[] | null = null;
+      fileStore.resolveMany.mockImplementation(async () => {
+        messagesAtPrewarm = store.messages();
+      });
+      service.getMessages.mockResolvedValue({
+        messages: [
+          makeMsg({ messageId: '2', attachmentIds: ['20', '21'] }),
+          makeMsg({ messageId: '1', attachmentIds: ['10'] }),
+        ],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+
+      expect(fileStore.resolveMany).toHaveBeenCalledWith('1', '1', ['20', '21', '10']);
+      // The prewarm ran BEFORE patchState — the page must not render un-resolved rows.
+      expect(messagesAtPrewarm).toEqual([]);
+      expect(store.messages()).toHaveLength(2);
+    });
+
+    it('skips the prewarm round trip entirely for a page without attachments', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '1' })],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+
+      expect(fileStore.resolveMany).not.toHaveBeenCalled();
     });
 
     it('discards a stale response when the user switched channels mid-flight', async () => {
@@ -438,6 +474,58 @@ describe('MessageStore', () => {
       expect(msgs[0].messageId).toBe('50');
       expect(msgs[msgs.length - 1].messageId).toBe('249');
       expect(store.hasMore()).toBe(true);
+    });
+  });
+
+  describe('trimToWindowKeepingOldest()', () => {
+    const load250 = async (): Promise<void> => {
+      service.getMessages.mockResolvedValue({
+        messages: Array.from({ length: 250 }, (_, i) => makeMsg({ messageId: String(i) })).reverse(),
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+    };
+
+    it('is a no-op at or under the cap', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: Array.from({ length: 50 }, (_, i) => makeMsg({ messageId: String(i) })),
+        degraded: false,
+      });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '1'));
+
+      store.trimToWindowKeepingOldest();
+
+      expect(store.messages()).toHaveLength(50);
+      expect(store.anchored()).toBe(false);
+    });
+
+    it('keeps the OLDEST 200, enters anchored mode, and leaves hasMore alone', async () => {
+      await load250();
+      expect(store.hasMore()).toBe(false); // <50-rule from the single mocked page
+
+      store.trimToWindowKeepingOldest();
+
+      const msgs = store.messages();
+      expect(msgs).toHaveLength(200);
+      // Newest 50 dropped; the oldest message is retained.
+      expect(msgs[0].messageId).toBe('0');
+      expect(msgs[msgs.length - 1].messageId).toBe('199');
+      // The cut tail is re-loadable through the anchored loadNewer machinery.
+      expect(store.anchored()).toBe(true);
+      // hasMore is the OLDER edge — this trim must not touch it.
+      expect(store.hasMore()).toBe(false);
+    });
+
+    it('never cuts while an optimistic send is in flight', async () => {
+      await load250();
+      service.sendMessage.mockReturnValue(new Promise(() => {})); // never resolves → stays pending
+      void TestBed.runInInjectionContext(() => store.sendMessage('hi'));
+      expect(store.messages().some((m) => m.pending)).toBe(true);
+
+      store.trimToWindowKeepingOldest();
+
+      expect(store.messages()).toHaveLength(251); // untouched — the pending bubble sits at the tail
+      expect(store.anchored()).toBe(false);
     });
   });
 

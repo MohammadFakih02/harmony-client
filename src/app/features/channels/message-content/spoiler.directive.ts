@@ -1,26 +1,32 @@
-import { Directive, signal } from '@angular/core';
+import { Directive, computed, signal } from '@angular/core';
 
 /**
  * Click-to-reveal spoiler. Each ||spoiler|| span carries its own reveal state, so one revealed
- * spoiler doesn't uncover the others. Hidden: a solid box with transparent, non-selectable text;
- * revealed: normal text (selection re-enabled, inheriting the message list's select-text).
+ * spoiler doesn't uncover the others.
+ *
+ * Hidden state uses `[&_*]:invisible` (visibility on every descendant), NOT inherited
+ * `text-transparent`: mention chips, role chips (inline colour styles), links, and inline code
+ * all carry their own colour/background, which override an inherited transparent colour and
+ * leaked through the redaction box. visibility hides paint entirely while keeping layout, and
+ * hidden descendants don't hit-test, so the click still lands on this host.
  */
 @Directive({
   selector: '[appSpoiler]',
   standalone: true,
   host: {
-    class: 'rounded px-1 transition-colors',
-    '[class.bg-surface-3]': '!revealed()',
-    '[class.text-transparent]': '!revealed()',
-    '[class.cursor-pointer]': '!revealed()',
-    '[class.select-none]': '!revealed()',
-    '[class.bg-surface-2]': 'revealed()',
+    '[class]': 'hostClasses()',
     '[attr.title]': "!revealed() ? 'Reveal spoiler' : null",
     '(click)': 'reveal()',
   },
 })
 export class SpoilerDirective {
   readonly revealed = signal(false);
+
+  protected readonly hostClasses = computed(() =>
+    this.revealed()
+      ? 'rounded px-1 transition-colors bg-surface-2'
+      : 'rounded px-1 transition-colors bg-surface-3 cursor-pointer select-none [&_*]:invisible',
+  );
 
   reveal(): void {
     this.revealed.set(true);

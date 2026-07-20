@@ -41,4 +41,10 @@ export interface FileDownloadResponse {
   url: string;
   /** Unix-ms instant the presigned URL stops working. */
   expiresAt: number;
+  /**
+   * Presigned URL of the display-only downscaled derivative (large chat images). Null when the
+   * original is small enough or animated — inline rendering falls back to `url`. Lightbox / copy /
+   * open / download always use `url` (the untouched original).
+   */
+  thumbnailUrl: string | null;
 }
