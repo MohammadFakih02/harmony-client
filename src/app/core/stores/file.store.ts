@@ -53,6 +53,45 @@ export const FileStore = signalStore(
         inFlight.set(fileId, promise);
         return promise;
       },
+
+      /**
+       * Prewarms the cache for a whole message page's attachments in ONE round trip (the
+       * per-attachment resolve() above is the fallback for live messages / anything this
+       * missed). Ids already fresh or in flight are skipped; each fetched id also registers
+       * an in-flight share so a concurrent resolve() dedupes against the batch. Fail-soft:
+       * a failed batch resolves nothing and the per-attachment path takes over.
+       */
+      async resolveMany(
+        guildId: string | null,
+        channelId: string,
+        fileIds: string[],
+      ): Promise<void> {
+        const need = [...new Set(fileIds)].filter((id) => {
+          const cached = store.cache()[id];
+          return !(cached && isFresh(cached)) && !inFlight.has(id);
+        });
+        if (need.length === 0) return;
+
+        const batch = service
+          .getDownloads(guildId, channelId, need)
+          .then((metas) => {
+            const next = { ...store.cache() };
+            for (const meta of metas) next[meta.id] = meta;
+            patchState(store, { cache: next });
+            return metas;
+          })
+          .catch(() => null);
+
+        for (const id of need) {
+          inFlight.set(
+            id,
+            batch
+              .then((metas) => metas?.find((m) => m.id === id) ?? null)
+              .finally(() => inFlight.delete(id)),
+          );
+        }
+        await batch;
+      },
     };
   }),
 );

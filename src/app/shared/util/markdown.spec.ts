@@ -195,4 +195,53 @@ describe('parseMarkdown', () => {
     ]);
     expect(parse('https:// nothing')).toEqual([{ type: 'text', text: 'https:// nothing' }]);
   });
+
+  describe('blockquotes', () => {
+    it('parses a single quoted line', () => {
+      expect(flatten(parse('> hi'))).toEqual(['blockquote', 'text:hi']);
+    });
+
+    it('folds consecutive quoted lines into one blockquote', () => {
+      expect(parse('> a\n> b')).toEqual([
+        { type: 'blockquote', children: [{ type: 'text', text: 'a\nb' }] },
+      ]);
+    });
+
+    it('does not quote without the required space after >', () => {
+      expect(parse('>no space')).toEqual([{ type: 'text', text: '>no space' }]);
+    });
+
+    it('surrounds a mid-message quote with the plain text lines', () => {
+      expect(flatten(parse('before\n> quoted\nafter'))).toEqual([
+        'text:before',
+        'blockquote',
+        'text:quoted',
+        'text:after',
+      ]);
+    });
+
+    it('parses inline formatting and mentions inside a quote', () => {
+      expect(flatten(parse('> **bold** @alice'))).toEqual([
+        'blockquote',
+        'bold',
+        'text:bold',
+        'text: ',
+        'mention:@alice',
+      ]);
+    });
+
+    it('a bare "> " with nothing after it is an empty quoted line', () => {
+      expect(parse('> ')).toEqual([{ type: 'blockquote', children: [] }]);
+    });
+
+    it('leaves an unquoted message untouched (fast path)', () => {
+      expect(parse('no quote here')).toEqual([{ type: 'text', text: 'no quote here' }]);
+    });
+
+    it('keeps a quote out of a code block', () => {
+      expect(parse('```\n> not a quote\n```')).toEqual([
+        { type: 'codeblock', text: '> not a quote', lang: null },
+      ]);
+    });
+  });
 });

@@ -14,6 +14,7 @@ import { MessageService } from '../services/message.service';
 import { SignalRService } from '../services/signalr.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
+import { FileStore } from './file.store';
 import { extractApiError } from '../../shared/util/api-error';
 import { compareSnowflakes } from '../../shared/util/snowflake';
 
@@ -146,7 +147,27 @@ export const MessageStore = signalStore(
     auth = inject(AuthService),
     reactions = inject(ReactionService),
     toast = inject(ToastService),
+    fileStore = inject(FileStore),
   ) => {
+    /**
+     * Primes the FileStore's URL cache for every attachment on a fetched page BEFORE the page
+     * renders — one batch round trip instead of a presign request per attachment, which is what
+     * used to paint rows of default-sized skeletons while scrolling history. Bounded so a slow
+     * presign can never stall history loading (unresolved ids fall back to the per-attachment
+     * path in message-attachments).
+     */
+    const prewarmAttachments = async (
+      guildId: string | null,
+      channelId: string,
+      messages: readonly MessageResponse[],
+    ): Promise<void> => {
+      const ids = messages.flatMap((m) => m.attachmentIds ?? []);
+      if (ids.length === 0) return;
+      await Promise.race([
+        fileStore.resolveMany(guildId, channelId, ids),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    };
     /**
      * Sends via the hub when the socket is live (primary path — one round-trip returns the persisted
      * id, and the full message arrives on the MessageReceived broadcast, reconciled by nonce), and
@@ -248,6 +269,8 @@ export const MessageStore = signalStore(
     const fetchLatestInto = async (guildId: string | null, channelId: string): Promise<void> => {
       const response = await service.getMessages(guildId, channelId);
       if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
+      await prewarmAttachments(guildId, channelId, response.messages);
+      if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
       patchState(store, {
         messages: [...response.messages].reverse(),
         hasMore: response.messages.length === 50,
@@ -298,6 +321,8 @@ export const MessageStore = signalStore(
       try {
         const response = await service.getMessages(guildId, channelId, { around: messageId });
         if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
+        await prewarmAttachments(guildId, channelId, response.messages);
+        if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         patchState(store, {
           messages: [...response.messages].reverse(),
           // We loaded a centred window: older history is (almost always) re-loadable on scroll-up,
@@ -331,6 +356,8 @@ export const MessageStore = signalStore(
       try {
         const response = await service.getMessages(guildId, channelId, { after: newest.messageId });
         if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
+        await prewarmAttachments(guildId, channelId, response.messages);
+        if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         const newer = [...response.messages].reverse();
         const reachedTail = response.messages.length < 50;
         patchState(store, {
@@ -386,6 +413,8 @@ export const MessageStore = signalStore(
       try {
         const response = await service.getMessages(guildId, channelId, { before: oldest.messageId });
         if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
+        await prewarmAttachments(guildId, channelId, response.messages);
+        if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         const older = [...response.messages].reverse();
         patchState(store, {
           messages: [...older, ...store.messages()],
@@ -626,6 +655,27 @@ export const MessageStore = signalStore(
       patchState(store, {
         messages: msgs.slice(msgs.length - MESSAGE_WINDOW_CAP),
         hasMore: true,
+      });
+    },
+
+    /**
+     * The mirror trim for browsing DEEP history: keeps the OLDEST cap-worth and drops the newest
+     * edge, so the DOM stays bounded while scrolling up instead of growing without limit. Only
+     * safe while the viewport sits near the top of the loaded window (the message list gates it) —
+     * removal strictly below the viewport shifts nothing visible. Trimming the newest edge means
+     * the channel's tail is no longer loaded, so this enters anchored mode: live appends pause,
+     * the Jump to Present pill shows, and scrolling back down re-loads the trimmed pages via
+     * loadNewer until the true tail clears it. Deliberately does NOT touch hasMore (that flag is
+     * the OLDER edge, managed by loadOlder). Skipped while any optimistic send is in flight —
+     * a pending bubble lives at the tail and must not be cut.
+     */
+    trimToWindowKeepingOldest(): void {
+      const msgs = store.messages();
+      if (msgs.length <= MESSAGE_WINDOW_CAP) return;
+      if (msgs.some((m) => m.tempId !== undefined || m.pending || m.failed)) return;
+      patchState(store, {
+        messages: msgs.slice(0, MESSAGE_WINDOW_CAP),
+        anchored: true,
       });
     },
 

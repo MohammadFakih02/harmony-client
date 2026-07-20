@@ -55,6 +55,24 @@ export function buildMentionSets(
 }
 
 /**
+ * Content equality for two mention contexts. Used as the custom `equal` on the message list's
+ * `mentionContext` computed: member/presence stores re-emit on every routine update, and without
+ * this the computed would return a NEW (but identical) object each time — whose changed identity
+ * makes every message-content re-parse its markdown, stalling large lists for nothing.
+ */
+export function mentionContextEquals(a: MentionContext, b: MentionContext): boolean {
+  if (a.guild !== b.guild) return false;
+  if (a.sets.maxLen !== b.sets.maxLen) return false;
+  if (a.sets.users.size !== b.sets.users.size) return false;
+  for (const u of a.sets.users) if (!b.sets.users.has(u)) return false;
+  if (a.sets.roles.size !== b.sets.roles.size) return false;
+  for (const [name, color] of a.sets.roles) {
+    if (!b.sets.roles.has(name) || b.sets.roles.get(name) !== color) return false;
+  }
+  return true;
+}
+
+/**
  * If a mention starts at `content[at]` (which must be `@`), returns the match (length + kind +
  * colour); otherwise null. User matches beat role matches on an exact-length tie.
  */

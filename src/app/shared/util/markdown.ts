@@ -4,9 +4,10 @@
  * construction, needs no sanitizer, and folds @-mentions in as a node type so chips keep working.
  *
  * Supported: **bold**, *italic* / _italic_, __underline__, ~~strike~~, `inline code`,
- * ```code blocks``` (optionally fenced with a language), and ||spoiler||. Code spans/blocks are
- * literal — no markdown or mentions are parsed inside them. Unmatched delimiters render as plain
- * text. Block-level constructs (blockquotes, lists, headings) are intentionally out of scope.
+ * ```code blocks``` (optionally fenced with a language), ||spoiler||, and `> ` blockquotes
+ * (line-level; consecutive quoted lines fold into one block). Code spans/blocks are literal — no
+ * markdown or mentions are parsed inside them. Unmatched delimiters render as plain text. Other
+ * block-level constructs (lists, headings, `>>>`) are intentionally out of scope.
  *
  * The node shape uses optional fields (rather than a discriminated union) so Angular's template
  * type-checker can read node.text / node.children / node.lang in an @switch without narrowing.
@@ -23,7 +24,8 @@ export type MdNodeType =
   | 'italic'
   | 'underline'
   | 'strike'
-  | 'spoiler';
+  | 'spoiler'
+  | 'blockquote';
 
 export interface MdNode {
   type: MdNodeType;
@@ -215,8 +217,53 @@ function parseInline(s: string, ctx: MentionContext): MdNode[] {
   return out;
 }
 
+/**
+ * Line-level pass over a non-code segment: consecutive quoted lines (`> text`, or a bare `>`
+ * continuing a quote as an empty line) fold into one blockquote node whose dequoted content is
+ * parsed inline (newlines preserved). Discord-style: the space after `>` is required, so `>text`
+ * stays plain text. Everything unquoted flows through parseInline exactly as before — a segment
+ * with no `>` at any line start short-circuits, so the common message pays nothing.
+ */
+function parseBlocks(s: string, ctx: MentionContext): MdNode[] {
+  if (!/(^|\n)>/.test(s)) return parseInline(s, ctx);
+
+  const out: MdNode[] = [];
+  let textBuf: string[] = [];
+  let quoteBuf: string[] | null = null;
+
+  const flushText = (): void => {
+    // The newline that separated text from a quote isn't re-added: the blockquote renders as a
+    // block, so the visual line break comes free and re-adding it would double-space.
+    const text = textBuf.join('\n');
+    if (text.length > 0) out.push(...parseInline(text, ctx));
+    textBuf = [];
+  };
+  const flushQuote = (): void => {
+    if (quoteBuf === null) return;
+    out.push({ type: 'blockquote', children: parseInline(quoteBuf.join('\n'), ctx) });
+    quoteBuf = null;
+  };
+
+  for (const line of s.split('\n')) {
+    const dequoted = line.startsWith('> ') ? line.slice(2) : line === '>' ? '' : null;
+    if (dequoted !== null) {
+      if (quoteBuf === null) {
+        flushText();
+        quoteBuf = [];
+      }
+      quoteBuf.push(dequoted);
+    } else {
+      flushQuote();
+      textBuf.push(line);
+    }
+  }
+  flushText();
+  flushQuote();
+  return out;
+}
+
 /** Parses message content into a renderable node tree. Code blocks (```…```) are extracted first
- *  and kept literal; everything between them is parsed inline. */
+ *  and kept literal; everything between them is parsed at block level (blockquotes) then inline. */
 export function parseMarkdown(content: string, ctx: MentionContext): MdNode[] {
   const nodes: MdNode[] = [];
   let i = 0;
@@ -226,7 +273,7 @@ export function parseMarkdown(content: string, ctx: MentionContext): MdNode[] {
     if (content.startsWith('```', i)) {
       const close = content.indexOf('```', i + 3);
       if (close !== -1) {
-        if (i > segStart) nodes.push(...parseInline(content.slice(segStart, i), ctx));
+        if (i > segStart) nodes.push(...parseBlocks(content.slice(segStart, i), ctx));
 
         let body = content.slice(i + 3, close);
         let lang: string | null = null;
@@ -253,7 +300,7 @@ export function parseMarkdown(content: string, ctx: MentionContext): MdNode[] {
   }
 
   if (segStart < content.length) {
-    nodes.push(...parseInline(content.slice(segStart), ctx));
+    nodes.push(...parseBlocks(content.slice(segStart), ctx));
   }
   return nodes;
 }
