@@ -2,6 +2,7 @@ import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import { GuildSummary } from '../models/guild.models';
 import { GuildService } from '../services/guild.service';
+import { ToastService } from '../services/toast.service';
 
 interface GuildState {
   guilds: GuildSummary[];
@@ -15,7 +16,7 @@ export const GuildStore = signalStore(
   withComputed(({ guilds, selectedGuildId }) => ({
     selectedGuild: computed(() => guilds().find((g) => g.id === selectedGuildId()) ?? null),
   })),
-  withMethods((store, service = inject(GuildService)) => ({
+  withMethods((store, service = inject(GuildService), toast = inject(ToastService)) => ({
     async loadGuilds(): Promise<void> {
       patchState(store, { loading: true });
       try {
@@ -80,10 +81,15 @@ export const GuildStore = signalStore(
 
     /** Delete a guild (owner only) then drop it from local state. */
     async deleteGuild(guildId: string): Promise<void> {
+      const name = store.guilds().find((g) => g.id === guildId)?.name ?? 'Server';
       await service.deleteGuild(guildId);
       patchState(store, {
         guilds: store.guilds().filter((g) => g.id !== guildId),
         selectedGuildId: store.selectedGuildId() === guildId ? null : store.selectedGuildId(),
+      });
+      // Soft delete — reassure the owner it's recoverable and link straight to the Trash pane.
+      toast.action(`${name} moved to Trash`, 'Restore it from Settings → Trash', 'fa-trash-can', ['/app/settings'], {
+        queryParams: { tab: 'trash' },
       });
     },
 

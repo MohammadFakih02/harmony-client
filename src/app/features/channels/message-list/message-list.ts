@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, computed, signal, viewChild, effect, inject, Injector, untracked,
+  Component, ElementRef, computed, signal, viewChild, effect, inject, Injector, output, untracked,
 } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -359,6 +359,10 @@ export class MessageList {
   // Inline-edit state: the messageId being edited and its working draft.
   protected readonly editingId = signal<string | null>(null);
   protected readonly editDraft = signal('');
+
+  // Fired when an inline edit closes (saved or cancelled) so the channel can hand focus back to the
+  // composer — otherwise the next ArrowUp lands on the (unfocused) message list and just scrolls it.
+  readonly editFinished = output<void>();
 
   // @-mention autocomplete inside the inline editor (only one edit box is open at a time,
   // so a single viewChild + trigger signal suffice). Mirrors the composer's behaviour.
@@ -833,10 +837,13 @@ export class MessageList {
   }
 
   protected cancelEdit(): void {
+    const wasEditing = this.editingId() !== null;
     this.editingId.set(null);
     this.editDraft.set('');
     this.editMentionTrigger.set(null);
     this.editEmojiOpen.set(false);
+    // Return focus to the composer so the ArrowUp-to-edit shortcut works again immediately.
+    if (wasEditing) this.editFinished.emit();
   }
 
   protected onEditInput(value: string): void {

@@ -7,8 +7,16 @@ import { AccessibilitySettings } from './pages/accessibility-settings';
 import { NotificationSettings } from './pages/notification-settings';
 import { PrivacySettings } from './pages/privacy-settings';
 import { VoiceSettings } from './pages/voice-settings';
+import { TrashSettings } from './pages/trash-settings';
 
-type Tab = 'account' | 'privacy' | 'notifications' | 'appearance' | 'accessibility' | 'voice';
+type Tab =
+  | 'account'
+  | 'privacy'
+  | 'notifications'
+  | 'appearance'
+  | 'accessibility'
+  | 'voice'
+  | 'trash';
 
 const TABS: readonly Tab[] = [
   'account',
@@ -17,6 +25,7 @@ const TABS: readonly Tab[] = [
   'appearance',
   'accessibility',
   'voice',
+  'trash',
 ];
 
 interface NavGroup {
@@ -41,6 +50,7 @@ interface NavGroup {
     NotificationSettings,
     PrivacySettings,
     VoiceSettings,
+    TrashSettings,
   ],
   templateUrl: './settings.html',
 })
@@ -65,6 +75,7 @@ export class Settings {
         { id: 'account', label: 'My Account', icon: 'fa-user' },
         { id: 'privacy', label: 'Privacy & Safety', icon: 'fa-shield-halved' },
         { id: 'notifications', label: 'Notifications', icon: 'fa-bell' },
+        { id: 'trash', label: 'Trash', icon: 'fa-trash-can' },
       ],
     },
     {

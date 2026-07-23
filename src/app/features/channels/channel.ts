@@ -34,9 +34,14 @@ import { DmCallStage } from '../voice/dm-call-stage/dm-call-stage';
     <!-- DM call surface (LiveKit Slice 4) — renders only while this DM has a live call -->
     <app-dm-call-stage [channelId]="dmId" />
     }
-    <app-message-list #list class="flex-1 min-h-0" />
-    <app-typing-indicator />
-    <app-message-input (editLastRequested)="list.editLastOwnMessage()" />
+    <app-message-list #list class="flex-1 min-h-0" (editFinished)="composer.focus()" />
+    <!-- Typing bar floats over the composer's top edge so it never steals height from the list
+         (which hid the last message on short screens). pointer-events-none keeps clicks/scroll
+         passing through to the messages behind it. -->
+    <div class="relative shrink-0">
+      <app-typing-indicator class="absolute bottom-full inset-x-0 z-10 pointer-events-none" />
+      <app-message-input #composer (editLastRequested)="list.editLastOwnMessage()" />
+    </div>
     }
   `,
 })

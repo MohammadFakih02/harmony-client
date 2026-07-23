@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject, input, signal } from '@angular/cor
 import { Router } from '@angular/router';
 import { InviteService } from '../../../core/services/invite.service';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { NotificationStore } from '../../../core/stores/notification.store';
 import { InvitePreview } from '../../../core/models/invite.models';
 import { ToastService } from '../../../core/services/toast.service';
 import { extractApiError } from '../../../shared/util/api-error';
@@ -23,6 +24,7 @@ export class InviteEmbed implements OnInit {
 
   private readonly invites = inject(InviteService);
   private readonly guildStore = inject(GuildStore);
+  private readonly notificationStore = inject(NotificationStore);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
@@ -74,10 +76,14 @@ export class InviteEmbed implements OnInit {
     try {
       const guild = await this.invites.join(p.code);
       this.guildStore.addGuild(guild);
+      // Joined — an outstanding guild_invite bell entry has served its purpose (the server clears it
+      // too; this repaints the loaded row immediately).
+      this.notificationStore.markGuildInviteRead(guild.id);
       await this.router.navigate(['/app/guilds', guild.id]);
     } catch (e: unknown) {
       // Already a member — the link was followed by someone who'd joined elsewhere meanwhile.
       if ((e as { status?: number })?.status === 409) {
+        this.notificationStore.markGuildInviteRead(p.guildId);
         await this.router.navigate(['/app/guilds', p.guildId]);
         return;
       }

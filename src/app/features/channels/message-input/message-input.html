@@ -91,7 +91,7 @@
       [attr.aria-label]="action.label"
       class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
       (mousedown)="$event.preventDefault()"
-      (click)="applyFormat(action.open, action.close)"
+      (click)="applyFormat(action.open, action.close, action.placeholder)"
     >
       <i class="fas {{ action.icon }} text-xs"></i>
     </button>
@@ -131,7 +131,7 @@
       class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm py-2.5 pr-4 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
       [class.pl-4]="!canAttach()"
       [class.pl-1]="canAttach()"
-      [placeholder]="cooldownRemaining() > 0 ? 'Slowmode active — wait ' + cooldownRemaining() + 's' : 'Message #' + channelName()"
+      [placeholder]="composerPlaceholder()"
       [ngModel]="draft()"
       (ngModelChange)="onDraftInput($event)"
       (keydown)="onKeydown($event)"

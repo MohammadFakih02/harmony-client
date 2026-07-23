@@ -64,14 +64,19 @@ export const NotificationStore = signalStore(
         await service.clearAll().catch(() => {});
       },
 
-      /** Marks every unread `mention`/`reply` for a channel read — used when the user opens it. */
-      async markChannelMentionsRead(channelId: string): Promise<void> {
+      /**
+       * Marks every unread channel-scoped bell entry (`mention`/`reply`/`message`) for a channel read
+       * — used when the user opens it. Optimistic for the currently-loaded rows; the server clears the
+       * rest (incl. rows past the loaded page and other devices) when the channel is marked read and
+       * pushes the authoritative badge back via NotificationBadgeUpdate.
+       */
+      async markChannelRead(channelId: string): Promise<void> {
         const targets = store
           .notifications()
           .filter(
             (n) =>
               !n.isRead &&
-              (n.type === 'mention' || n.type === 'reply') &&
+              (n.type === 'mention' || n.type === 'reply' || n.type === 'message') &&
               n.channelId === channelId,
           );
         if (targets.length === 0) return;
@@ -81,7 +86,28 @@ export const NotificationStore = signalStore(
             .map((n) => (targets.some((t) => t.id === n.id) ? { ...n, isRead: true } : n)),
           unreadCount: Math.max(0, store.unreadCount() - targets.length),
         });
+        // Persist the loaded rows individually too: the channel /read POST clears them server-side in
+        // the normal case, but a jump-into-history open doesn't fire /read — these calls keep the
+        // loaded rows consistent regardless (idempotent; already-read rows are a no-op).
         await Promise.all(targets.map((t) => service.markRead(t.id).catch(() => {})));
+      },
+
+      /**
+       * Marks an unread `guild_invite` for a guild read — used when the user joins that guild (via the
+       * inline invite card). The server also clears it on join, so this is the optimistic local
+       * repaint; the badge reconciles via NotificationBadgeUpdate.
+       */
+      markGuildInviteRead(guildId: string): void {
+        const target = store
+          .notifications()
+          .find((n) => !n.isRead && n.type === 'guild_invite' && n.guildId === guildId);
+        if (!target) return;
+        patchState(store, {
+          notifications: store
+            .notifications()
+            .map((n) => (n.id === target.id ? { ...n, isRead: true } : n)),
+          unreadCount: Math.max(0, store.unreadCount() - 1),
+        });
       },
 
       /** Marks an unread `friend_request` from an actor read — used when it's accepted. */
