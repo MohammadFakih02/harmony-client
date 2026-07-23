@@ -440,13 +440,20 @@ export const VoiceStore = signalStore(
           return store.watchedStreamUserIds().includes(userId);
         },
 
+        // Watching is exclusive — one stream at a time. Opting into a stream replaces whatever was
+        // being watched; clicking the one you're on turns it off. (Kept as a list so isWatchingStream
+        // / the tiles / stopWatchingAllStreams stay unchanged; the invariant is length ≤ 1.)
         toggleWatchStream(userId: string): void {
-          const watched = store.watchedStreamUserIds();
           patchState(store, {
-            watchedStreamUserIds: watched.includes(userId)
-              ? watched.filter((id) => id !== userId)
-              : [...watched, userId],
+            watchedStreamUserIds: store.watchedStreamUserIds().includes(userId) ? [] : [userId],
           });
+        },
+
+        /** Stops watching the current stream (the voice-bar quick "stop watching" button). */
+        stopWatchingAllStreams(): void {
+          if (store.watchedStreamUserIds().length) {
+            patchState(store, { watchedStreamUserIds: [] });
+          }
         },
 
         isVideoHidden(userId: string): boolean {

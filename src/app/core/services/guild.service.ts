@@ -4,6 +4,14 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { GuildSummary } from '../models/guild.models';
 
+/** A soft-deleted guild as shown in the owner's global Trash (§5.71 #5). deletedAt is unix-ms. */
+export interface DeletedGuild {
+  id: string;
+  name: string;
+  iconKey: string | null;
+  deletedAt: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class GuildService {
   private readonly http = inject(HttpClient);
@@ -58,9 +66,28 @@ export class GuildService {
     return firstValueFrom(this.http.delete<void>(`${this.base}/guilds/${guildId}/leave`));
   }
 
-  /** Delete a guild (owner only). */
+  /** Delete a guild (owner only). Soft-delete — recoverable from Trash (§5.71 #5). */
   deleteGuild(guildId: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`${this.base}/guilds/${guildId}`));
+  }
+
+  // ---- Trash / restore (owner only; §5.71 #5) ----
+
+  /** Guilds the caller owns that they've soft-deleted — their global Trash. */
+  getTrash(): Promise<DeletedGuild[]> {
+    return firstValueFrom(this.http.get<DeletedGuild[]>(`${this.base}/guilds/trash`));
+  }
+
+  /** Restore a trashed guild (owner only). Returns the live guild for re-adding to the rail. */
+  restoreGuild(guildId: string): Promise<GuildSummary> {
+    return firstValueFrom(
+      this.http.post<GuildSummary>(`${this.base}/guilds/${guildId}/restore`, null),
+    );
+  }
+
+  /** Permanently delete a trashed guild now (irreversible — purges all its channels/messages). */
+  permanentDeleteGuild(guildId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/guilds/${guildId}/permanent`));
   }
 
   // ---- guild assets (icon/banner) — ManageGuild-scoped presign → PUT → confirm ----

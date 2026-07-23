@@ -207,7 +207,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     // notifications for it, mirroring how the unread badge resets on the active channel.
     effect(() => {
       const channelId = this.messageStore.activeChannelId();
-      if (channelId) this.notificationStore.markChannelMentionsRead(channelId);
+      if (channelId) this.notificationStore.markChannelRead(channelId);
     });
 
     // Keep the DM panel's peer profile (banner/bio) fresh for whichever conversation is open.

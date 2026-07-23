@@ -13,7 +13,7 @@ export class ToastContainer {
   private readonly router = inject(Router);
 
   protected open(t: Toast): void {
-    if (t.route) this.router.navigate(t.route as unknown[]);
+    if (t.route) this.router.navigate(t.route as unknown[], t.extras);
     this.toast.dismiss(t.id);
   }
 }

@@ -4,6 +4,14 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Channel, ChannelCapabilities, ChannelOverride } from '../models/channel.models';
 
+/** A soft-deleted channel as shown in a guild's Trash (§5.71 #5). deletedAt is unix-ms. */
+export interface DeletedChannel {
+  id: string;
+  name: string;
+  type: string;
+  deletedAt: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChannelService {
   private readonly http = inject(HttpClient);
@@ -53,6 +61,38 @@ export class ChannelService {
   delete(guildId: string, channelId: string): Promise<void> {
     return firstValueFrom(
       this.http.delete<void>(`${this.base}/guilds/${guildId}/channels/${channelId}`),
+    );
+  }
+
+  // --- Trash / restore (ManageChannels; §5.71 #5) ---
+
+  /** The guild's soft-deleted channels — its Trash. */
+  async getTrash(guildId: string): Promise<DeletedChannel[]> {
+    const raw = await firstValueFrom(
+      this.http.get<Record<string, unknown>[]>(`${this.base}/guilds/${guildId}/channels/trash`),
+    );
+    return raw.map((r) => ({
+      id: String(r['id']),
+      name: String(r['name']),
+      type: String(r['type']),
+      deletedAt: Number(r['deletedAt']),
+    }));
+  }
+
+  /** Restore a trashed channel (and its preserved messages). */
+  restore(guildId: string, channelId: string): Promise<Channel> {
+    return firstValueFrom(
+      this.http.post<Channel>(
+        `${this.base}/guilds/${guildId}/channels/${channelId}/restore`,
+        null,
+      ),
+    );
+  }
+
+  /** Permanently delete a trashed channel now (irreversible — purges its messages). */
+  permanentDelete(guildId: string, channelId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.delete<void>(`${this.base}/guilds/${guildId}/channels/${channelId}/permanent`),
     );
   }
 
