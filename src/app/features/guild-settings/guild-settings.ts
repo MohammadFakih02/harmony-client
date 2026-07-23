@@ -10,8 +10,9 @@ import { GuildWelcome } from './pages/guild-welcome';
 import { GuildRoles } from './pages/guild-roles';
 import { GuildBans } from './pages/guild-bans';
 import { GuildAuditLog } from './pages/guild-audit-log';
+import { GuildTrash } from './pages/guild-trash';
 
-type Tab = 'overview' | 'welcome' | 'roles' | 'bans' | 'audit';
+type Tab = 'overview' | 'welcome' | 'roles' | 'bans' | 'audit' | 'trash';
 
 /**
  * Full-screen guild settings overlay (route `guilds/:guildId/settings`), mirroring the user-settings
@@ -24,7 +25,7 @@ type Tab = 'overview' | 'welcome' | 'roles' | 'bans' | 'audit';
   selector: 'app-guild-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [GuildOverview, GuildWelcome, GuildRoles, GuildBans, GuildAuditLog],
+  imports: [GuildOverview, GuildWelcome, GuildRoles, GuildBans, GuildAuditLog, GuildTrash],
   templateUrl: './guild-settings.html',
 })
 export class GuildSettings implements OnInit {
@@ -54,6 +55,9 @@ export class GuildSettings implements OnInit {
   protected readonly canViewAuditLog = computed(
     () => !!this.memberStore.capabilitiesOf(this.guildId)?.canViewAuditLog,
   );
+  protected readonly canManageChannels = computed(
+    () => !!this.memberStore.capabilitiesOf(this.guildId)?.canManageChannels,
+  );
 
   async ngOnInit(): Promise<void> {
     if (!this.guildStore.guilds().some((g) => g.id === this.guildId)) {
@@ -77,6 +81,7 @@ export class GuildSettings implements OnInit {
     if (this.canManageRoles()) return 'roles';
     if (this.canBan()) return 'bans';
     if (this.canViewAuditLog()) return 'audit';
+    if (this.canManageChannels()) return 'trash';
     return null;
   }
 

@@ -114,7 +114,7 @@
       [class.hover:bg-surface-3]="!voiceStore.selfStreaming()"
       [class.bg-success-muted]="voiceStore.selfStreaming()"
       [class.text-success]="voiceStore.selfStreaming()"
-      [title]="voiceStore.selfStreaming() ? 'Stop Sharing Screen' : 'Share Screen'"
+      [title]="voiceStore.selfStreaming() ? 'Stop Sharing Screen' : 'Share Screen — to also share audio, use Chrome/Edge on Windows, or a browser tab'"
       [attr.aria-label]="voiceStore.selfStreaming() ? 'Stop Sharing Screen' : 'Share Screen'"
       [attr.aria-pressed]="voiceStore.selfStreaming()"
       (click)="toggleScreenShare()"
@@ -123,6 +123,22 @@
     </button>
     }
   </div>
+
+  <!-- Quick "stop watching" — clears every opted-into screenshare in one click (no right-click). -->
+  @if (watchingAnyStream()) {
+  <div class="px-1.5 pb-1.5">
+    <button
+      type="button"
+      class="w-full flex items-center justify-center gap-1.5 h-8 rounded-lg bg-surface text-muted hover:text-danger hover:bg-danger-muted transition-micro text-2xs font-semibold"
+      title="Stop watching stream"
+      aria-label="Stop watching stream"
+      (click)="stopWatchingStreams()"
+    >
+      <i class="fas fa-eye-slash text-sm"></i>
+      Stop Watching Stream
+    </button>
+  </div>
+  }
   }
 </div>
 }

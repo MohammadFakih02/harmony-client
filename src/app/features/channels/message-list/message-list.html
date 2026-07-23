@@ -84,7 +84,7 @@
 </div>
 }
 
-<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text">
+<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text pb-6">
   @for (group of messageGroups(); track group.firstMessageId) {
   <!-- Date separator — this group starts a new calendar day -->
   @if (group.dayLabel) {

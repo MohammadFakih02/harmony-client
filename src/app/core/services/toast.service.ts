@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { NavigationExtras } from '@angular/router';
 
 export interface Toast {
   id: number;
@@ -6,6 +7,7 @@ export interface Toast {
   title: string;
   body: string | null;
   route: unknown[] | null; // router commands to navigate to when the toast is clicked
+  extras?: NavigationExtras; // optional navigation extras (e.g. queryParams) for the route
 }
 
 /**
@@ -68,6 +70,11 @@ export class ToastService {
   /** A transient, non-routed confirmation toast (e.g. "Copied to clipboard"). */
   info(title: string, icon = 'fa-check'): void {
     this.push({ icon, title, body: null, route: null });
+  }
+
+  /** A routed confirmation toast (e.g. "Server moved to Trash"); clicking follows the route. */
+  action(title: string, body: string | null, icon: string, route: unknown[], extras?: NavigationExtras): void {
+    this.push({ icon, title, body, route, extras });
   }
 
   private push(toast: Omit<Toast, 'id'>): number {

@@ -81,6 +81,11 @@ export class VoiceBar {
     () => !this.capsApply() || (this.channelStore.currentCapabilities()?.canStream ?? true),
   );
 
+  /** True while the viewer has opted into at least one screenshare — shows the quick stop button. */
+  protected readonly watchingAnyStream = computed(
+    () => this.voiceStore.watchedStreamUserIds().length > 0,
+  );
+
   /** Clicking the label navigates back to where the call lives (voice stage or the DM). */
   protected goToCall(): void {
     const channel = this.activeChannel();
@@ -106,6 +111,10 @@ export class VoiceBar {
 
   protected toggleScreenShare(): void {
     void this.voiceStore.toggleScreenShare();
+  }
+
+  protected stopWatchingStreams(): void {
+    this.voiceStore.stopWatchingAllStreams();
   }
 
   protected disconnect(): void {

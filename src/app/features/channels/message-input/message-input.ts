@@ -1,7 +1,9 @@
 import {
   Component,
   ElementRef,
+  Injector,
   OnDestroy,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -17,6 +19,9 @@ import { MessageStore } from '../../../core/stores/message.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
+import { dmLabel } from '../../../core/models/direct-message.models';
+import { DirectMessageService } from '../../../core/services/direct-message.service';
 import { FileService } from '../../../core/services/file.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SignalRService } from '../../../core/services/signalr.service';
@@ -75,9 +80,12 @@ export class MessageInput implements OnDestroy {
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
+  private readonly dmService = inject(DirectMessageService);
   private readonly fileService = inject(FileService);
   private readonly auth = inject(AuthService);
   private readonly signalR = inject(SignalRService);
+  private readonly injector = inject(Injector);
 
   // Throttle outgoing "started typing" pings — at most one per this window while actively typing.
   private lastTypingAt = 0;
@@ -123,7 +131,12 @@ export class MessageInput implements OnDestroy {
   protected readonly mentionCandidates = computed<MentionCandidate[]>(() => {
     const trigger = this.mentionTrigger();
     if (!trigger) return [];
-    const pool = this.isDm() ? this.dmCandidates() : this.guildCandidates();
+    // You can't mention yourself — exclude your own member/participant entry (the broadcast
+    // and role entries carry an empty userId, so they're never filtered out).
+    const myId = this.auth.currentUser()?.id;
+    const pool = (this.isDm() ? this.dmCandidates() : this.guildCandidates()).filter(
+      (c) => c.userId !== myId,
+    );
     // Fuzzy match so "owner" finds "seed_owner" and a small typo still resolves.
     return fuzzyFilter(pool, trigger.query, (c) => c.username).slice(0, 10);
   });
@@ -141,20 +154,25 @@ export class MessageInput implements OnDestroy {
 
   // --- formatting toolbar ---
 
-  /** Wraps in the markdown subset `markdown.ts` renders; `close` defaults to `open`. */
+  /**
+   * Wraps in the markdown subset `markdown.ts` renders; `close` defaults to `open`. `placeholder`
+   * is the sample text inserted (and auto-selected) when the button is clicked with nothing
+   * selected, so the user types over it instead of navigating between empty markers.
+   */
   protected readonly formatActions: {
     icon: string;
     label: string;
     open: string;
     close?: string;
+    placeholder: string;
   }[] = [
-    { icon: 'fa-bold', label: 'Bold', open: '**' },
-    { icon: 'fa-italic', label: 'Italic', open: '*' },
-    { icon: 'fa-underline', label: 'Underline', open: '__' },
-    { icon: 'fa-strikethrough', label: 'Strikethrough', open: '~~' },
-    { icon: 'fa-eye-slash', label: 'Spoiler', open: '||' },
-    { icon: 'fa-code', label: 'Inline code', open: '`' },
-    { icon: 'fa-file-code', label: 'Code block', open: '```\n', close: '\n```' },
+    { icon: 'fa-bold', label: 'Bold', open: '**', placeholder: 'bold text' },
+    { icon: 'fa-italic', label: 'Italic', open: '*', placeholder: 'italic text' },
+    { icon: 'fa-underline', label: 'Underline', open: '__', placeholder: 'underlined text' },
+    { icon: 'fa-strikethrough', label: 'Strikethrough', open: '~~', placeholder: 'strikethrough' },
+    { icon: 'fa-eye-slash', label: 'Spoiler', open: '||', placeholder: 'spoiler' },
+    { icon: 'fa-code', label: 'Inline code', open: '`', placeholder: 'code' },
+    { icon: 'fa-file-code', label: 'Code block', open: '```\n', close: '\n```', placeholder: 'code' },
   ];
 
   // --- emoji picker ---
@@ -169,6 +187,20 @@ export class MessageInput implements OnDestroy {
   protected readonly channelName = computed(
     () => this.channelStore.selectedChannel()?.name ?? 'channel',
   );
+
+  // Composer placeholder: "Message #general" in a guild channel, "Message @Alice" / "Message
+  // <group>" in a DM (no leading '#'), or the slowmode countdown while cooling down.
+  protected readonly composerPlaceholder = computed(() => {
+    if (this.cooldownRemaining() > 0) return `Slowmode active — wait ${this.cooldownRemaining()}s`;
+    if (this.isDm()) {
+      const channelId = this.messageStore.activeChannelId();
+      const dm = channelId ? this.dmStore.find(channelId) : undefined;
+      if (!dm) return 'Message';
+      const name = dmLabel(dm, (p) => this.nicknameStore.nicknameOf(p.userId) ?? p.username);
+      return `Message ${dm.isGroup ? name : '@' + name}`;
+    }
+    return `Message #${this.channelName()}`;
+  });
 
   // Wall-clock signal so the composer re-enables itself the moment a timeout lapses. A timeout emits
   // MemberUpdated only when set / manually cleared — never on natural expiry — so we re-evaluate
@@ -231,9 +263,26 @@ export class MessageInput implements OnDestroy {
     return caps.canSend || caps.timedOut;
   });
 
-  // Whether the caller may send here right now: has permission AND isn't currently timed out (live).
+  // A DM send can be blocked by the peer's DM-privacy checklist or a block — no guild capability
+  // covers DMs. Fetched from /dm/{id}/send-gate on DM open (the effect below); fail-open (true)
+  // while loading or on error, since the server still enforces on the actual send. Keyed by channel
+  // so a stale response from a DM the user already left is ignored.
+  private readonly dmGate = signal<{
+    channelId: string;
+    canSend: boolean;
+    reason: string | null;
+  } | null>(null);
+
+  private readonly dmCanSend = computed(() => {
+    if (!this.isDm()) return true;
+    const gate = this.dmGate();
+    return gate?.channelId === this.messageStore.activeChannelId() ? gate.canSend : true;
+  });
+
+  // Whether the caller may send here right now: has permission, isn't timed out (live), and — in a
+  // DM — passes the peer's block/privacy gate.
   protected readonly canSendInChannel = computed(
-    () => this.canSendPermission() && !this.timedOut(),
+    () => this.canSendPermission() && !this.timedOut() && this.dmCanSend(),
   );
 
   // A DM (no active guild) has no capability endpoint — attaching is always allowed there.
@@ -247,9 +296,10 @@ export class MessageInput implements OnDestroy {
     () => this.isDm() || (this.channelStore.currentCapabilities()?.canAttach ?? false),
   );
 
-  // Explains a disabled input — live timeout vs missing permission.
+  // Explains a disabled input — DM block/privacy, live timeout, or missing permission.
   protected readonly disabledReason = computed(() => {
     if (this.canSendInChannel()) return null;
+    if (!this.dmCanSend()) return this.dmGate()?.reason ?? "You can't message this user.";
     return this.timedOut()
       ? "You're timed out and can't send messages."
       : 'You do not have permission to send messages in this channel.';
@@ -285,6 +335,30 @@ export class MessageInput implements OnDestroy {
       if (this.messageStore.replyTarget()) {
         queueMicrotask(() => this.draftInput()?.nativeElement.focus());
       }
+    });
+
+    // Load the DM send-gate whenever a DM is opened, so the composer locks like a no-permission
+    // channel (block / friends-only) instead of letting a doomed send fail. Guild channels use caps.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      const isDm = this.isDm();
+      untracked(() => {
+        if (!channelId || !isDm) {
+          this.dmGate.set(null);
+          return;
+        }
+        this.dmService
+          .sendGate(channelId)
+          .then((gate) => {
+            // Ignore a response that arrived after the user already switched away.
+            if (this.messageStore.activeChannelId() === channelId) {
+              this.dmGate.set({ channelId, canSend: gate.canSend, reason: gate.reason });
+            }
+          })
+          .catch(() => {
+            /* fail-open — the server enforces on the actual send regardless */
+          });
+      });
     });
 
     // A slowmode cooldown is per-channel — clear it when switching channels so a new channel
@@ -407,22 +481,55 @@ export class MessageInput implements OnDestroy {
   }
 
   /**
-   * Toggle-wraps the current selection (or caret) in a markdown marker pair — the toolbar
-   * buttons and the Ctrl+B/I/U shortcuts. Selection survives, so toggles round-trip.
+   * Applies a markdown marker pair — the toolbar buttons and the Ctrl+B/I/U shortcuts. With a
+   * selection it toggle-wraps it (so toggles round-trip). With nothing selected it inserts
+   * `placeholder` between the markers and auto-selects it, so the user just types over the sample
+   * text instead of navigating between two empty markers.
    */
-  applyFormat(open: string, close?: string): void {
+  applyFormat(open: string, close: string | undefined, placeholder: string): void {
     const el = this.draftInput()?.nativeElement;
     const value = this.draft();
     const start = el?.selectionStart ?? value.length;
     const end = el?.selectionEnd ?? value.length;
-    const result = toggleWrap(value, start, end, open, close);
-    this.draft.set(result.text);
-    queueMicrotask(() => {
-      const input = this.draftInput()?.nativeElement;
-      if (!input) return;
-      input.focus();
-      input.setSelectionRange(result.selectionStart, result.selectionEnd);
-    });
+
+    let text: string;
+    let selectionStart: number;
+    let selectionEnd: number;
+    if (start === end) {
+      const closeMarker = close ?? open;
+      text = value.slice(0, start) + open + placeholder + closeMarker + value.slice(end);
+      selectionStart = start + open.length;
+      selectionEnd = selectionStart + placeholder.length;
+    } else {
+      const result = toggleWrap(value, start, end, open, close);
+      text = result.text;
+      selectionStart = result.selectionStart;
+      selectionEnd = result.selectionEnd;
+    }
+
+    this.draft.set(text);
+    // Restore the selection AFTER Angular commits the ngModel write. draft.set() schedules change
+    // detection, whose writeValue re-assigns textarea.value and resets the caret to the end — a
+    // queueMicrotask restore races ahead of that and loses the highlight. afterNextRender runs once
+    // the DOM write has landed, so the placeholder stays selected for the user to type over.
+    afterNextRender(
+      () => {
+        const input = this.draftInput()?.nativeElement;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(selectionStart, selectionEnd);
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /**
+   * Refocuses the composer — called after an inline message edit closes so the ArrowUp-to-edit
+   * shortcut keeps working (the edit box, not the composer, held focus; without this the next
+   * ArrowUp lands on the message list and just scrolls it).
+   */
+  focus(): void {
+    queueMicrotask(() => this.draftInput()?.nativeElement.focus());
   }
 
   toggleEmoji(): void {
@@ -655,12 +762,16 @@ export class MessageInput implements OnDestroy {
 
     // Formatting shortcuts (Discord-style): Ctrl/Cmd + B / I / U.
     if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-      const marker = ({ b: '**', i: '*', u: '__' } as Record<string, string>)[
-        event.key.toLowerCase()
-      ];
-      if (marker) {
+      const fmt = (
+        {
+          b: ['**', 'bold text'],
+          i: ['*', 'italic text'],
+          u: ['__', 'underlined text'],
+        } as Record<string, [string, string]>
+      )[event.key.toLowerCase()];
+      if (fmt) {
         event.preventDefault();
-        this.applyFormat(marker);
+        this.applyFormat(fmt[0], undefined, fmt[1]);
         return;
       }
     }

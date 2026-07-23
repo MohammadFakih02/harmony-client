@@ -419,6 +419,23 @@ describe('VoiceStore', () => {
     expect(store.isWatchingStream('u2')).toBe(false);
   });
 
+  it('watching is exclusive — opting into a stream replaces the previous one', () => {
+    store.toggleWatchStream('u2');
+    expect(store.isWatchingStream('u2')).toBe(true);
+
+    store.toggleWatchStream('u3');
+    expect(store.isWatchingStream('u3')).toBe(true);
+    expect(store.isWatchingStream('u2')).toBe(false); // only one stream at a time
+  });
+
+  it('stopWatchingAllStreams clears the current watch', () => {
+    store.toggleWatchStream('u2');
+    expect(store.isWatchingStream('u2')).toBe(true);
+
+    store.stopWatchingAllStreams();
+    expect(store.isWatchingStream('u2')).toBe(false);
+  });
+
   it('toggleHideVideo hides per user and survives roster updates', () => {
     store.applyJoined(participant({ userId: 'u2', isVideoOn: true }));
 

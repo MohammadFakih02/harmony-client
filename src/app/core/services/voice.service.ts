@@ -333,7 +333,13 @@ export class VoiceService {
     try {
       await this.room.localParticipant.setScreenShareEnabled(on, { audio: true });
       return on;
-    } catch {
+    } catch (err) {
+      // Cancelling the browser picker also lands here (NotAllowedError) — expected, stay silent.
+      // Anything else is a genuine capture/publish failure (e.g. Chrome rejecting the screen-audio
+      // track) and must be surfaced rather than swallowed into a no-op "share didn't start".
+      if ((err as { name?: string })?.name !== 'NotAllowedError') {
+        console.error('[voice] setScreenShareEnabled failed', err);
+      }
       return !on;
     }
   }

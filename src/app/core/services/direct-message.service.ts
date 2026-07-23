@@ -35,6 +35,19 @@ export class DirectMessageService {
     return firstValueFrom(this.http.delete<void>(`${this.base}/dm/${channelId}/participants/me`));
   }
 
+  /**
+   * Whether the caller may send in this DM right now (block / the peer's DM-privacy checklist), with
+   * a reason to show when they can't. Lets the composer disable the input up front instead of failing
+   * a doomed send. 1:1 only in practice — groups always return canSend.
+   */
+  sendGate(channelId: string): Promise<{ canSend: boolean; reason: string | null }> {
+    return firstValueFrom(
+      this.http.get<{ canSend: boolean; reason: string | null }>(
+        `${this.base}/dm/${channelId}/send-gate`,
+      ),
+    );
+  }
+
   /** Renames a group DM (any participant); empty name clears back to the joined member names. */
   rename(channelId: string, name: string): Promise<void> {
     return firstValueFrom(this.http.patch<void>(`${this.base}/dm/${channelId}/name`, { name }));

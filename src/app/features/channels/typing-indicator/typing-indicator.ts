@@ -19,7 +19,7 @@ import { MuteStore } from '../../../core/stores/mute.store';
   host: { class: 'block' },
   template: `
     @if (label(); as text) {
-      <div class="flex items-center gap-2 px-4 h-6 text-xs text-muted">
+      <div class="flex items-center gap-2 px-4 h-6 text-xs text-muted bg-surface">
         <span class="inline-flex gap-0.5" aria-hidden="true">
           <span class="w-1 h-1 rounded-full bg-muted animate-bounce [animation-delay:-0.2s]"></span>
           <span class="w-1 h-1 rounded-full bg-muted animate-bounce [animation-delay:-0.1s]"></span>
