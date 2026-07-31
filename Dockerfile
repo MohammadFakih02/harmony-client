@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 #
 # Harmony web client — build the Angular app, then serve the static bundle with
-# nginx. The API base URL is baked in at build time from src/environments/
-# environment.ts (http://localhost:5057), so the compose stack maps the API to
-# host port 5057 and this app is opened at http://localhost:4200.
+# nginx. The app calls the API with same-origin relative paths (/api, /hubs);
+# nginx (see nginx.conf) reverse-proxies those to the `api` container. The bundle
+# therefore carries no hostname and runs unchanged behind localhost, a tunnel, or
+# a real domain. Opened at http://localhost:4200 in the compose stack.
 
 # ---- build ----
 FROM node:22 AS build
