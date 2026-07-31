@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, isDevMode } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Channel } from '../models/channel.models';
 import {
@@ -119,9 +119,11 @@ export class GatewayEvents {
   readonly events$ = this._events.asObservable();
 
   emit(event: GatewayEvent): void {
-    // One central place to trace the entire real-time pipeline in dev.
-    // eslint-disable-next-line no-console
-    console.debug(`[GATEWAY] → ${event.type}`, event);
+    // One central place to trace the entire real-time pipeline. Dev-only — silent in prod builds.
+    if (isDevMode()) {
+      // eslint-disable-next-line no-console
+      console.debug(`[GATEWAY] → ${event.type}`, event);
+    }
     this._events.next(event);
   }
 }

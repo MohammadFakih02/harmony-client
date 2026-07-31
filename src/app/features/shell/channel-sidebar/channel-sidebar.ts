@@ -96,6 +96,7 @@ export class ChannelSidebar {
   protected readonly muteStore = inject(MuteStore);
   protected readonly nicknameStore = inject(NicknameStore);
   protected readonly guildNotif = inject(GuildNotificationSettingsStore);
+  protected readonly friendStore = inject(FriendStore);
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
   protected readonly voiceService = inject(VoiceService);
@@ -405,7 +406,7 @@ export class ChannelSidebar {
     if (!guildId) return;
     const ok = await this.confirmService.confirm({
       title: 'Delete Channel',
-      message: `Delete #${channel.name}? This can't be undone.`,
+      message: `Delete #${channel.name}? It moves to Trash — you can restore it from the server's Deleted Channels within 30 days.`,
       confirmLabel: 'Delete Channel',
       danger: true,
     });

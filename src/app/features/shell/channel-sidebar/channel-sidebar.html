@@ -518,6 +518,14 @@
     >
       <i class="fas fa-user-group w-5 text-center"></i>
       <span class="flex-1">Friends</span>
+      @if (friendStore.incomingCount() > 0) {
+      <span
+        class="min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full bg-danger text-white text-2xs font-bold"
+        [title]="friendStore.incomingCount() + ' pending friend request(s)'"
+      >
+        {{ friendStore.incomingCount() }}
+      </span>
+      }
     </a>
 
     <div class="flex items-center justify-between px-2 mb-1">

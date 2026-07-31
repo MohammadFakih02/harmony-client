@@ -56,11 +56,14 @@
       </div>
       }
 
-      <!-- Uploading overlay -->
+      <!-- Uploading overlay + determinate progress bar along the bottom edge -->
       @if (file.status === 'uploading') {
       <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
         <i class="fas fa-yin-yang animate-spin text-white text-sm"></i>
         <span class="text-2xs text-white">{{ file.progress }}%</span>
+      </div>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+        <div class="h-full bg-accent transition-[width] duration-150" [style.width.%]="file.progress"></div>
       </div>
       } @else if (file.status === 'error') {
       <div class="absolute inset-0 bg-danger/60 flex items-center justify-center">
@@ -135,6 +138,7 @@
       [ngModel]="draft()"
       (ngModelChange)="onDraftInput($event)"
       (keydown)="onKeydown($event)"
+      (paste)="onPaste($event)"
       rows="1"
     ></textarea>
 
