@@ -34,12 +34,12 @@ function target(over: Partial<UserMenuTarget> = {}): UserMenuTarget {
 describe('buildUserMenu', () => {
   it('offers Profile + Message + Add Friend + Block for another user with no moderation context', () => {
     const entries = buildUserMenu(deps(), target({ guildId: null }));
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Add Friend', 'Mute @bob', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Copy User ID', 'Message', 'Add Friend', 'Mute @bob', 'Block']);
   });
 
   it('hides Message, Add Friend and Block for yourself', () => {
     const entries = buildUserMenu(deps(), target({ userId: 'me', guildId: null }));
-    expect(labels(entries)).toEqual(['Profile']);
+    expect(labels(entries)).toEqual(['Profile', 'Copy User ID']);
   });
 
   it('hides Add Friend when already friends or a request is pending', () => {
@@ -52,7 +52,7 @@ describe('buildUserMenu', () => {
   it('offers Unblock instead of Block for an already-blocked user', () => {
     const d = deps({ blockStore: { isBlocked: () => true } });
     const entries = buildUserMenu(d, target({ guildId: null }));
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Mute @bob', 'Unblock']);
+    expect(labels(entries)).toEqual(['Profile', 'Copy User ID', 'Message', 'Mute @bob', 'Unblock']);
   });
 
   it('appends moderation for a non-owner member the caller can moderate', () => {
@@ -61,7 +61,7 @@ describe('buildUserMenu', () => {
       d,
       target({ member: { userId: 'u1', username: 'bob', isOwner: false, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Add Friend', 'Roles', 'Timeout', 'Kick', 'Ban', 'Mute @bob', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Copy User ID', 'Message', 'Add Friend', 'Roles', 'Timeout', 'Kick', 'Ban', 'Mute @bob', 'Block']);
     expect(entries.some(isSeparator)).toBe(true);
   });
 
@@ -79,7 +79,7 @@ describe('buildUserMenu', () => {
       deps(),
       target({ member: { userId: 'u1', username: 'bob', isOwner: true, roleIds: [] } as never, caps: modCaps }),
     );
-    expect(labels(entries)).toEqual(['Profile', 'Message', 'Add Friend', 'Mute @bob', 'Block']);
+    expect(labels(entries)).toEqual(['Profile', 'Copy User ID', 'Message', 'Add Friend', 'Mute @bob', 'Block']);
   });
 
   it('offers Unmute instead of Mute for an already-muted user', () => {
