@@ -6,7 +6,7 @@
   <div class="flex flex-col items-center gap-1 w-full">
     <a
       routerLink="/app/friends"
-      class="guild-icon hover:text-white"
+      class="guild-icon hover:text-white relative"
       [class.active]="homeSelected()"
       [class.bg-accent]="homeSelected()"
       [class.text-white]="homeSelected()"
@@ -15,6 +15,14 @@
       title="Direct Messages"
     >
       <i class="fas fa-yin-yang text-2xl"></i>
+      @if (friendStore.incomingCount() > 0) {
+      <span
+        class="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold ring-2 ring-bg"
+        [title]="friendStore.incomingCount() + ' pending friend request(s)'"
+      >
+        {{ friendStore.incomingCount() }}
+      </span>
+      }
     </a>
 
     <!-- Unread DM senders — surfaced as avatar pills so an incoming DM is reachable from a server -->

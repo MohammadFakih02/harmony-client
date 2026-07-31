@@ -34,13 +34,16 @@ import { AutofocusEnd } from '../../../shared/directives/autofocus.directive';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
 import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
+import { getRecents, pushRecent } from '../../../shared/util/emoji-recents';
 import { MentionTrigger, applyMention, detectMentionTrigger } from '../../../shared/util/mention-trigger';
 import { extractInviteCodes } from '../../../shared/util/invite-links';
+import { extractMessageLinks, buildMessageLink, MessageLinkRef } from '../../../shared/util/message-links';
 import { dmLabel } from '../../../core/models/direct-message.models';
 import { MessageAttachments } from '../message-attachments/message-attachments';
 import { MessageContent } from '../message-content/message-content';
 import { ForwardModal } from '../forward-modal/forward-modal';
 import { InviteEmbed } from '../../guilds/invite-embed/invite-embed';
+import { MessageLinkEmbed } from '../message-link-embed/message-link-embed';
 import { UserProfilePopout } from '../../shell/user-profile-popout/user-profile-popout';
 
 /** Compact preview of the message a message replies to (found:false → "unavailable" line). */
@@ -59,6 +62,7 @@ export interface RenderedMessage {
   msg: MessageResponse;
   preview: ReplyPreview | null;
   inviteCodes: string[];
+  messageLinks: MessageLinkRef[];
 }
 
 export interface MessageGroup {
@@ -142,6 +146,7 @@ const UNREAD_BANNER_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
     MessageContent,
     ForwardModal,
     InviteEmbed,
+    MessageLinkEmbed,
     UserProfilePopout,
     OverlayModule,
     MentionAutocomplete,
@@ -233,6 +238,18 @@ export class MessageList {
     return codes;
   }
 
+  // Links to other Harmony messages → inline "jump to message" cards. Memoized per message (keyed on
+  // content) alongside the invite-code scan, to keep the regex out of the group recompute.
+  private readonly messageLinkCache = new WeakMap<MessageResponse, { content: string; links: MessageLinkRef[] }>();
+  private messageLinksOf(msg: MessageResponse): MessageLinkRef[] {
+    if (msg.isDeleted) return [];
+    const cached = this.messageLinkCache.get(msg);
+    if (cached && cached.content === msg.content) return cached.links;
+    const links = extractMessageLinks(msg.content);
+    this.messageLinkCache.set(msg, { content: msg.content, links });
+    return links;
+  }
+
   // O(1) lookup of a loaded message by id — rebuilt only when the message list changes. Backs the
   // reply-preview resolver so it doesn't scan the whole array per rendered message.
   private readonly messageIndex = computed<Map<string, MessageResponse>>(() => {
@@ -287,6 +304,7 @@ export class MessageList {
     const entries: ContextMenuEntry[] = [];
     if (this.canReply(msg)) entries.push({ label: 'Reply', icon: 'fa-reply', action: () => this.replyTo(msg) });
     if (this.canCopy(msg)) entries.push({ label: 'Copy Text', icon: 'fa-copy', action: () => this.copyText(msg) });
+    if (this.canReply(msg)) entries.push({ label: 'Copy Message Link', icon: 'fa-link', action: () => this.copyMessageLink(msg) });
     entries.push({ label: 'Copy Message ID', icon: 'fa-hashtag', action: () => this.copyMessageId(msg) });
 
     const mid: ContextMenuEntry[] = [];
@@ -313,6 +331,15 @@ export class MessageList {
   protected copyMessageId(msg: MessageResponse): void {
     void navigator.clipboard?.writeText(msg.messageId).then(
       () => this.toast.info('Copied message ID'),
+      () => this.toast.info('Copy failed', 'fa-triangle-exclamation'),
+    );
+  }
+
+  /** Copies a shareable app link to this message — the writer half of the inline unfurl card. */
+  protected copyMessageLink(msg: MessageResponse): void {
+    const link = buildMessageLink(location.origin, msg.guildId, msg.channelId, msg.messageId);
+    void navigator.clipboard?.writeText(link).then(
+      () => this.toast.info('Copied message link'),
       () => this.toast.info('Copy failed', 'fa-triangle-exclamation'),
     );
   }
@@ -473,7 +500,12 @@ export class MessageList {
                 content: ref.content,
               };
       }
-      return { msg, preview, inviteCodes: this.inviteCodesOf(msg) };
+      return {
+        msg,
+        preview,
+        inviteCodes: this.inviteCodesOf(msg),
+        messageLinks: this.messageLinksOf(msg),
+      };
     };
 
     const groups: MessageGroup[] = [];
@@ -663,6 +695,35 @@ export class MessageList {
   /** Bare "14:32" time for the hover gutter on grouped (non-first) messages. */
   protected shortTime(sentAt: number): string {
     return new Date(sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  /** Full absolute date+time — used as the hover tooltip on any timestamp ("Monday, ... at 3:04 PM"). */
+  protected fullTime(sentAt: number): string {
+    return new Date(sentAt).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' });
+  }
+
+  // --- one-click quick reactions (hover toolbar) ---
+  // Your most-recent emoji first, topped up from a small default set so the row is always full.
+  private static readonly DEFAULT_QUICK = ['👍', '😂', '❤️', '🎉', '😮'];
+  protected readonly quickReactions = signal<string[]>(MessageList.computeQuick());
+
+  private static computeQuick(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const char of [...getRecents(), ...MessageList.DEFAULT_QUICK]) {
+      if (seen.has(char)) continue;
+      seen.add(char);
+      out.push(char);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  /** One-click react from the hover toolbar — toggles the emoji and bumps it up the recents. */
+  protected quickReact(msg: MessageResponse, emoji: string): void {
+    pushRecent(emoji);
+    this.quickReactions.set(MessageList.computeQuick());
+    void this.messageStore.toggleReaction(msg, emoji);
   }
 
   // --- welcome empty-state (no messages yet) ---
