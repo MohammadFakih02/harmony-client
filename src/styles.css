@@ -754,3 +754,17 @@ button:active:not(:disabled),
     );
   }
 }
+
+/* Accessibility: honour the OS "reduce motion" setting — neutralise spinners, bounces, slide-ins
+   and transitions (and CSS smooth-scroll) for users who opt out of animation. Kept at the top level
+   (outside @layer) with !important so it wins over utility animations like animate-spin/bounce. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

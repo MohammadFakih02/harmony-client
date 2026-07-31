@@ -64,6 +64,15 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
       icon: 'fa-user',
       action: () => deps.profileModal.open(userId, guildId),
     },
+    {
+      label: 'Copy User ID',
+      icon: 'fa-hashtag',
+      action: () =>
+        void navigator.clipboard?.writeText(userId).then(
+          () => deps.toast.info('Copied user ID'),
+          () => deps.toast.info('Copy failed', 'fa-triangle-exclamation'),
+        ),
+    },
   ];
 
   if (!isSelf) {

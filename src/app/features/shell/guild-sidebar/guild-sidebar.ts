@@ -8,12 +8,14 @@ import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiModal, ConfirmService } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
+import { FriendStore } from '../../../core/stores/friend.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { MuteStore } from '../../../core/stores/mute.store';
 import { MemberStore } from '../../../core/stores/member.store';
 import { MUTE_DURATIONS } from '../../../core/models/mute.models';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { GuildSummary } from '../../../core/models/guild.models';
 import {
@@ -35,11 +37,13 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
 export class GuildSidebar {
   protected readonly auth = inject(AuthService);
   protected readonly guildStore = inject(GuildStore);
+  protected readonly friendStore = inject(FriendStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly dmStore = inject(DmStore);
   protected readonly muteStore = inject(MuteStore);
   private readonly memberStore = inject(MemberStore);
   private readonly contextMenu = inject(ContextMenuService);
+  private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly confirmService = inject(ConfirmService);
 
@@ -81,7 +85,8 @@ export class GuildSidebar {
       {
         label: 'Copy Server ID',
         icon: 'fa-hashtag',
-        action: () => void navigator.clipboard?.writeText(guild.id),
+        action: () =>
+          void navigator.clipboard?.writeText(guild.id).then(() => this.toast.info('Copied server ID')),
       },
       { separator: true },
       owner
@@ -103,7 +108,7 @@ export class GuildSidebar {
 
   private async leaveOrDeleteGuild(guild: GuildSummary, owner: boolean): Promise<void> {
     const message = owner
-      ? `Delete “${guild.name}”? This permanently removes the server for everyone.`
+      ? `Delete “${guild.name}”? It moves to Trash — you can restore it from Settings → Trash within 30 days.`
       : `Leave “${guild.name}”?`;
     const ok = await this.confirmService.confirm({
       title: owner ? 'Delete Server' : 'Leave Server',
@@ -279,6 +284,12 @@ export class GuildSidebar {
   }
 
   async logout(): Promise<void> {
-    await this.auth.logout();
+    const ok = await this.confirmService.confirm({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out?',
+      confirmLabel: 'Log Out',
+      danger: true,
+    });
+    if (ok) await this.auth.logout();
   }
 }

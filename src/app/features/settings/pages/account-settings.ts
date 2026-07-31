@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ImageCropperModal, UiAvatar, UiButton, UiProfileBanner } from '../../../shared/ui';
+import { ConfirmService, ImageCropperModal, UiAvatar, UiButton, UiProfileBanner } from '../../../shared/ui';
 import { AuthService } from '../../../core/services/auth.service';
 import { UserService } from '../../../core/services/user.service';
 import { FileService } from '../../../core/services/file.service';
@@ -406,6 +406,7 @@ import { extractApiError } from '../../../shared/util/api-error';
 })
 export class AccountSettings implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly confirm = inject(ConfirmService);
   private readonly userService = inject(UserService);
   private readonly fileService = inject(FileService);
   private readonly toast = inject(ToastService);
@@ -466,8 +467,14 @@ export class AccountSettings implements OnInit, OnDestroy {
     clearInterval(this.cooldownTimer);
   }
 
-  protected logout(): void {
-    void this.auth.logout();
+  protected async logout(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out?',
+      confirmLabel: 'Log Out',
+      danger: true,
+    });
+    if (ok) void this.auth.logout();
   }
 
   protected async resendVerification(): Promise<void> {

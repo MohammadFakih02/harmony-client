@@ -172,7 +172,7 @@
           (contextmenu)="openAuthorMenu($event, group)"
           >{{ group.authorName }}</span
         >
-        <span class="text-xs text-faint">{{ group.timestamp }}</span>
+        <span class="text-xs text-faint" [title]="fullTime(group.items[0].msg.sentAt)">{{ group.timestamp }}</span>
         @if (group.blocked) {
         <button
           type="button"
@@ -321,6 +321,11 @@
         <app-invite-embed [code]="code" />
         }
 
+        <!-- Inline "jump to message" cards for any Harmony message links -->
+        @for (link of item.messageLinks; track link.messageId) {
+        <app-message-link-embed [link]="link" />
+        }
+
         <!-- Reaction pills (aggregated emoji + count; highlighted when you reacted) -->
         @if (!msg.isDeleted && msg.reactions?.length) {
         <div class="flex flex-wrap items-center gap-1 mt-1">
@@ -360,8 +365,18 @@
           class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
           [class.!flex]="reactionTarget()?.messageId === msg.messageId"
         >
-          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none">{{ shortTime(msg.sentAt) }}</span>
+          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="fullTime(msg.sentAt)">{{ shortTime(msg.sentAt) }}</span>
           @if (canReact(msg)) {
+          @for (emoji of quickReactions(); track emoji) {
+          <button
+            type="button"
+            class="w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none hover:bg-surface-2 hover:scale-110 transition-micro"
+            [title]="'React with ' + emoji"
+            (click)="quickReact(msg, emoji)"
+          >
+            {{ emoji }}
+          </button>
+          }
           <button
             type="button"
             cdkOverlayOrigin

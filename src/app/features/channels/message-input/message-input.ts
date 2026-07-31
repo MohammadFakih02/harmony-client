@@ -21,7 +21,9 @@ import { RoleStore } from '../../../core/stores/role.store';
 import { DmStore } from '../../../core/stores/dm.store';
 import { NicknameStore } from '../../../core/stores/nickname.store';
 import { dmLabel } from '../../../core/models/direct-message.models';
+import { ConfettiService } from '../../../core/services/confetti.service';
 import { DirectMessageService } from '../../../core/services/direct-message.service';
+import { DraftService } from '../../../core/services/draft.service';
 import { FileService } from '../../../core/services/file.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SignalRService } from '../../../core/services/signalr.service';
@@ -82,6 +84,8 @@ export class MessageInput implements OnDestroy {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly dmService = inject(DirectMessageService);
+  private readonly confetti = inject(ConfettiService);
+  private readonly drafts = inject(DraftService);
   private readonly fileService = inject(FileService);
   private readonly auth = inject(AuthService);
   private readonly signalR = inject(SignalRService);
@@ -368,6 +372,19 @@ export class MessageInput implements OnDestroy {
       untracked(() => this.cooldownUntil.set(null));
     });
 
+    // Load this channel's saved draft on open, so an unsent message survives a channel switch and a
+    // reload. Each keystroke persists via writeDraft(), so switching away already saved the latest;
+    // this only reads it back. A raw set() (not writeDraft) — loading must not re-persist.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      untracked(() => {
+        this.draft.set(channelId ? this.drafts.get(channelId) : '');
+        // Drop any autocomplete popup that belonged to the channel we just left.
+        this.mentionTrigger.set(null);
+        this.emojiTrigger.set(null);
+      });
+    });
+
     // Restore the server-authoritative cooldown on channel open: the gate's Redis TTL survives a
     // leave/rejoin even though the local timer doesn't, so read the remaining seconds reported by
     // the open load and rebuild the countdown from it. Gated on slowmode actually applying to us
@@ -388,6 +405,17 @@ export class MessageInput implements OnDestroy {
     clearInterval(this.ticker);
   }
 
+  /**
+   * Sets the composer text AND saves it as this channel's draft (so it survives a channel switch and
+   * a reload). Every user-driven edit routes through here; programmatic clears on send and the
+   * channel-open load use a raw draft.set() instead so they don't re-persist.
+   */
+  private writeDraft(text: string): void {
+    this.draft.set(text);
+    const channelId = this.messageStore.activeChannelId();
+    if (channelId) this.drafts.set(channelId, text);
+  }
+
   onDraftInput(value: string): void {
     const el = this.draftInput()?.nativeElement;
     const caret = el?.selectionStart ?? value.length;
@@ -395,14 +423,14 @@ export class MessageInput implements OnDestroy {
     // A just-completed exact `:shortcode:` converts to its emoji in place.
     const converted = convertCompletedShortcode(value, caret);
     if (converted) {
-      this.draft.set(converted.text);
+      this.writeDraft(converted.text);
       this.emojiTrigger.set(null);
       this.restoreCaret(converted.caret);
       this.signalTyping(converted.text);
       return;
     }
 
-    this.draft.set(value);
+    this.writeDraft(value);
     const trigger = detectMentionTrigger(value, caret);
     if (trigger) this.closeEmoji(); // don't stack the emoji picker over the mention popup
     this.mentionTrigger.set(trigger);
@@ -450,7 +478,7 @@ export class MessageInput implements OnDestroy {
     if (!trigger) return;
 
     const { text, caret } = applyMention(this.draft(), trigger, candidate.username);
-    this.draft.set(text);
+    this.writeDraft(text);
     this.closeMentionAutocomplete();
 
     queueMicrotask(() => {
@@ -470,7 +498,7 @@ export class MessageInput implements OnDestroy {
     const trigger = this.emojiTrigger();
     if (!trigger) return;
     const { text, caret } = applyEmoji(this.draft(), trigger, emoji.char);
-    this.draft.set(text);
+    this.writeDraft(text);
     this.emojiTrigger.set(null);
     pushRecent(emoji.char);
     this.restoreCaret(caret);
@@ -507,7 +535,7 @@ export class MessageInput implements OnDestroy {
       selectionEnd = result.selectionEnd;
     }
 
-    this.draft.set(text);
+    this.writeDraft(text);
     // Restore the selection AFTER Angular commits the ngModel write. draft.set() schedules change
     // detection, whose writeValue re-assigns textarea.value and resets the caret to the end — a
     // queueMicrotask restore races ahead of that and loses the highlight. afterNextRender runs once
@@ -557,7 +585,7 @@ export class MessageInput implements OnDestroy {
     const start = el?.selectionStart ?? value.length;
     const end = el?.selectionEnd ?? value.length;
     const next = value.slice(0, start) + text + value.slice(end);
-    this.draft.set(next);
+    this.writeDraft(next);
 
     queueMicrotask(() => {
       const input = this.draftInput()?.nativeElement;
@@ -590,8 +618,14 @@ export class MessageInput implements OnDestroy {
     const replyToId = this.messageStore.replyTarget()?.messageId ?? null;
     this.messageStore.clearReplyTarget();
 
+    // Easter egg: sending a 🎉 rains confetti (client-side only, honours reduce-motion).
+    if (content.includes('🎉')) this.confetti.burst();
+
     this.sending.set(true);
     this.draft.set('');
+    // The message is committed — drop the saved draft so it doesn't reappear on the next open.
+    const sentChannelId = this.messageStore.activeChannelId();
+    if (sentChannelId) this.drafts.clear(sentChannelId);
     this.stopTypingSignal(); // the message is on its way — clear our typing indicator for others
     this.closeMentionAutocomplete();
     this.closeEmojiSuggest();
@@ -620,25 +654,47 @@ export class MessageInput implements OnDestroy {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
     input.value = ''; // reset so re-picking the same file fires change again
-    this.attachError.set(null);
+    this.stageFiles(files);
+  }
 
+  /**
+   * Paste an image (or any file) straight into the composer — the screenshot → Ctrl+V flow. Only
+   * intercepts when the clipboard actually carries files; plain-text pastes fall through untouched.
+   */
+  onPaste(event: ClipboardEvent): void {
+    const files = Array.from(event.clipboardData?.files ?? []);
+    if (files.length === 0) return; // ordinary text/markup paste — leave it to the textarea
+    if (!this.canAttach()) return; // no attach permission here — nothing to stage
+    event.preventDefault();
+    this.stageFiles(files);
+  }
+
+  /** Validates + uploads a batch of files (from the picker or a paste), stopping at the cap. */
+  private stageFiles(files: File[]): void {
+    this.attachError.set(null);
     for (const file of files) {
-      if (this.staged().length >= MAX_FILES) {
+      if (this.tryStage(file) === 'full') {
         this.attachError.set(`You can attach up to ${MAX_FILES} files.`);
         break;
       }
-      // Fall back to a filename-extension MIME for signature-less text (.md reports empty file.type).
-      const contentType = effectiveContentType(file);
-      if (!isAllowedType(contentType)) {
-        this.attachError.set("This file type isn't supported.");
-        continue;
-      }
-      if (file.size > MAX_SIZE_BYTES) {
-        this.attachError.set('Files must be 50 MB or smaller.');
-        continue;
-      }
-      this.startUpload(file, contentType);
     }
+  }
+
+  /** Runs one file through the size/type/count guards and starts its upload when it passes. */
+  private tryStage(file: File): 'staged' | 'rejected' | 'full' {
+    if (this.staged().length >= MAX_FILES) return 'full';
+    // Fall back to a filename-extension MIME for signature-less text (.md reports empty file.type).
+    const contentType = effectiveContentType(file);
+    if (!isAllowedType(contentType)) {
+      this.attachError.set("This file type isn't supported.");
+      return 'rejected';
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      this.attachError.set('Files must be 50 MB or smaller.');
+      return 'rejected';
+    }
+    this.startUpload(file, contentType);
+    return 'staged';
   }
 
   private async startUpload(file: File, contentType: string): Promise<void> {
