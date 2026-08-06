@@ -17,6 +17,8 @@ describe('VoicePrefsService', () => {
       noiseSuppression: true,
       echoCancellation: true,
       autoGainControl: true,
+      screenShareResolution: '720p',
+      screenShareFps: 30,
     });
   });
 

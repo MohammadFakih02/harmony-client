@@ -78,7 +78,7 @@ const HAS_VALUES = ['link'];
   templateUrl: './search-panel.html',
   host: {
     class:
-      'block w-[26rem] max-h-[32rem] rounded-lg bg-surface-2 border border-border shadow-2xl overflow-hidden flex flex-col',
+      'block w-[26rem] max-w-[calc(100vw-1rem)] max-h-[32rem] rounded-lg bg-surface-2 border border-border shadow-2xl overflow-hidden flex flex-col',
   },
 })
 export class SearchPanel implements OnInit, OnDestroy {
@@ -228,7 +228,10 @@ export class SearchPanel implements OnInit, OnDestroy {
       : `${frag.op}:${/\s/.test(s.insert) ? `"${s.insert}"` : s.insert} `;
 
     this.query.set(this.query().slice(0, frag.start) + replacement);
-    this.dismissed.set(true);
+    // Picking an OPERATOR (e.g. `before:`) must keep the dropdown open so its value suggestions
+    // (today / yesterday / date, or `link` for has:) appear immediately — dismissing here was why
+    // they never showed. A VALUE pick is complete, so dismiss until the next keystroke.
+    this.dismissed.set(!s.isOperator);
     this.highlightedIndex.set(0);
     queueMicrotask(() => this.searchInput()?.nativeElement.focus());
     if (!s.isOperator) void this.run(false);

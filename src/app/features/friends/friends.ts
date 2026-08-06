@@ -22,6 +22,7 @@ import { ContextMenuEntry } from '../../core/models/context-menu.models';
 import { UiAvatar, ConfirmService } from '../../shared/ui';
 import { NotificationBell } from '../shell/notification-bell/notification-bell';
 import { UserProfilePopout } from '../shell/user-profile-popout/user-profile-popout';
+import { MobileNavService } from '../../core/services/mobile-nav.service';
 
 type FriendsTab = 'online' | 'all' | 'pending' | 'add';
 
@@ -33,6 +34,8 @@ type FriendsTab = 'online' | 'all' | 'pending' | 'add';
   templateUrl: './friends.html',
 })
 export class Friends {
+  // Mobile: this page renders its own header, so it hosts its own drawer hamburger.
+  protected readonly mobileNav = inject(MobileNavService);
   protected readonly friendStore = inject(FriendStore);
   protected readonly presenceStore = inject(PresenceStore);
   private readonly dmStore = inject(DmStore);

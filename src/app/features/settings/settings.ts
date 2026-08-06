@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
-import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { NavigationHistoryService } from '../../core/services/navigation-history.service';
+import { ViewportService } from '../../core/services/viewport.service';
 import { AccountSettings } from './pages/account-settings';
 import { AppearanceSettings } from './pages/appearance-settings';
 import { AccessibilitySettings } from './pages/accessibility-settings';
@@ -55,8 +56,10 @@ interface NavGroup {
   templateUrl: './settings.html',
 })
 export class Settings {
-  private readonly location = inject(Location);
   private readonly router = inject(Router);
+  private readonly navHistory = inject(NavigationHistoryService);
+  private readonly viewport = inject(ViewportService);
+  private readonly hadTabParam = inject(ActivatedRoute).snapshot.queryParamMap.has('tab');
 
   // Deep-linkable pane (`/app/settings?tab=…`). The old `profile` tab merged into My Account,
   // so legacy Edit-Profile deep-links map to `account`.
@@ -67,6 +70,19 @@ export class Settings {
       return tab && TABS.includes(tab) ? tab : 'account';
     })(),
   );
+
+  // Mobile stacked flow: the nav list is one screen, the pane another. Only drives `max-md:`
+  // classes, so its value is irrelevant on desktop. A tab deep-link starts on the pane.
+  protected readonly showPane = signal(!this.viewport.isMobile() || this.hadTabParam);
+
+  protected selectTab(tab: Tab): void {
+    this.activeTab.set(tab);
+    this.showPane.set(true);
+  }
+
+  protected backToNav(): void {
+    this.showPane.set(false);
+  }
 
   protected readonly groups: NavGroup[] = [
     {
@@ -90,12 +106,9 @@ export class Settings {
 
   @HostListener('document:keydown.escape')
   close(): void {
-    // Entry is always the in-app gear, so back returns to the prior screen; fall back to Friends
-    // if there's no in-app history to return to (e.g. a direct deep-link to /app/settings).
-    const before = this.router.url;
-    this.location.back();
-    setTimeout(() => {
-      if (this.router.url === before) void this.router.navigate(['/app/friends']);
-    }, 0);
+    // Return to the exact screen you opened Settings from. Using the recorded previous URL (rather
+    // than location.back()) avoids the race where a same-tick history check bounced you to Friends.
+    // Falls back to Friends only for a direct deep-link with no prior in-app screen.
+    void this.router.navigateByUrl(this.navHistory.previousOutside('/app/settings') ?? '/app/friends');
   }
 }

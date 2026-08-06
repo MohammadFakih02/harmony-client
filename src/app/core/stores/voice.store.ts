@@ -240,21 +240,17 @@ export const VoiceStore = signalStore(
 
           patchState(store, { connecting: true, connectingChannelId: channelId });
           try {
-            // onEnded fires only on an *unexpected* drop (an intentional leave() nulls the callback
-            // before disconnecting) — reset + a deferred server-leave so a racing force-move wins.
-            await voice.connect(
-              channelId,
-              () => handleUnexpectedDrop(channelId),
-              bitrateOf(channelId),
-            );
-            // Cancelled during the media connect (cancelJoin nulled the pending channel + already
-            // tore the media down) — bail before we signal a join we're abandoning.
-            if (store.connectingChannelId() !== channelId) {
-              await voice.disconnect().catch(() => {});
-              return;
-            }
-            await signalR.joinVoice(channelId);
-            // Cancelled during signaling — retract the join we just sent, then bail.
+            // Media (token + LiveKit connect) and signaling (hub JoinVoice) run in PARALLEL — the
+            // REST token endpoint mirrors the hub's permission/occupancy checks, so an unauthorized
+            // join still fails on the media side, and the join costs max(media, hub) instead of
+            // their sum. onEnded fires only on an *unexpected* drop (an intentional leave() nulls
+            // the callback before disconnecting) — reset + a deferred server-leave so a racing
+            // force-move wins.
+            await Promise.all([
+              voice.connect(channelId, () => handleUnexpectedDrop(channelId), bitrateOf(channelId)),
+              signalR.joinVoice(channelId),
+            ]);
+            // Cancelled while connecting — retract the hub join we already sent, then bail.
             if (store.connectingChannelId() !== channelId) {
               void signalR.leaveVoice(channelId).catch(() => {});
               await voice.disconnect().catch(() => {});
@@ -279,6 +275,8 @@ export const VoiceStore = signalStore(
             void this.loadRoster(channelId);
           } catch (err) {
             console.error('[voice] join failed', err);
+            // The hub join may have landed even though media failed — retract it.
+            void signalR.leaveVoice(channelId).catch(() => {});
             await voice.disconnect().catch(() => {});
             patchState(store, { connecting: false, connectingChannelId: null });
           }

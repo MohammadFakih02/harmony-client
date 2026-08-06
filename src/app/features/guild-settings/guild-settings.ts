@@ -11,6 +11,7 @@ import { GuildRoles } from './pages/guild-roles';
 import { GuildBans } from './pages/guild-bans';
 import { GuildAuditLog } from './pages/guild-audit-log';
 import { GuildTrash } from './pages/guild-trash';
+import { ViewportService } from '../../core/services/viewport.service';
 
 type Tab = 'overview' | 'welcome' | 'roles' | 'bans' | 'audit' | 'trash';
 
@@ -39,6 +40,19 @@ export class GuildSettings implements OnInit {
   protected readonly guildId = this.route.snapshot.paramMap.get('guildId')!;
   protected readonly textChannels = signal<Channel[]>([]);
   protected readonly activeTab = signal<Tab>('overview');
+
+  // Mobile stacked flow: nav list first, pane on tab pick. Only drives `max-md:` classes.
+  private readonly viewport = inject(ViewportService);
+  protected readonly showPane = signal(!this.viewport.isMobile());
+
+  protected selectTab(tab: Tab): void {
+    this.activeTab.set(tab);
+    this.showPane.set(true);
+  }
+
+  protected backToNav(): void {
+    this.showPane.set(false);
+  }
 
   protected readonly guildName = computed(
     () => this.guildStore.guilds().find((g) => g.id === this.guildId)?.name ?? 'Server',

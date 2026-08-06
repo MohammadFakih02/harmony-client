@@ -1,6 +1,45 @@
 @if (contextMenu.state(); as s) {
-<!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. -->
-<div class="fixed inset-0 z-1100" (click)="close()" (contextmenu)="close($event)" (auxclick)="close()">
+<!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. Transparent on desktop,
+     dimmed behind the mobile bottom sheet. -->
+<div
+  class="fixed inset-0 z-1100 max-md:bg-black/50"
+  (click)="close()"
+  (contextmenu)="close($event)"
+  (auxclick)="close()"
+>
+  @if (viewport.isMobile()) {
+  <!-- Mobile: bottom sheet. Submenus expand inline (accordion) instead of hover fly-outs. -->
+  <div
+    class="fixed inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl bg-surface shadow-modal border-t border-border flex flex-col gap-0.5 animate-slide-up"
+    (click)="$event.stopPropagation()"
+    (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    @for (entry of s.entries; track $index) {
+      @if (isSep(entry)) {
+      <div class="h-px bg-border-subtle my-0.5"></div>
+      } @else if (asItem(entry); as it) {
+        @if (it.children?.length) {
+        <ng-container
+          *ngTemplateOutlet="row; context: { $implicit: it, hasSub: true, subIndex: $index, expanded: expandedSub() === $index }"
+        ></ng-container>
+        @if (expandedSub() === $index) {
+        <div class="flex flex-col gap-0.5 pl-5">
+          @for (child of it.children; track $index) {
+            @if (isSep(child)) {
+            <div class="h-px bg-border-subtle my-0.5"></div>
+            } @else if (asItem(child); as ch) {
+            <ng-container *ngTemplateOutlet="row; context: { $implicit: ch }"></ng-container>
+            }
+          }
+        </div>
+        }
+        } @else {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: it }"></ng-container>
+        }
+      }
+    }
+  </div>
+  } @else {
   <div
     #menu
     class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-scale-in origin-top-left"
@@ -37,10 +76,11 @@
       }
     }
   </div>
+  }
 </div>
 }
 
-<ng-template #row let-item let-hasSub="hasSub">
+<ng-template #row let-item let-hasSub="hasSub" let-subIndex="subIndex" let-expanded="expanded">
   @if (item.slider) {
   <!-- Slider row (per-user volume etc.) — label + live % on top, full-width range below. -->
   <div class="flex flex-col gap-1 w-full px-2.5 py-1.5">
@@ -65,14 +105,14 @@
   } @else {
   <button
     type="button"
-    class="group/item flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 rounded-lg text-sm font-medium transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
+    class="group/item flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 max-md:py-2.5 rounded-lg text-sm font-medium transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
     [class.text-danger]="item.danger"
     [class.hover:bg-danger]="item.danger && !item.disabled"
     [class.text-primary]="!item.danger"
     [class.hover:bg-accent]="!item.danger && !item.disabled"
     [class.hover:text-white]="!item.disabled"
     [disabled]="item.disabled"
-    (click)="run(item)"
+    (click)="run(item, subIndex)"
   >
     @if (item.icon) {
     <i
@@ -90,7 +130,10 @@
     </span>
     }
     @if (hasSub) {
-    <i class="fas fa-chevron-right text-2xs text-faint group-hover/item:text-white shrink-0"></i>
+    <i
+      class="fas fa-chevron-right text-2xs text-faint group-hover/item:text-white shrink-0 transition-micro"
+      [class.rotate-90]="expanded"
+    ></i>
     }
   </button>
   }

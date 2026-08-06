@@ -23,6 +23,11 @@ export const MemberStore = signalStore(
     // the cache fills; without this each fires its own GET.
     const inFlight = new Map<string, Promise<void>>();
 
+    // Self-heal throttle: last time we reloaded a guild because a live event referenced an
+    // unknown member (see ensureKnown). Caps the refetch to once per guild per window so an
+    // event for a genuinely-non-member (or a reload that hasn't landed yet) can't spam the API.
+    const lastEnsureAt = new Map<string, number>();
+
     const dedupe = (key: string, run: () => Promise<void>): Promise<void> => {
       const existing = inFlight.get(key);
       if (existing) return existing;
@@ -85,6 +90,24 @@ export const MemberStore = signalStore(
       });
     },
 
+    /**
+     * Re-resolves a channel's viewer set, overwriting the cache. Called when the member list grows
+     * (someone joined): the cached set was resolved before they existed, so the sidebar's
+     * ViewChannel filter would keep hiding a just-joined member until a channel switch otherwise.
+     */
+    async refreshViewers(guildId: string, channelId: string): Promise<void> {
+      return dedupe(`viewers-refresh:${channelId}`, async () => {
+        try {
+          const viewers = await service.getChannelViewers(guildId, channelId);
+          patchState(store, {
+            viewersByChannel: { ...store.viewersByChannel(), [channelId]: viewers },
+          });
+        } catch {
+          // Fail open — leave the existing set; the sidebar still shows previously-known members.
+        }
+      });
+    },
+
     /** Fetches the caller's guild capabilities once and caches them; a no-op if cached or in flight. */
     async loadCapabilitiesIfNeeded(guildId: string): Promise<void> {
       if (store.capsByGuild()[guildId]) return;
@@ -112,6 +135,22 @@ export const MemberStore = signalStore(
       } catch {
         // Leave the cached value in place.
       }
+    },
+
+    /**
+     * Self-heal: a live event (typing / voice / message) referenced a user we don't have in the
+     * guild's cached member list, so the MemberJoined broadcast that should have added them was
+     * missed. Refetch the whole list (throttled per guild) so the newcomer stops rendering as
+     * "Someone" / a ghost until a manual refresh. A no-op when the guild isn't loaded (nothing to
+     * reconcile against) or the user is already known.
+     */
+    ensureKnown(guildId: string, userId: string): void {
+      const list = store.byGuild()[guildId];
+      if (!list || list.some((m) => m.userId === userId)) return;
+      const now = Date.now();
+      if (now - (lastEnsureAt.get(guildId) ?? 0) < 4000) return;
+      lastEnsureAt.set(guildId, now);
+      void this.reload(guildId).catch(() => {});
     },
 
     /** Adds a member to local state (invite redeem via SignalR). Cache-guarded + idempotent — a
@@ -243,6 +282,15 @@ export const MemberStore = signalStore(
         switch (e.type) {
           case 'MemberJoined':
             store.addMember(e.payload.guildId, e.payload.member);
+            break;
+          // Self-heal backstop: if a message or voice event names someone we don't have (a missed
+          // MemberJoined), refetch the guild's members so they resolve instead of showing "Someone".
+          case 'MessageReceived':
+            if (e.message.guildId) store.ensureKnown(e.message.guildId, e.message.userId);
+            break;
+          case 'VoiceParticipantJoined':
+          case 'VoiceStateUpdated':
+            if (e.payload.guildId) store.ensureKnown(e.payload.guildId, e.payload.userId);
             break;
           case 'MemberRemoved':
             store.removeMember(e.payload.guildId, e.payload.userId);

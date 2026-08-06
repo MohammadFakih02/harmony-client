@@ -7,6 +7,7 @@ import { GuildSummary } from '../../../core/models/guild.models';
 import { UiProfileBanner, ConfirmService } from '../../../shared/ui';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { extractApiError } from '../../../shared/util/api-error';
+import { MobileNavService } from '../../../core/services/mobile-nav.service';
 
 /**
  * Public-server discovery — browse discoverable (is_public) guilds, biggest first, with a debounced
@@ -20,7 +21,15 @@ import { extractApiError } from '../../../shared/util/api-error';
   imports: [FormsModule, UiProfileBanner],
   host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden' },
   template: `
-    <header class="flex items-center gap-3 px-6 h-14 shrink-0 border-b border-border-subtle">
+    <header class="flex items-center gap-3 px-6 max-md:px-3 h-14 shrink-0 border-b border-border-subtle">
+      <button
+        type="button"
+        class="hidden max-md:flex w-9 h-9 items-center justify-center rounded-lg text-muted hover:text-primary shrink-0"
+        aria-label="Open navigation"
+        (click)="mobileNav.openLeft()"
+      >
+        <i class="fas fa-bars"></i>
+      </button>
       <i class="fas fa-compass text-lg text-accent"></i>
       <h1 class="text-lg font-bold text-primary">Discover</h1>
     </header>
@@ -109,6 +118,7 @@ export class Discover implements OnInit {
   private readonly guildStore = inject(GuildStore);
   private readonly router = inject(Router);
   private readonly confirmService = inject(ConfirmService);
+  protected readonly mobileNav = inject(MobileNavService);
 
   protected readonly query = signal('');
   protected readonly results = signal<GuildSummary[]>([]);

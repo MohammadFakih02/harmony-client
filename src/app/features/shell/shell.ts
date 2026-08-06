@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, OnDestroy, OnInit, signal, untracked } from '@angular/core';
+import { Component, computed, effect, HostListener, inject, OnDestroy, OnInit, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
@@ -38,7 +38,6 @@ import { ToastContainer } from './toast-container/toast-container';
 import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { ConnectionBanner } from './connection-banner';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
-import { CallOverlay } from '../voice/call-overlay/call-overlay';
 import { IncomingCall } from '../voice/incoming-call/incoming-call';
 import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu, ConfirmDialog } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
@@ -50,11 +49,14 @@ import {
 } from '../../core/models/direct-message.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
+import { NavigationHistoryService } from '../../core/services/navigation-history.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { DirectMessageService } from '../../core/services/direct-message.service';
 import { FileService } from '../../core/services/file.service';
 import { publicFileUrl } from '../../shared/util/public-file-url';
 import { LocalSettingsStore } from '../../core/stores/local-settings.store';
+import { ViewportService } from '../../core/services/viewport.service';
+import { MobileNavService } from '../../core/services/mobile-nav.service';
 import { ResizeHandle } from '../../shared/directives/resize-handle.directive';
 import {
   CHANNEL_SIDEBAR_MAX,
@@ -73,7 +75,6 @@ import {
     MemberSidebar,
     NotificationBell,
     GroupDmModal,
-    CallOverlay,
     IncomingCall,
     UiAvatar,
     UiIconButton,
@@ -101,8 +102,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly channelSidebarMax = CHANNEL_SIDEBAR_MAX;
   protected readonly rightSidebarMin = RIGHT_SIDEBAR_MIN;
   protected readonly rightSidebarMax = RIGHT_SIDEBAR_MAX;
+  // Mobile layout: the sidebars become off-canvas drawers; the right panels start closed there.
+  protected readonly viewport = inject(ViewportService);
+  protected readonly nav = inject(MobileNavService);
   private readonly gateway = inject(GatewayEvents);
-  protected readonly showMembers = signal(true);
+  protected readonly showMembers = signal(!this.viewport.isMobile());
   private readonly router = inject(Router);
 
   // The member list only applies inside a guild — not on Friends / DM screens.
@@ -128,7 +132,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   ];
   protected readonly activeGuildId = computed(() => this.guildStore.selectedGuildId());
   // Right-hand DM profile panel (mirrors the guild member-list toggle).
-  protected readonly showDmProfile = signal(true);
+  protected readonly showDmProfile = signal(!this.viewport.isMobile());
   private readonly guildStore = inject(GuildStore);
   private readonly channelStore = inject(ChannelStore);
   private readonly messageStore = inject(MessageStore);
@@ -148,6 +152,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly toast = inject(ToastService);
+  // Injected so the previous-URL recorder starts at boot — Settings/Server-Settings read it to
+  // return you to the exact screen you came from. Do not remove.
+  private readonly navHistory = inject(NavigationHistoryService);
 
   // --- Header bar context (guild channel name+topic, or DM peer/group identity) ---
   protected readonly headerChannel = computed(() => this.channelStore.selectedChannel());
@@ -202,6 +209,22 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   private readonly subs = new Subscription();
 
+  /**
+   * A right-click that lands OUTSIDE an open CDK dropdown hits its transparent backdrop, which would
+   * otherwise show the native browser menu (the app's own menus never got a chance). Suppress the
+   * native menu and dismiss the dropdown — Discord-style — by firing the left-click the backdrop
+   * already closes on. Scoped to `.cdk-overlay-backdrop`, so right-clicks on real content (which run
+   * their own `(contextmenu)` handlers) are untouched.
+   */
+  @HostListener('document:contextmenu', ['$event'])
+  protected onDocumentContextMenu(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (target?.classList.contains('cdk-overlay-backdrop')) {
+      event.preventDefault();
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }
+  }
+
   constructor() {
     // Opening a channel counts as "viewing the cause": clear any unread mention
     // notifications for it, mirroring how the unread badge resets on the active channel.
@@ -214,6 +237,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     effect(() => {
       const peer = this.dmPeer();
       if (peer) untracked(() => void this.profileStore.refresh(peer.userId));
+    });
+
+    // Mobile: the right drawer (member list / DM profile) is per-conversation — close it when the
+    // active channel changes so it doesn't sit open over the next chat.
+    effect(() => {
+      this.messageStore.activeChannelId();
+      if (untracked(() => this.viewport.isMobile())) {
+        this.showMembers.set(false);
+        this.showDmProfile.set(false);
+      }
     });
 
     // Ensure guild-level capabilities + roles are loaded for the active guild (the header's Roles
@@ -456,6 +489,17 @@ export class ShellComponent implements OnInit, OnDestroy {
             }
           }
           break;
+
+        case 'TypingStarted': {
+          // Self-heal: a typing ping in the open guild channel from someone the member store
+          // doesn't have (a missed MemberJoined) would render as "Someone". Reconcile so the name
+          // resolves. Typing carries only a channelId, so key off the active guild + channel.
+          const guildId = this.guildStore.selectedGuildId();
+          if (guildId && e.payload.channelId === this.messageStore.activeChannelId()) {
+            this.memberStore.ensureKnown(guildId, e.payload.userId);
+          }
+          break;
+        }
 
         case 'Kicked':
           // Reaches only the affected user, so any emission means *we* were removed.
