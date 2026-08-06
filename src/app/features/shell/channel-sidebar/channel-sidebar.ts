@@ -1,14 +1,26 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
-import { CdkDrag, CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkDragMove, DragDropModule } from '@angular/cdk/drag-drop';
+import { CdkScrollable } from '@angular/cdk/scrolling';
 import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { Channel, ChannelCategory, SidebarEntry } from '../../../core/models/channel.models';
+import {
+  BandRow,
+  DropIndicator,
+  DropTarget,
+  buildSidebarView,
+  insertBefore,
+  pickBand,
+  resolveCategoryDrop,
+  resolveChannelDrop,
+  sameOrder,
+} from './sidebar-dnd';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { GuildStore } from '../../../core/stores/guild.store';
@@ -45,6 +57,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { delayedSignal } from '../../../shared/util/delayed-signal';
 import { publicFileUrl } from '../../../shared/util/public-file-url';
 import { GuildNotificationSettingsStore } from '../../../core/stores/guild-notification-settings.store';
+import { ViewportService } from '../../../core/services/viewport.service';
+import { MobileNavService } from '../../../core/services/mobile-nav.service';
 import {
   NOTIFICATION_LEVEL_DEFAULT,
   NOTIFICATION_LEVEL_OPTIONS,
@@ -75,6 +89,7 @@ interface ExpiryOption {
     NgTemplateOutlet,
     OverlayModule,
     DragDropModule,
+    CdkScrollable,
     GroupDmModal,
     ChannelSettingsModal,
     InvitePeopleModal,
@@ -97,6 +112,10 @@ export class ChannelSidebar {
   protected readonly nicknameStore = inject(NicknameStore);
   protected readonly guildNotif = inject(GuildNotificationSettingsStore);
   protected readonly friendStore = inject(FriendStore);
+  // Mobile: this sidebar lives inside the shell's left drawer — navigation taps close it, and
+  // drag-reorder is disabled on coarse pointers (it fights scroll + the long-press menu).
+  protected readonly viewport = inject(ViewportService);
+  private readonly mobileNav = inject(MobileNavService);
   private readonly contextMenu = inject(ContextMenuService);
   private readonly router = inject(Router);
   protected readonly voiceService = inject(VoiceService);
@@ -120,6 +139,11 @@ export class ChannelSidebar {
 
   /** The channel being edited in the settings modal (row gear, or right-click → Edit Channel), or null. */
   protected readonly editingChannel = signal<Channel | null>(null);
+
+  /** Closes the mobile left drawer after a navigation tap (harmless no-op on desktop). */
+  protected closeDrawer(): void {
+    this.mobileNav.closeLeft();
+  }
 
   constructor() {
     // A DM/group peer isn't guaranteed to be covered by any other presence load — the guild
@@ -288,29 +312,29 @@ export class ChannelSidebar {
     }
   }
 
-  // --- Sidebar drag-and-drop: one top-level list (bare channels + category blocks, interleaved
-  //     by position) plus a nested list per category, all connected. ---
+  // --- Sidebar drag-and-drop -------------------------------------------------------------------
+  // ONE drop list with CDK sorting DISABLED. CDK supplies the gesture (5px threshold, preview,
+  // placeholder, drop event); WE resolve the target: every drag move rect-tests the live rows —
+  // trustworthy precisely because nothing shifts mid-drag — and renders an insertion line /
+  // into-category highlight; the drop commits the last resolved target (sidebar-dnd.ts holds the
+  // pure math). The previous nested-connected-lists design could not be made reliable: CDK caches
+  // nested-list rects at drag start while live-sorting transforms the visual blocks away from
+  // those rects (worst dragging DOWN onto a category), and it resets the shifted siblings before
+  // emitting the drop, so drop-time hit-tests always saw geometry the user never did.
 
-  protected readonly TOP_LEVEL_LIST_ID = 'channel-top-level';
+  private readonly dropRoot = viewChild<ElementRef<HTMLElement>>('dropRoot');
 
-  /**
-   * Every drop-list id (each category + top level), so cdkDropListConnectedTo links them all.
-   * ORDER IS LOAD-BEARING: CDK resolves a cross-list transfer to the FIRST connected list whose
-   * rect contains the pointer, and the top-level list's rect contains every category list (they're
-   * DOM-nested inside it). Top-level must come LAST or it steals every into-a-category drop.
-   */
-  protected readonly connectedDropListIds = computed(() => [
-    ...this.channelStore.currentCategories().map((c) => this.categoryDropListId(c.id)),
-    this.TOP_LEVEL_LIST_ID,
-  ]);
+  /** Below the last row, this much slop still targets that row; past it = top-level append
+   *  (also the only way to land a bare channel AFTER a trailing category block). */
+  private static readonly BOTTOM_SLOP_PX = 12;
 
-  protected categoryDropListId(categoryId: string): string {
-    return `channel-category-${categoryId}`;
-  }
-
-  /** Category blocks may only be dropped at top level — never inside another category. */
-  protected readonly channelOnlyPredicate = (drag: CdkDrag<unknown>): boolean =>
-    (drag.data as { kind?: string } | null)?.kind !== 'category';
+  private dragging:
+    | { kind: 'channel'; channel: Channel }
+    | { kind: 'category'; catId: string }
+    | null = null;
+  private pendingTarget: DropTarget | null = null;
+  private lastPointerY: number | null = null;
+  protected readonly dropIndicator = signal<DropIndicator | null>(null);
 
   protected entryTrackId(entry: SidebarEntry): string {
     return entry.kind === 'category' ? `cat-${entry.category.id}` : `ch-${entry.channel.id}`;
@@ -320,68 +344,174 @@ export class ChannelSidebar {
     return entry.kind === 'category' ? entry.category.id : entry.channel.id;
   }
 
-  /**
-   * Drop onto the top-level list: reorders the mixed sequence (categories are ordinary channels
-   * with positions, so moving a group rides the same reorder endpoint), or — when the drag came
-   * out of a category's list — ungroups the channel, landing it at the drop index.
-   */
-  protected onTopLevelDrop(event: CdkDragDrop<SidebarEntry[]>): void {
-    const guildId = this.guildStore.selectedGuildId();
-    if (!guildId) return;
-    const entries = [...this.channelStore.sidebarEntries()];
-
-    if (event.previousContainer === event.container) {
-      if (event.previousIndex === event.currentIndex) return;
-      moveItemInArray(entries, event.previousIndex, event.currentIndex);
-      void this.channelStore.reorderChannels(
-        guildId,
-        entries.map((e) => ChannelSidebar.topLevelEntryId(e)),
-      );
-      return;
+  protected onDragStarted(data: SidebarEntry | Channel): void {
+    if ('kind' in data) {
+      this.dragging =
+        data.kind === 'category'
+          ? { kind: 'category', catId: data.category.id }
+          : { kind: 'channel', channel: data.channel };
+    } else {
+      this.dragging = { kind: 'channel', channel: data };
     }
-
-    const data = event.item.data as SidebarEntry | Channel;
-    if ('kind' in data) return; // a category block can't arrive from another list
-    entries.splice(event.currentIndex, 0, { kind: 'channel', channel: data });
-    void this.channelStore
-      .moveToCategory(guildId, data.id, null)
-      .then(() =>
-        this.channelStore.reorderChannels(
-          guildId,
-          entries.map((e) => ChannelSidebar.topLevelEntryId(e)),
-        ),
-      )
-      .catch(() => {});
+    this.pendingTarget = null;
+    this.lastPointerY = null;
+    this.dropIndicator.set(null);
   }
 
-  /**
-   * Drop onto a category's list: reorders within the category, or — when the drag came from the
-   * top level or another category — moves the channel into this category at the drop index.
-   */
-  protected onCategoryDrop(event: CdkDragDrop<Channel[]>, category: ChannelCategory): void {
-    const guildId = this.guildStore.selectedGuildId();
-    if (!guildId) return;
-    const moved = event.item.data as Channel;
-    if (!moved || 'kind' in moved) return;
+  protected onDragMoved(event: CdkDragMove): void {
+    // pointerPosition is page-based; rects are viewport-based (the shell never window-scrolls,
+    // but subtract anyway for correctness).
+    this.lastPointerY = event.pointerPosition.y - window.scrollY;
+    this.updateDropTarget();
+  }
 
-    if (event.previousContainer === event.container) {
-      if (event.previousIndex === event.currentIndex) return;
-      const ids = category.channels.map((c) => c.id);
-      ids.splice(event.previousIndex, 1);
-      ids.splice(event.currentIndex, 0, moved.id);
-      void this.channelStore.reorderChannels(guildId, ids);
+  /** CDK auto-scroll moves the rows under a stationary pointer without emitting drag moves —
+   *  recompute against the last known pointer so the indicator tracks the scrolled content. */
+  protected onSidebarScrolled(): void {
+    if (this.dragging) this.updateDropTarget();
+  }
+
+  protected onDragEnded(): void {
+    // CDK emits `ended` BEFORE `dropped` (DragRef._cleanupDragArtifacts: ended → dropped →
+    // container.drop, all in one synchronous block) — clearing here directly would wipe the
+    // pending target the drop is about to commit. Defer one microtask: a real drop reads and
+    // clears the state first; an end-without-drop still gets cleaned up right after.
+    queueMicrotask(() => this.clearDragState());
+  }
+
+  private updateDropTarget(): void {
+    const drag = this.dragging;
+    const root = this.dropRoot()?.nativeElement;
+    const y = this.lastPointerY;
+    if (!drag || !root || y === null) return;
+    const view = buildSidebarView(this.channelStore.sidebarEntries());
+    const res =
+      drag.kind === 'channel'
+        ? resolveChannelDrop(
+            pickBand(
+              this.collectRows(root, '[data-drop-row], [data-drop-header]'),
+              y,
+              ChannelSidebar.BOTTOM_SLOP_PX,
+            ),
+            view,
+            drag.channel.id,
+          )
+        : resolveCategoryDrop(
+            pickBand(
+              this.collectRows(root, '[data-drop-block], [data-drop-row^="top:"]'),
+              y,
+              ChannelSidebar.BOTTOM_SLOP_PX,
+            ),
+            view,
+            drag.catId,
+          );
+    this.pendingTarget = res?.target ?? null;
+    this.dropIndicator.set(res?.indicator ?? null);
+  }
+
+  /** Commits the target resolved by the last move. Identity-based (filter self, insert before
+   *  anchor) — no index math against a shuffled list, because the list never shuffles. */
+  protected onSidebarDrop(): void {
+    const drag = this.dragging;
+    const target = this.pendingTarget;
+    this.clearDragState();
+    const guildId = this.guildStore.selectedGuildId();
+    if (!drag || !target || !guildId) return;
+
+    if (drag.kind === 'category') {
+      if (target.scope !== 'top') return; // unreachable by construction; guards the type
+      const topIds = this.topLevelIds();
+      const ids = insertBefore(topIds, drag.catId, target.before);
+      if (!sameOrder(ids, topIds)) void this.channelStore.reorderChannels(guildId, ids);
       return;
     }
 
-    const ids = category.channels.filter((c) => c.id !== moved.id).map((c) => c.id);
-    // A collapsed category renders no rows (CDK always reports index 0) — append at the end
-    // instead, and expand so the drop visibly landed.
-    ids.splice(category.collapsed ? ids.length : event.currentIndex, 0, moved.id);
-    if (category.collapsed) this.channelStore.toggleCategory(category.id);
-    void this.channelStore
-      .moveToCategory(guildId, moved.id, category.id)
-      .then(() => this.channelStore.reorderChannels(guildId, ids))
-      .catch(() => {});
+    const channelId = drag.channel.id;
+    const currentCatId = this.displayedCategoryIdOf(channelId);
+
+    if (target.scope === 'top') {
+      const topIds = this.topLevelIds();
+      const ids = insertBefore(topIds, channelId, target.before);
+      if (currentCatId !== null) {
+        void this.channelStore
+          .moveToCategory(guildId, channelId, null)
+          .then(() => this.channelStore.reorderChannels(guildId, ids))
+          .catch(() => {});
+      } else if (!sameOrder(ids, topIds)) {
+        void this.channelStore.reorderChannels(guildId, ids);
+      }
+      return;
+    }
+
+    const category = this.channelStore.currentCategories().find((c) => c.id === target.catId);
+    if (!category) return;
+    const catIds = category.channels.map((c) => c.id);
+    const ids = insertBefore(catIds, channelId, target.before);
+    if (category.collapsed) this.channelStore.toggleCategory(category.id); // land visibly
+    if (currentCatId !== target.catId) {
+      void this.channelStore
+        .moveToCategory(guildId, channelId, target.catId)
+        .then(() => this.channelStore.reorderChannels(guildId, ids))
+        .catch(() => {});
+    } else if (!sameOrder(ids, catIds)) {
+      void this.channelStore.reorderChannels(guildId, ids);
+    }
+  }
+
+  // Indicator helpers for the template.
+  protected lineAbove(key: string): boolean {
+    const ind = this.dropIndicator();
+    return ind?.kind === 'line' && ind.edge === 'above' && ind.key === key;
+  }
+
+  protected lineBelow(key: string): boolean {
+    const ind = this.dropIndicator();
+    return ind?.kind === 'line' && ind.edge === 'below' && ind.key === key;
+  }
+
+  protected isDropInto(catId: string): boolean {
+    const ind = this.dropIndicator();
+    return ind?.kind === 'into' && ind.catId === catId;
+  }
+
+  private clearDragState(): void {
+    this.dragging = null;
+    this.pendingTarget = null;
+    this.lastPointerY = null;
+    this.dropIndicator.set(null);
+  }
+
+  /** Visible band rows in document (= visual) order. Skips zero-height elements (the hidden
+   *  original of the dragged row); the CDK placeholder clone is deliberately kept — it carries
+   *  the same data attribute and occupies the origin slot. */
+  private collectRows(root: HTMLElement, selector: string): BandRow[] {
+    const rows: BandRow[] = [];
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>(selector))) {
+      const rect = el.getBoundingClientRect();
+      if (rect.height <= 0) continue;
+      const key =
+        el.getAttribute('data-drop-row') ??
+        (el.hasAttribute('data-drop-header')
+          ? `head:${el.getAttribute('data-drop-header')}`
+          : `block:${el.getAttribute('data-drop-block')}`);
+      rows.push({ key, top: rect.top, bottom: rect.bottom });
+    }
+    return rows;
+  }
+
+  private topLevelIds(): string[] {
+    return this.channelStore.sidebarEntries().map((e) => ChannelSidebar.topLevelEntryId(e));
+  }
+
+  /** The category the channel is DISPLAYED under right now (null = top level). Reads the store's
+   *  category view rather than raw categoryId, so a pointer at a deleted category — which the
+   *  sidebar degrades to top-level — reads as top-level here too. */
+  private displayedCategoryIdOf(channelId: string): string | null {
+    return (
+      this.channelStore
+        .currentCategories()
+        .find((c) => c.channels.some((ch) => ch.id === channelId))?.id ?? null
+    );
   }
 
   /** Right-click empty space below the categories/channels — Create Channel/Category
@@ -851,11 +981,15 @@ export class ChannelSidebar {
     {
       value: 'invisible',
       label: 'Invisible',
-      dotClass: 'bg-surface-3',
+      // Hollow ring (Discord's offline glyph) — a filled surface-3 dot vanishes in light mode.
+      dotClass: 'bg-transparent border-2 border-faint',
       description: 'You will appear offline.',
     },
   ];
+  // "Never" leads: it's the default selection, so the 4×2 grid reads Never → ascending durations.
+  // (The custom-status <select> renders the null entry as "Don't clear" via its own override.)
   protected readonly expiryOptions: ExpiryOption[] = [
+    { label: 'Never', minutes: null },
     { label: '15m', minutes: 15 },
     { label: '30m', minutes: 30 },
     { label: '1h', minutes: 60 },
@@ -863,7 +997,6 @@ export class ChannelSidebar {
     { label: '4h', minutes: 240 },
     { label: '8h', minutes: 480 },
     { label: '24h', minutes: 1440 },
-    { label: "Don't clear", minutes: null },
   ];
 
   // "Clear after" duration applied to the next status pick (null = don't clear).

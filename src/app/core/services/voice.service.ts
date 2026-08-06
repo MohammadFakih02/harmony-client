@@ -20,6 +20,23 @@ import { VoicePrefsService } from './voice-prefs.service';
 
 type LiveKitModule = typeof import('livekit-client');
 
+// --- Client-side speaking detection (WebAudio) ---------------------------------------------------
+// LiveKit's ActiveSpeakersChanged is computed server-side and pushed on a coarse interval, which
+// reads as laggy/inaccurate next to Discord. Instead we run a local AnalyserNode over every
+// subscribed mic track (plus our own) and poll RMS at SPEAKING_POLL_MS — instant attack, short
+// release so the ring doesn't flicker between words.
+const SPEAKING_POLL_MS = 80;
+const SPEAKING_RMS_THRESHOLD = 0.02;
+const SPEAKING_RELEASE_MS = 300;
+
+interface SpeechSource {
+  identity: string;
+  source: MediaStreamAudioSourceNode;
+  analyser: AnalyserNode;
+  buf: Float32Array<ArrayBuffer>;
+  lastAbove: number;
+}
+
 /** The attachable video tracks a participant is publishing, camera and screenshare slotted apart. */
 export interface ParticipantVideoTracks {
   camera?: LocalVideoTrack | RemoteVideoTrack;
@@ -59,6 +76,14 @@ export class VoiceService {
   // userIds whose screenshare AUDIO this viewer consumes — stream audio is watch-gated (synced
   // from the store's click-to-watch set), so non-watchers neither hear nor download it.
   private watchedStreams: ReadonlySet<string> = new Set();
+  // Client-side speaking detection: one shared AudioContext + an analyser per live mic track,
+  // polled on speechTimer. Keyed by trackSid (remote) / 'local-mic' (own mic).
+  private speechCtx: AudioContext | null = null;
+  private speechTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly speechSources = new Map<string, SpeechSource>();
+  // The in-flight mic publish. connect() no longer blocks the join on getUserMedia (it's the
+  // slowest step); mute toggles chain behind this so a quick mute-at-join can't race the enable.
+  private micReady: Promise<unknown> = Promise.resolve();
 
   /** userIds currently speaking (LiveKit active-speaker detection) — drives the roster highlight. */
   readonly speakingUserIds = signal<ReadonlySet<string>>(new Set());
@@ -171,11 +196,13 @@ export class VoiceService {
     this.room = room;
     this.onEnded = onEnded;
 
-    try {
-      await room.localParticipant.setMicrophoneEnabled(true);
-    } catch {
-      // No mic (denied/missing device): stay in the call listen-only; the user can retry unmute.
-    }
+    // Publish the mic WITHOUT blocking the join — getUserMedia (permission prompt / device
+    // spin-up) is routinely the slowest step and nothing else depends on it. A failure leaves
+    // us in the call listen-only; the user can retry via unmute.
+    this.micReady = room.localParticipant
+      .setMicrophoneEnabled(true)
+      .catch(() => {})
+      .finally(() => this.refreshLocalMicAnalyser());
 
     // Re-apply deafen if it was toggled before connecting.
     if (this.deafened) this.applyAudioPrefs();
@@ -210,6 +237,10 @@ export class VoiceService {
         el.style.display = 'none';
         document.body.appendChild(el);
         this.audioEls.set(track.sid, { el, identity: participant.identity, source });
+        // Mic tracks feed the local speaking detector (screen audio must not light the ring).
+        if (source === 'mic') {
+          this.addSpeechSource(track.sid, participant.identity, track.mediaStreamTrack);
+        }
       },
     );
 
@@ -224,6 +255,7 @@ export class VoiceService {
           return;
         }
         if (!track.sid) return;
+        this.removeSpeechSource(track.sid);
         const entry = this.audioEls.get(track.sid);
         if (entry) {
           track.detach(entry.el);
@@ -248,16 +280,15 @@ export class VoiceService {
       if (slot === 'screen') this.localScreenShareOn.set(false);
     });
 
-    room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Array<{ identity: string }>) => {
-      this.speakingUserIds.set(new Set(speakers.map((s) => s.identity)));
-    });
+    // NOTE: speaking detection deliberately does NOT use RoomEvent.ActiveSpeakersChanged — that's
+    // computed server-side and pushed on a coarse interval (visibly delayed). The local analyser
+    // set (addSpeechSource/pollSpeaking) drives speakingUserIds instead.
 
     room.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
-      // Drop any lingering speaker highlight for someone who left.
-      if (this.speakingUserIds().has(p.identity)) {
-        const next = new Set(this.speakingUserIds());
-        next.delete(p.identity);
-        this.speakingUserIds.set(next);
+      // Drop any lingering analyser/highlight for someone who left (unsubscribes usually precede
+      // this, but not guaranteed).
+      for (const [key, entry] of [...this.speechSources]) {
+        if (entry.identity === p.identity) this.removeSpeechSource(key);
       }
       // And any video slots of theirs (unsubscribes usually precede this, but not guaranteed).
       if (this.videoTracks().has(p.identity)) {
@@ -292,6 +323,16 @@ export class VoiceService {
       el.remove();
     }
     this.audioEls.clear();
+    if (this.speechTimer) {
+      clearInterval(this.speechTimer);
+      this.speechTimer = null;
+    }
+    for (const key of [...this.speechSources.keys()]) this.removeSpeechSource(key);
+    if (this.speechCtx) {
+      void this.speechCtx.close().catch(() => {});
+      this.speechCtx = null;
+    }
+    this.micReady = Promise.resolve();
     this.speakingUserIds.set(new Set());
     // Tracks die with the room; the per-user volume/local-mute *preferences* survive the session.
     this.videoTracks.set(new Map());
@@ -299,9 +340,13 @@ export class VoiceService {
     this.room = null;
   }
 
-  /** Mutes/unmutes the local microphone publication. */
+  /** Mutes/unmutes the local microphone publication (chained behind the initial mic publish). */
   setMicMuted(muted: boolean): void {
-    void this.room?.localParticipant.setMicrophoneEnabled(!muted).catch(() => {});
+    const room = this.room;
+    if (!room) return;
+    this.micReady = this.micReady
+      .then(() => room.localParticipant.setMicrophoneEnabled(!muted))
+      .catch(() => {});
   }
 
   /** Deafen = silence all incoming audio (and, by convention, also mute your own mic — the store does that). */
@@ -331,7 +376,31 @@ export class VoiceService {
   async setScreenShareEnabled(on: boolean): Promise<boolean> {
     if (!this.room) return false;
     try {
-      await this.room.localParticipant.setScreenShareEnabled(on, { audio: true });
+      if (on) {
+        const { screenShareResolution, screenShareFps } = this.prefs.prefs();
+        // Ceiling stays below 1080p by design (VoicePrefs) so a screenshare can't saturate a slow/
+        // tunnelled uplink. `resolution` requests the capture size; `screenShareEncoding` is the hard
+        // cap on what's actually sent (bitrate + framerate).
+        const dims = screenShareResolution === '480p'
+          ? { width: 854, height: 480 }
+          : { width: 1280, height: 720 };
+        const maxBitrate = screenShareResolution === '480p' ? 1_000_000 : 2_500_000;
+        await this.room.localParticipant.setScreenShareEnabled(
+          true,
+          {
+            audio: true,
+            resolution: {
+              width: dims.width,
+              height: dims.height,
+              frameRate: screenShareFps,
+              aspectRatio: dims.width / dims.height,
+            },
+          },
+          { screenShareEncoding: { maxBitrate, maxFramerate: screenShareFps } },
+        );
+      } else {
+        await this.room.localParticipant.setScreenShareEnabled(false);
+      }
       return on;
     } catch (err) {
       // Cancelling the browser picker also lands here (NotAllowedError) — expected, stay silent.
@@ -357,6 +426,9 @@ export class VoiceService {
   async switchActiveDevice(kind: MediaDeviceKind, deviceId: string | null): Promise<void> {
     if (!this.room) return;
     await this.room.switchActiveDevice(kind, deviceId ?? 'default').catch(() => {});
+    // A mic switch restarts the local track in place (same publication, NEW MediaStreamTrack) —
+    // re-point the speaking analyser at the new track or the own-ring goes dead.
+    if (kind === 'audioinput') this.refreshLocalMicAnalyser();
   }
 
   /** Sets a per-user local voice (mic) playback volume (0..1). A client-side preference only. */
@@ -421,6 +493,65 @@ export class VoiceService {
     for (const { el, identity, source } of this.audioEls.values()) {
       el.muted = this.isSilenced(identity);
       el.volume = this.volumeFor(identity, source);
+    }
+  }
+
+  // --- speaking detection (local WebAudio analysers) ---
+
+  /** Registers a mic MediaStreamTrack with the speaking detector. Safe to call twice per key. */
+  private addSpeechSource(key: string, identity: string, msTrack: MediaStreamTrack | undefined): void {
+    if (!msTrack || this.speechSources.has(key)) return;
+    try {
+      const ctx = (this.speechCtx ??= new AudioContext());
+      if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+      const source = ctx.createMediaStreamSource(new MediaStream([msTrack]));
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      this.speechSources.set(key, {
+        identity,
+        source,
+        analyser,
+        buf: new Float32Array(analyser.fftSize),
+        lastAbove: 0,
+      });
+      this.speechTimer ??= setInterval(() => this.pollSpeaking(), SPEAKING_POLL_MS);
+    } catch {
+      // WebAudio unavailable — no speaking ring for this track; audio playback is unaffected.
+    }
+  }
+
+  private removeSpeechSource(key: string): void {
+    const entry = this.speechSources.get(key);
+    if (!entry) return;
+    entry.source.disconnect();
+    this.speechSources.delete(key);
+  }
+
+  /** (Re)binds the analyser for our own mic — after the initial publish and on device switches. */
+  private refreshLocalMicAnalyser(): void {
+    if (!this.room || !this.lk) return;
+    this.removeSpeechSource('local-mic');
+    const pub = this.room.localParticipant.getTrackPublication(this.lk.Track.Source.Microphone);
+    this.addSpeechSource('local-mic', this.room.localParticipant.identity, pub?.track?.mediaStreamTrack);
+  }
+
+  /** RMS-thresholds every mic analyser: instant attack, SPEAKING_RELEASE_MS release. */
+  private pollSpeaking(): void {
+    const now = Date.now();
+    const speaking = new Set<string>();
+    for (const entry of this.speechSources.values()) {
+      entry.analyser.getFloatTimeDomainData(entry.buf);
+      let sum = 0;
+      for (let i = 0; i < entry.buf.length; i++) sum += entry.buf[i] * entry.buf[i];
+      if (Math.sqrt(sum / entry.buf.length) > SPEAKING_RMS_THRESHOLD) entry.lastAbove = now;
+      if (entry.lastAbove !== 0 && now - entry.lastAbove < SPEAKING_RELEASE_MS) {
+        speaking.add(entry.identity);
+      }
+    }
+    const cur = this.speakingUserIds();
+    if (cur.size !== speaking.size || [...speaking].some((id) => !cur.has(id))) {
+      this.speakingUserIds.set(speaking);
     }
   }
 

@@ -1,6 +1,7 @@
-<!-- One call tile (camera/avatar or screenshare) — always-dark, lives inside the stage/overlay grid. -->
+<!-- One call tile (camera/avatar or screenshare) — dark in dark palettes, theme-aware in light mode
+     (the .voice-* utilities in styles.css); lives inside the stage/overlay grid. -->
 <div
-  class="relative w-full h-full min-h-0 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden transition-shadow duration-150 animate-fade-in"
+  class="relative w-full h-full min-h-0 rounded-xl voice-tile-bg flex items-center justify-center overflow-hidden transition-shadow duration-150 animate-fade-in"
   [class.aspect-video]="!emphasized()"
   [class.ring-2]="isSpeaking()"
   [class.ring-success]="isSpeaking()"
@@ -26,7 +27,7 @@
     <span class="text-2xs font-bold uppercase tracking-wider bg-danger text-white rounded px-1.5 py-0.5">Live</span>
     <button
       type="button"
-      class="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-micro"
+      class="px-3 py-1.5 rounded-md voice-chip voice-chip-hover voice-text text-xs font-medium transition-micro"
       (click)="watchStream($event)"
     >
       <i class="fas fa-display mr-1.5"></i>Watch Stream
@@ -34,7 +35,7 @@
   </div>
   } @else if (tile().kind === 'screen') {
   <!-- Watching, but the track hasn't arrived yet. -->
-  <div class="flex flex-col items-center gap-2 text-white/50">
+  <div class="flex flex-col items-center gap-2 voice-text-faint">
     <i class="fas fa-display text-2xl"></i>
     <span class="text-xs">Loading stream…</span>
   </div>
@@ -74,12 +75,14 @@
     }
   </span>
 
-  <!-- Per-tile local controls (overlay only, remote users only): mute-for-me + volume. -->
-  @if (showControls() && !isSelf() && tile().kind === 'camera') {
+  <!-- Per-tile local hover controls (remote tiles only). Camera: mute-for-me + mic volume.
+       Watched screen: stop-watching + stream-audio volume (independent of their mic volume). -->
+  @if (showControls() && !isSelf() && (tile().kind === 'camera' || watchingThisStream())) {
   <div
     class="absolute top-2 right-2 flex items-center gap-2 px-2 py-1 rounded-md bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
     (click)="$event.stopPropagation()"
   >
+    @if (tile().kind === 'camera') {
     <button
       type="button"
       class="w-6 h-6 flex items-center justify-center rounded text-white/80 hover:text-white transition-micro"
@@ -95,6 +98,17 @@
         [class.text-danger]="locallyMuted()"
       ></i>
     </button>
+    } @else {
+    <button
+      type="button"
+      class="w-6 h-6 flex items-center justify-center rounded text-white/80 hover:text-white transition-micro"
+      title="Stop watching stream"
+      aria-label="Stop watching stream"
+      (click)="stopWatching($event)"
+    >
+      <i class="fas fa-eye-slash text-xs"></i>
+    </button>
+    }
     <input
       type="range"
       min="0"
@@ -103,8 +117,8 @@
       class="w-20 accent-white"
       [value]="volume()"
       (input)="onVolumeInput($event)"
-      aria-label="User volume"
-      title="User volume"
+      [attr.aria-label]="tile().kind === 'screen' ? 'Stream volume' : 'User volume'"
+      [title]="tile().kind === 'screen' ? 'Stream volume' : 'User volume'"
     />
   </div>
   }

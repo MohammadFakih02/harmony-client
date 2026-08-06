@@ -91,10 +91,14 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
     appendAddFriendEntry(deps, target, entries);
   }
 
-  // Moderation — only for a non-self, non-owner member the caller can act on.
-  const moderatable =
-    !!guildId && !!member && !isSelf && !member.isOwner && !!caps;
-  if (!moderatable) {
+  // Role assignment is offered for anyone the caller can manage — INCLUDING yourself: you can
+  // give yourself a role below your highest (the owner bypasses hierarchy server-side). Other
+  // moderation (Timeout/Kick/Ban) stays non-self and non-owner. A non-self owner target is never
+  // manageable.
+  const canManage = !!guildId && !!member && !!caps;
+  const canAssignRoles = canManage && caps!.canManageRoles && (isSelf || !member!.isOwner);
+  const canModerate = canManage && !isSelf && !member!.isOwner;
+  if (!canAssignRoles && !canModerate) {
     appendMuteEntry(deps, target, entries, isSelf);
     appendBlockEntry(deps, target, entries, isSelf);
     return entries;
@@ -103,7 +107,7 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
   const gid = guildId!;
   const mod: ContextMenuEntry[] = [];
 
-  if (caps!.canManageRoles) {
+  if (canAssignRoles) {
     const roles = deps.roleStore.rolesOf(gid).filter((r) => !r.isDefault);
     if (roles.length > 0) {
       mod.push({
@@ -119,7 +123,7 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
     }
   }
 
-  if (caps!.canTimeout) {
+  if (canModerate && caps!.canTimeout) {
     const timedOut =
       member!.communicationDisabledUntil != null && member!.communicationDisabledUntil > Date.now();
     const timeoutChildren: ContextMenuEntry[] = TIMEOUT_PRESETS.map((preset) => ({
@@ -139,7 +143,7 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
     mod.push({ label: 'Timeout', icon: 'fa-clock', children: timeoutChildren });
   }
 
-  if (caps!.canKick) {
+  if (canModerate && caps!.canKick) {
     mod.push({
       label: 'Kick',
       icon: 'fa-user-slash',
@@ -156,7 +160,7 @@ export function buildUserMenu(deps: UserMenuDeps, target: UserMenuTarget): Conte
     });
   }
 
-  if (caps!.canBan) {
+  if (canModerate && caps!.canBan) {
     mod.push({
       label: 'Ban',
       icon: 'fa-ban',

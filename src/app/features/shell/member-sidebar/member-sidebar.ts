@@ -197,6 +197,22 @@ export class MemberSidebar implements OnDestroy {
       const channelId = this.channelStore.selectedChannelId();
       if (guildId && channelId) this.memberStore.loadViewersIfNeeded(guildId, channelId);
     });
+
+    // When someone joins (MemberJoined grows the member list), the open channel's cached viewer set
+    // predates them, so the ViewChannel filter would hide the newcomer until a channel switch.
+    // Re-resolve viewers on same-guild growth so the sidebar updates live.
+    let prevGuild = '';
+    let prevCount = 0;
+    effect(() => {
+      const guildId = this.guildStore.selectedGuildId() ?? '';
+      const channelId = this.channelStore.selectedChannelId();
+      const count = this.members().length;
+      if (guildId && guildId === prevGuild && channelId && count > prevCount) {
+        void this.memberStore.refreshViewers(guildId, channelId);
+      }
+      prevGuild = guildId;
+      prevCount = count;
+    });
   }
 
   ngOnDestroy(): void {

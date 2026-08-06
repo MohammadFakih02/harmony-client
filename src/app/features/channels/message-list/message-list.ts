@@ -26,6 +26,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { RoleService } from '../../../core/services/role.service';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { ContextMenuService } from '../../../core/services/context-menu.service';
+import { ViewportService } from '../../../core/services/viewport.service';
 import { buildUserMenu, UserMenuDeps } from '../../shell/user-context-menu';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
 import { MessageResponse } from '../../../core/models/message.models';
@@ -177,6 +178,8 @@ export class MessageList {
   private readonly injector = inject(Injector);
   private readonly unreadStore = inject(UnreadStore);
   private readonly contextMenu = inject(ContextMenuService);
+  // Touch: the hover toolbar can't be reached, so its actions move into the long-press menu.
+  protected readonly viewport = inject(ViewportService);
   private readonly confirmService = inject(ConfirmService);
   private readonly userMenuDeps: UserMenuDeps = {
     memberStore: this.memberStore,
@@ -302,6 +305,25 @@ export class MessageList {
   /** Right-click a message → its actions (reply/copy/pin/forward/edit/delete), gated by capability. */
   protected openMessageMenu(event: MouseEvent, msg: MessageResponse): void {
     const entries: ContextMenuEntry[] = [];
+    // Touch only: the quick-reaction row + Add Reaction live in the hover toolbar, which never
+    // shows on a coarse pointer — surface them in the menu instead. Desktop menu is unchanged.
+    if (this.viewport.coarsePointer() && this.canReact(msg)) {
+      entries.push(
+        {
+          label: 'Add Reaction',
+          icon: 'fa-face-smile',
+          children: [
+            ...this.quickReactions().map((emoji) => ({
+              label: emoji,
+              action: () => this.quickReact(msg, emoji),
+            })),
+            { separator: true },
+            { label: 'More…', icon: 'fa-face-smile', action: () => this.openReactionSheet(msg) },
+          ],
+        },
+        { separator: true },
+      );
+    }
     if (this.canReply(msg)) entries.push({ label: 'Reply', icon: 'fa-reply', action: () => this.replyTo(msg) });
     if (this.canCopy(msg)) entries.push({ label: 'Copy Text', icon: 'fa-copy', action: () => this.copyText(msg) });
     if (this.canReply(msg)) entries.push({ label: 'Copy Message Link', icon: 'fa-link', action: () => this.copyMessageLink(msg) });
@@ -797,6 +819,12 @@ export class MessageList {
   protected closeReactionPicker(): void {
     this.reactionTarget.set(null);
     this.reactionOrigin.set(null);
+  }
+
+  /** Touch path (long-press menu → "More…"): open the full picker as a bottom sheet — no origin. */
+  protected openReactionSheet(msg: MessageResponse): void {
+    this.reactionOrigin.set(null);
+    this.reactionTarget.set(msg);
   }
 
   /** Picks an emoji from the add-reaction popover → toggle it on, then close. */

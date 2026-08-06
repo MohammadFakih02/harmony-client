@@ -159,12 +159,13 @@ describe('VoiceStore', () => {
     expect(store.connectingChannelId()).toBeNull();
     expect(voice.disconnect).toHaveBeenCalled();
 
-    // The media connect resolves late — join must bail without going active or signaling a join.
+    // The media connect resolves late — join must bail without going active, retracting the
+    // hub join that went out in parallel with the media connect.
     resolveConnect();
     await joinPromise;
     expect(store.activeChannelId()).toBeNull();
     expect(store.inVoice()).toBe(false);
-    expect(signalR.joinVoice).not.toHaveBeenCalled();
+    expect(signalR.leaveVoice).toHaveBeenCalledWith('c1');
   });
 
   it('leave() during connecting routes to cancelJoin', async () => {
@@ -180,7 +181,7 @@ describe('VoiceStore', () => {
 
     resolveConnect();
     await joinPromise;
-    expect(signalR.joinVoice).not.toHaveBeenCalled();
+    expect(signalR.leaveVoice).toHaveBeenCalledWith('c1'); // the parallel hub join is retracted
   });
 
   it('leave() tears down media + signaling and clears state', async () => {

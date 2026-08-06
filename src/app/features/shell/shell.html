@@ -1,24 +1,36 @@
-<div class="flex h-screen w-screen bg-bg overflow-hidden select-none">
-  <!-- Guild Navigation Bar -->
-  <div class="flex flex-col h-full w-18 min-w-18 bg-surface overflow-hidden">
-    <app-guild-sidebar />
+<div class="flex h-dvh w-screen bg-bg overflow-hidden select-none">
+  <!-- Guild rail + channel sidebar. Desktop: plain flex-row panes (the max-md classes compile
+       away). Mobile: the pair becomes one off-canvas left drawer slid in by the hamburger. -->
+  <div
+    class="flex h-full shrink-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:bg-surface max-md:shadow-modal max-md:transition-transform max-md:duration-300"
+    [class.max-md:-translate-x-full]="!nav.leftDrawerOpen()"
+  >
+    <!-- Guild Navigation Bar -->
+    <div class="flex flex-col h-full w-18 min-w-18 bg-surface overflow-hidden">
+      <app-guild-sidebar />
+    </div>
+
+    <!-- Channel Navigation Panel (drag-resizable via the strip on its right edge; fills the drawer on mobile) -->
+    <div
+      class="flex flex-col h-full bg-surface-2 overflow-hidden border-r border-border-subtle shrink-0 max-md:flex-1 max-md:min-w-0"
+      [style.width.px]="viewport.isMobile() ? null : settings.channelSidebarWidth()"
+    >
+      <app-channel-sidebar />
+    </div>
+    <div
+      class="w-1 -ml-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
+      [appResizeHandle]="settings.channelSidebarWidth()"
+      edge="right"
+      [min]="channelSidebarMin"
+      [max]="channelSidebarMax"
+      (widthChange)="settings.setChannelSidebarWidth($event)"
+    ></div>
   </div>
 
-  <!-- Channel Navigation Panel (drag-resizable via the strip on its right edge) -->
-  <div
-    class="flex flex-col h-full bg-surface-2 overflow-hidden border-r border-border-subtle shrink-0"
-    [style.width.px]="settings.channelSidebarWidth()"
-  >
-    <app-channel-sidebar />
-  </div>
-  <div
-    class="w-1 -ml-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
-    [appResizeHandle]="settings.channelSidebarWidth()"
-    edge="right"
-    [min]="channelSidebarMin"
-    [max]="channelSidebarMax"
-    (widthChange)="settings.setChannelSidebarWidth($event)"
-  ></div>
+  <!-- Mobile left-drawer backdrop -->
+  @if (viewport.isMobile() && nav.leftDrawerOpen()) {
+  <div class="fixed inset-0 z-30 bg-black/50 animate-fade-in" (click)="nav.closeLeft()"></div>
+  }
 
   <!-- Content Workspace -->
   <main class="flex-1 h-full bg-surface overflow-hidden flex min-w-0">
@@ -27,6 +39,15 @@
            a guild channel or a DM — the Friends/home screen renders its own header. -->
       @if (inGuild() || inDm()) {
       <header class="flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0">
+        <!-- Mobile: hamburger opens the navigation drawer -->
+        <button
+          type="button"
+          class="hidden max-md:flex w-9 h-9 -ml-1 items-center justify-center rounded-lg text-muted hover:text-primary shrink-0"
+          aria-label="Open navigation"
+          (click)="nav.openLeft()"
+        >
+          <i class="fas fa-bars"></i>
+        </button>
         @if (inGuild() && headerChannel(); as ch) {
         <i
           class="fas text-faint shrink-0"
@@ -35,8 +56,8 @@
         ></i>
         <span class="font-semibold text-primary text-sm truncate shrink-0 max-w-[40%]">{{ ch.name }}</span>
         @if (ch.topic) {
-        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
-        <span class="text-xs text-muted truncate min-w-0">{{ ch.topic }}</span>
+        <span class="w-px h-5 bg-border mx-1 shrink-0 max-md:hidden"></span>
+        <span class="text-xs text-muted truncate min-w-0 max-md:hidden">{{ ch.topic }}</span>
         }
         } @else if (inDm() && dmChannel()) {
         @if (dmIsGroup()) {
@@ -54,8 +75,8 @@
         <ui-avatar [src]="peer.avatarKey" [alt]="peer.username" size="sm" [status]="dmPeerStatus()" />
         <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
         @if (dmPeerMessage(); as msg) {
-        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
-        <span class="text-xs text-muted truncate min-w-0" [title]="msg">{{ msg }}</span>
+        <span class="w-px h-5 bg-border mx-1 shrink-0 max-md:hidden"></span>
+        <span class="text-xs text-muted truncate min-w-0 max-md:hidden" [title]="msg">{{ msg }}</span>
         }
         }
         }
@@ -75,6 +96,7 @@
         </ui-icon-button>
         <ng-template
           cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
           [cdkConnectedOverlayOrigin]="searchOrigin"
           [cdkConnectedOverlayOpen]="showSearch()"
           [cdkConnectedOverlayPositions]="searchPanelPositions"
@@ -100,6 +122,7 @@
         </ui-icon-button>
         <ng-template
           cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
           [cdkConnectedOverlayOrigin]="dmSearchOrigin"
           [cdkConnectedOverlayOpen]="showSearch()"
           [cdkConnectedOverlayPositions]="searchPanelPositions"
@@ -124,6 +147,7 @@
         </ui-icon-button>
         <ng-template
           cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
           [cdkConnectedOverlayOrigin]="pinsOrigin"
           [cdkConnectedOverlayOpen]="showPins()"
           [cdkConnectedOverlayPositions]="pinsPanelPositions"
@@ -170,10 +194,18 @@
       <router-outlet />
     </div>
 
-    <!-- Member sidebar (togglable, drag-resizable) — guild channels only -->
+    <!-- Mobile right-drawer backdrop (member list / DM profile) -->
+    @if (viewport.isMobile() && ((inGuild() && showMembers()) || (inDm() && showDmProfile() && dmChannel()))) {
+    <div
+      class="fixed inset-0 z-30 bg-black/50 animate-fade-in"
+      (click)="showMembers.set(false); showDmProfile.set(false)"
+    ></div>
+    }
+
+    <!-- Member sidebar (togglable, drag-resizable; a right drawer on mobile) — guild channels only -->
     @if (inGuild() && showMembers()) {
     <div
-      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
       [appResizeHandle]="settings.rightSidebarWidth()"
       edge="left"
       [min]="rightSidebarMin"
@@ -181,17 +213,17 @@
       (widthChange)="settings.setRightSidebarWidth($event)"
     ></div>
     <div
-      class="h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0"
-      [style.width.px]="settings.rightSidebarWidth()"
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
     >
       <app-member-sidebar />
     </div>
     }
 
-    <!-- DM profile / group members panel (togglable, drag-resizable) — direct messages only -->
+    <!-- DM profile / group members panel (togglable, drag-resizable; a right drawer on mobile) — direct messages only -->
     @if (inDm() && showDmProfile() && dmChannel(); as dm) {
     <div
-      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro"
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
       [appResizeHandle]="settings.rightSidebarWidth()"
       edge="left"
       [min]="rightSidebarMin"
@@ -199,8 +231,8 @@
       (widthChange)="settings.setRightSidebarWidth($event)"
     ></div>
     <div
-      class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0"
-      [style.width.px]="settings.rightSidebarWidth()"
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
     >
       <!-- Banner: the peer's real banner (image > colour > accent gradient); groups keep the gradient -->
       @if (!dmIsGroup() && dmPeer(); as peer) {
@@ -392,9 +424,6 @@
 
 <!-- App-wide image lightbox -->
 <ui-lightbox />
-
-<!-- Expanded call view (shows only while open AND in a call) -->
-<app-call-overlay />
 
 <!-- Incoming DM/group-DM call ring (app-wide) -->
 <app-incoming-call />

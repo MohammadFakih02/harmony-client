@@ -17,12 +17,11 @@
     border-color var(--duration-element) var(--ease-standard),
     transform var(--duration-element) var(--ease-bounce);
 
-  // Soft zen expansion hover effect
+  // Soft zen expansion hover effect (no glow — the squircle morph + border carry it)
   &:hover {
     border-radius: 35%;
     border-color: var(--color-accent);
-    transform: scale(1.05); // Gentle kinetic rotation
-    box-shadow: 0 0 12px var(--color-accent-glow);
+    transform: scale(1.05);
   }
 
   &:active {

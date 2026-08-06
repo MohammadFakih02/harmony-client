@@ -112,6 +112,14 @@ export class VoiceTile {
       !this.voiceStore.isWatchingStream(this.tile().userId),
   );
 
+  /** A remote screen this viewer is currently watching — shows the "Stop watching" hover control. */
+  protected readonly watchingThisStream = computed(
+    () =>
+      this.tile().kind === 'screen' &&
+      !this.isSelf() &&
+      this.voiceStore.isWatchingStream(this.tile().userId),
+  );
+
   protected readonly isSpeaking = computed(
     () => this.tile().kind === 'camera' && this.voiceStore.speakingUserIds().has(this.tile().userId),
   );
@@ -165,9 +173,23 @@ export class VoiceTile {
     }
   }
 
-  protected watchStream(event: Event): void {
+  protected async watchStream(event: Event): Promise<void> {
     event.stopPropagation();
-    if (!this.voiceStore.isWatchingStream(this.tile().userId)) {
+    const userId = this.tile().userId;
+    // Watching a remote stream requires being connected to the room — a spectator has no media
+    // subscription. "Watch Stream" therefore joins the call first, then opts into the stream.
+    if (this.voiceStore.activeChannelId() !== this.channelId()) {
+      await this.voiceStore.join(this.channelId());
+    }
+    if (!this.voiceStore.isWatchingStream(userId)) {
+      this.voiceStore.toggleWatchStream(userId);
+    }
+  }
+
+  /** Stop watching this screen — the on-tile counterpart to the voice-bar's global stop button. */
+  protected stopWatching(event: Event): void {
+    event.stopPropagation();
+    if (this.voiceStore.isWatchingStream(this.tile().userId)) {
       this.voiceStore.toggleWatchStream(this.tile().userId);
     }
   }

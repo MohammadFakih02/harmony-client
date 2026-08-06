@@ -114,6 +114,7 @@
     <!-- Create / Join chooser — its own CDK overlay (escapes the rail's overflow-x-hidden) -->
     <ng-template
       cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
       [cdkConnectedOverlayOrigin]="addTrigger"
       [cdkConnectedOverlayOpen]="showAddMenu()"
       [cdkConnectedOverlayPositions]="addMenuPositions"

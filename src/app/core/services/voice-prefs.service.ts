@@ -6,6 +6,12 @@ import { Injectable, signal } from '@angular/core';
  * NEXT connect (livekit-client applies them at track creation); device ids also apply live
  * mid-call via `Room.switchActiveDevice` (VoiceService handles that).
  */
+// Screenshare quality caps — deliberately ceilinged below 1080p to protect upstream bandwidth
+// (a friend on a slow/tunnelled link is easy to overwhelm). Applied when the local screenshare
+// track is published (VoiceService.setScreenShareEnabled).
+export type ScreenShareResolution = '480p' | '720p';
+export type ScreenShareFps = 15 | 30;
+
 export interface VoicePrefs {
   micDeviceId: string | null;
   speakerDeviceId: string | null;
@@ -13,6 +19,8 @@ export interface VoicePrefs {
   noiseSuppression: boolean;
   echoCancellation: boolean;
   autoGainControl: boolean;
+  screenShareResolution: ScreenShareResolution;
+  screenShareFps: ScreenShareFps;
 }
 
 const STORAGE_KEY = 'harmony-voice-prefs';
@@ -24,6 +32,8 @@ const DEFAULTS: VoicePrefs = {
   noiseSuppression: true,
   echoCancellation: true,
   autoGainControl: true,
+  screenShareResolution: '720p',
+  screenShareFps: 30,
 };
 
 /**
@@ -58,6 +68,14 @@ export class VoicePrefsService {
 
   setAutoGainControl(on: boolean): void {
     this.patch({ autoGainControl: on });
+  }
+
+  setScreenShareResolution(resolution: ScreenShareResolution): void {
+    this.patch({ screenShareResolution: resolution });
+  }
+
+  setScreenShareFps(fps: ScreenShareFps): void {
+    this.patch({ screenShareFps: fps });
   }
 
   private patch(changes: Partial<VoicePrefs>): void {
