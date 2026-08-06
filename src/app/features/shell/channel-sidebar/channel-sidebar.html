@@ -1,0 +1,961 @@
+<aside class="flex flex-col w-full h-full bg-transparent">
+  @if (!inDirectMessages()) {
+  <!-- Guild header — opens the Server dropdown (Invite / Create Channel / Settings / Leave). -->
+  <button
+    type="button"
+    class="flex items-center gap-2 w-full px-4 h-12 min-h-12 border-b border-border-subtle transition-micro hover:bg-surface-2 shrink-0 text-left"
+    cdkOverlayOrigin
+    #serverMenuOrigin="cdkOverlayOrigin"
+    (click)="toggleServerMenu()"
+  >
+    <span class="font-semibold text-primary truncate-text flex-1 min-w-0">
+      {{ guildStore.selectedGuild()?.name ?? 'Select a server' }}
+    </span>
+    <i
+      class="fas fa-chevron-down text-xs text-faint shrink-0 transition-transform"
+      [class.rotate-180]="showServerMenu()"
+    ></i>
+  </button>
+
+  <!-- Server dropdown -->
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayPush]="true"
+    [cdkConnectedOverlayOrigin]="serverMenuOrigin"
+    [cdkConnectedOverlayOpen]="showServerMenu() && !!guildStore.selectedGuildId()"
+    [cdkConnectedOverlayPositions]="serverMenuPositions"
+    [cdkConnectedOverlayHasBackdrop]="true"
+    cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+    (backdropClick)="showServerMenu.set(false)"
+    (detach)="showServerMenu.set(false)"
+  >
+    <div
+      class="w-56 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+    >
+      @if (canCreateInvite()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openInvitePeople()"
+      >
+        <i class="fas fa-user-plus w-4 text-center text-faint"></i> Invite People
+      </button>
+      }
+      @if (canManageChannels()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="createChannelFromMenu()"
+      >
+        <i class="fas fa-plus w-4 text-center text-faint"></i> Create Channel
+      </button>
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openCreateCategory()"
+      >
+        <i class="fas fa-folder-plus w-4 text-center text-faint"></i> Create Category
+      </button>
+      }
+      @if (canOpenServerSettings()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="openServerSettings()"
+      >
+        <i class="fas fa-gear w-4 text-center text-faint"></i> Server Settings
+      </button>
+      }
+
+      @if (canCreateInvite() || canManageChannels() || canOpenServerSettings()) {
+      <div class="h-px bg-border-subtle my-1"></div>
+      }
+      <p class="px-2.5 pt-0.5 pb-1 text-2xs font-bold uppercase tracking-wider text-faint">
+        Notifications
+      </p>
+      @for (opt of guildNotifLevels; track opt.value) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="setGuildNotif(opt.value)"
+      >
+        <i
+          class="fas fa-check w-4 text-center text-accent"
+          [class.invisible]="guildNotifLevel() !== opt.value"
+        ></i>
+        {{ opt.label }}
+      </button>
+      }
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="toggleGuildSuppress()"
+      >
+        <i
+          class="fas fa-check w-4 text-center text-accent"
+          [class.invisible]="!guildSuppressEveryone()"
+        ></i>
+        Suppress &#64;everyone
+      </button>
+
+      <div class="h-px bg-border-subtle my-1"></div>
+      @if (selectedGuildMuted()) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="unmuteServer()"
+      >
+        <i class="fas fa-bell w-4 text-center text-faint"></i> Unmute Server
+      </button>
+      } @else {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+        (click)="muteServer()"
+      >
+        <i class="fas fa-bell-slash w-4 text-center text-faint"></i> Mute Server
+      </button>
+      }
+      <div class="h-px bg-border-subtle my-1"></div>
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm text-danger hover:bg-danger/10 transition-micro text-left"
+        (click)="leaveOrDeleteServer()"
+      >
+        @if (isGuildOwner()) {
+        <i class="fas fa-trash w-4 text-center"></i> Delete Server
+        } @else {
+        <i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Leave Server
+        }
+      </button>
+    </div>
+  </ng-template>
+
+  <!-- Channel list. cdkScrollable registers this as the drag auto-scroll container (CDK only
+       auto-scrolls ancestors it knows about); the (scroll) hook re-resolves the drop target when
+       auto-scroll moves rows under a stationary pointer. -->
+  <div
+    class="flex-1 overflow-y-auto overflow-x-hidden py-2"
+    cdkScrollable
+    (scroll)="onSidebarScrolled()"
+    (contextmenu)="openChannelListMenu($event)"
+  >
+    @if (showLoading()) {
+    <div class="flex justify-center pt-8">
+      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+    </div>
+    } @else if (channelStore.loading() && channelStore.sidebarEntries().length === 0) {
+    <!-- Loading under the delay threshold with nothing cached → render nothing
+         (avoids flashing the spinner or the "No channels yet" empty state) -->
+    } @else if (channelStore.sidebarEntries().length === 0 && guildStore.selectedGuildId()) {
+    <!-- Empty state -->
+    <div class="flex flex-col items-center gap-3 px-4 pt-10 text-center">
+      <i class="fas fa-hashtag text-3xl text-faint"></i>
+      <p class="text-xs text-muted">No channels yet.</p>
+      @if (canManageChannels()) {
+      <button
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
+        (click)="openCreateChannel()"
+      >
+        <i class="fas fa-plus mr-1"></i> Create a Channel
+      </button>
+      }
+    </div>
+    } @else {
+    <!-- The ONLY drop list — bare channels + category blocks, interleaved by position. CDK
+         sorting is OFF: the list stays static during a drag and the component resolves the
+         target from live row geometry (sidebar-dnd.ts), rendering an insertion line or an
+         into-category highlight instead of shuffling blocks under the pointer. -->
+    <div
+      cdkDropList
+      cdkDropListSortingDisabled
+      [cdkDropListAutoScrollStep]="8"
+      [cdkDropListDisabled]="!canManageChannels() || viewport.coarsePointer()"
+      (cdkDropListDropped)="onSidebarDrop()"
+      class="flex flex-col gap-0.5 px-2"
+      #dropRoot
+    >
+      @for (entry of channelStore.sidebarEntries(); track entryTrackId(entry)) {
+      @if (entry.kind === 'category') {
+      @let category = entry.category;
+      <div
+        cdkDrag
+        cdkDragLockAxis="y"
+        [cdkDragData]="entry"
+        cdkDragPreviewClass="sidebar-drag-preview"
+        (cdkDragStarted)="onDragStarted(entry)"
+        (cdkDragMoved)="onDragMoved($event)"
+        (cdkDragEnded)="onDragEnded()"
+        class="mb-2"
+      >
+        <div
+          class="channel-category-list rounded-md drop-anchor"
+          [attr.data-drop-block]="category.id"
+          [class.drop-line-above]="lineAbove('block:' + category.id)"
+          [class.drop-line-below]="lineBelow('block:' + category.id)"
+          [class.drop-into]="isDropInto(category.id)"
+        >
+          <!-- Header: its upper half targets "top level, above this block"; its lower half
+               targets "into the category" (before the first channel — append + whole-block
+               highlight when collapsed/empty). -->
+          <div
+            class="channel-category-header group flex items-center w-full pl-2 py-1"
+            [attr.data-drop-header]="category.id"
+            (contextmenu)="openCategoryMenu($event, category)"
+          >
+            <button
+              class="flex items-center gap-1 flex-1 text-2xs font-bold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+              (click)="toggleCategory(category.id)"
+            >
+              <i
+                class="fas fa-chevron-right text-3xs shrink-0 transition-element"
+                [class.rotate-90]="!category.collapsed"
+              ></i>
+              <span class="flex-1 text-left">{{ category.name }}</span>
+            </button>
+            @if (canManageChannels()) {
+            <span class="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-micro">
+              <ui-icon-button size="xs" hover="none" label="Create Channel" (click)="openCreateChannel()">
+                <i class="fas fa-plus"></i>
+              </ui-icon-button>
+            </span>
+            }
+          </div>
+
+          <!-- Rows are plain markup (no nested drop list): each row is a cdkDrag belonging to
+               the single top-level list; which category a drop lands in is purely geometric. -->
+          <div
+            class="channel-category-rows flex flex-col gap-0.5"
+            [class.animate-slide-down]="!category.collapsed"
+          >
+            @if (!category.collapsed) {
+            @for (channel of category.channels; track channel.id) {
+            <div
+              cdkDrag
+              cdkDragLockAxis="y"
+              [cdkDragData]="channel"
+              cdkDragPreviewClass="sidebar-drag-preview"
+              (cdkDragStarted)="onDragStarted(channel)"
+              (cdkDragMoved)="onDragMoved($event)"
+              (cdkDragEnded)="onDragEnded()"
+              class="drop-anchor"
+              [attr.data-drop-row]="'cat:' + category.id + ':' + channel.id"
+              [class.drop-line-above]="lineAbove('cat:' + category.id + ':' + channel.id)"
+              [class.drop-line-below]="lineBelow('cat:' + category.id + ':' + channel.id)"
+            >
+              <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: channel }" />
+            </div>
+            }
+            @if (category.channels.length === 0) {
+            <p class="px-2 py-1 text-2xs text-faint italic">No channels yet</p>
+            }
+            }
+          </div>
+        </div>
+      </div>
+      } @else {
+      <div
+        cdkDrag
+        cdkDragLockAxis="y"
+        [cdkDragData]="entry.channel"
+        cdkDragPreviewClass="sidebar-drag-preview"
+        (cdkDragStarted)="onDragStarted(entry.channel)"
+        (cdkDragMoved)="onDragMoved($event)"
+        (cdkDragEnded)="onDragEnded()"
+        class="drop-anchor"
+        [attr.data-drop-row]="'top:' + entry.channel.id"
+        [class.drop-line-above]="lineAbove('top:' + entry.channel.id)"
+        [class.drop-line-below]="lineBelow('top:' + entry.channel.id)"
+      >
+        <ng-container *ngTemplateOutlet="channelRow; context: { $implicit: entry.channel }" />
+      </div>
+      }
+      }
+    </div>
+
+    <!-- One channel row (voice or text) — shared between the category lists and the top level.
+         cdkDrag must live on the wrapper at each stamping site, NOT inside this template: a drag
+         directive resolves its parent drop list at the template's DECLARATION site, so rows
+         dragged from in here would float free (no reorder, no drop, click-through on release). -->
+    <ng-template #channelRow let-channel>
+        @if (channel.type === 'voice') {
+        <!-- Voice channel: click to join (no route change); live roster renders inline underneath. -->
+        @let vps = voiceParticipants(channel.id);
+        @let inThisVoice = voiceStore.activeChannelId() === channel.id;
+        <div class="flex flex-col">
+          <div
+            role="button"
+            tabindex="0"
+            class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative w-full text-left cursor-pointer"
+            [class.bg-surface-3]="inThisVoice"
+            [class.text-primary]="inThisVoice"
+            [class.ring-2]="voiceDropTarget() === channel.id"
+            [class.ring-accent]="voiceDropTarget() === channel.id"
+            [class.bg-accent-muted]="voiceDropTarget() === channel.id"
+            [attr.aria-label]="'Join ' + channel.name"
+            (contextmenu)="openChannelMenu($event, channel)"
+            (click)="joinVoice(channel); closeDrawer()"
+            (keydown.enter)="joinVoice(channel)"
+            (dragover)="onVoiceDragOver($event, channel)"
+            (dragleave)="onVoiceDragLeave(channel)"
+            (drop)="onVoiceDrop($event, channel)"
+          >
+            @if (voiceStore.connectingChannelId() === channel.id) {
+            <i class="fas fa-spinner fa-spin w-4 text-center shrink-0 text-faint text-sm"></i>
+            } @else {
+            <i
+              class="fas fa-volume-high w-4 text-center shrink-0 text-base"
+              [class.text-success]="inThisVoice"
+              [class.text-faint]="!inThisVoice"
+            ></i>
+            }
+            <span class="flex-1 truncate-text">{{ channel.name }}</span>
+            <!-- Occupancy: "n" when unlimited, "n/limit" when capped (red once full — the server
+                 rejects joins past the limit unless the joiner holds MoveMembers). -->
+            @if (vps.length || channel.userLimit) {
+            @let full = !!channel.userLimit && vps.length >= channel.userLimit;
+            <span
+              class="shrink-0 flex items-center gap-1 text-2xs font-medium tabular-nums"
+              [class.text-danger]="full"
+              [class.text-faint]="!full"
+              [attr.aria-label]="vps.length + ' connected' + (channel.userLimit ? ' of ' + channel.userLimit : '')"
+              [title]="full ? 'This voice channel is full' : ''"
+            >
+              <i class="fas fa-user text-3xs"></i
+              >{{ vps.length }}@if (channel.userLimit) {<span class="opacity-70">/{{ channel.userLimit }}</span>}
+            </span>
+            }
+            <div class="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-micro">
+              <ui-icon-button
+                size="xs"
+                hover="surface-3"
+                [label]="canManageChannels() ? 'Edit Channel' : 'Notification Settings'"
+                cdkOverlayOrigin
+                #voiceNotifOrigin="cdkOverlayOrigin"
+                (click)="openChannelGear(channel, $event)"
+              >
+                <i class="fas fa-gear"></i>
+              </ui-icon-button>
+              <ng-template
+                cdkConnectedOverlay
+                [cdkConnectedOverlayPush]="true"
+                [cdkConnectedOverlayOrigin]="voiceNotifOrigin"
+                [cdkConnectedOverlayOpen]="channelNotifTarget() === channel.id"
+                [cdkConnectedOverlayPositions]="channelNotifPositions"
+                [cdkConnectedOverlayHasBackdrop]="true"
+                cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+                (backdropClick)="channelNotifTarget.set(null)"
+                (detach)="channelNotifTarget.set(null)"
+              >
+                <div
+                  class="w-52 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+                >
+                  <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 pt-1 pb-0.5">
+                    Notification Settings
+                  </p>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                    (click)="setChannelNotif(channel.id, null)"
+                  >
+                    <i
+                      class="fas fa-check text-xs w-3.5 text-center"
+                      [class.text-accent]="channelNotifLevel(channel.id) === null"
+                      [class.opacity-0]="channelNotifLevel(channel.id) !== null"
+                    ></i>
+                    Use Server Default
+                  </button>
+                  @for (opt of notifLevelOptions; track opt.value) {
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                    (click)="setChannelNotif(channel.id, opt.value)"
+                  >
+                    <i
+                      class="fas fa-check text-xs w-3.5 text-center"
+                      [class.text-accent]="channelNotifLevel(channel.id) === opt.value"
+                      [class.opacity-0]="channelNotifLevel(channel.id) !== opt.value"
+                    ></i>
+                    {{ opt.label }}
+                  </button>
+                  }
+                </div>
+              </ng-template>
+            </div>
+          </div>
+
+          <!-- Connected participants -->
+          @if (vps.length) {
+          <div class="flex flex-col gap-0.5 ml-5 mt-0.5 mb-1 animate-slide-down">
+            @for (p of vps; track p.userId) {
+            <!-- Draggable onto another voice row = move (self = join; others mirror MoveMembers).
+                 mousedown must not bubble: the row sits inside the channel block's cdkDrag, and a
+                 native drag here must never double as a channel reorder. -->
+            <div
+              class="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-surface-2 transition-micro animate-fade-in"
+              [class.cursor-grab]="canDragVoice(p)"
+              [class.opacity-50]="voiceDrag()?.userId === p.userId"
+              [attr.draggable]="canDragVoice(p) ? true : null"
+              (mousedown)="$event.stopPropagation()"
+              (dragstart)="onVoiceDragStart($event, p)"
+              (dragend)="onVoiceDragEnd()"
+              (contextmenu)="openVoiceUserMenu($event, p)"
+            >
+              <span
+                class="relative rounded-full shrink-0 ring-success transition-shadow duration-150"
+                [class.ring-2]="isSpeaking(p.userId)"
+              >
+                <ui-avatar [src]="voiceAvatar(p.userId)" [alt]="voiceName(p.userId)" size="sm" />
+              </span>
+              <span
+                class="flex-1 truncate-text text-xs font-medium transition-micro"
+                [class.text-primary]="isSpeaking(p.userId)"
+                [class.text-muted]="!isSpeaking(p.userId)"
+              >
+                {{ voiceName(p.userId) }}
+              </span>
+              @if (p.isStreaming) {
+              <span class="text-3xs font-bold uppercase tracking-wide bg-danger text-white rounded px-1 py-px shrink-0">Live</span>
+              }
+              @if (p.isVideoOn) {
+              <i class="fas fa-video text-2xs text-faint shrink-0" title="Camera on"></i>
+              }
+              @if (voiceService.locallyMutedUserIds().has(p.userId)) {
+              <i class="fas fa-volume-xmark text-2xs text-danger shrink-0" title="Muted for you"></i>
+              }
+              <!-- Deafen implies mic-muted, so a deafened participant shows both glyphs. A server-
+                   imposed mute/deafen renders red (only a moderator can lift it); self state stays faint. -->
+              @if (p.isMuted || p.isDeafened || p.isServerMuted || p.isServerDeafened) {
+              <i
+                class="fas fa-microphone-slash text-2xs shrink-0"
+                [class.text-danger]="p.isServerMuted"
+                [class.text-faint]="!p.isServerMuted"
+                [title]="p.isServerMuted ? 'Server muted' : 'Muted'"
+              ></i>
+              }
+              @if (p.isDeafened || p.isServerDeafened) {
+              <i
+                class="fas fa-headphones-simple text-2xs shrink-0"
+                [class.text-danger]="p.isServerDeafened"
+                [class.text-faint]="!p.isServerDeafened"
+                [title]="p.isServerDeafened ? 'Server deafened' : 'Deafened'"
+              ></i>
+              }
+            </div>
+            }
+          </div>
+          }
+        </div>
+        } @else {
+        <!-- The channel you're viewing never shows an unread badge (you're reading it). -->
+        @let muted = muteStore.isMuted('channel', channel.id);
+        <!-- A muted channel shows no unread emphasis (dimmed, no pill/badge), Discord-style. -->
+        @let unread = channelStore.selectedChannelId() === channel.id || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
+        <a
+          [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
+          routerLinkActive="bg-surface-3 text-primary"
+          class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
+          [class.font-semibold]="unread > 0"
+          [class.text-primary]="unread > 0"
+          [class.opacity-45]="muted"
+          [attr.aria-label]="'Open ' + channel.name"
+          (contextmenu)="openChannelMenu($event, channel)"
+          (click)="closeDrawer()"
+        >
+          <!-- Unread pill at the sidebar edge (Discord's unread marker) -->
+          @if (unread > 0) {
+          <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary"></span>
+          }
+          <!-- Voice channels render in their own branch above; this row is always a text/announcement channel. -->
+          <i class="fas fa-hashtag w-4 text-center shrink-0 text-faint text-base"></i>
+          <span class="flex-1 truncate-text">{{ channel.name }}</span>
+
+          <!-- Unread badge -->
+          @if (unread > 0) {
+          <span
+            class="shrink-0 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"
+          >
+            {{ unread > 99 ? '99+' : unread }}
+          </span>
+          } @else {
+          <div class="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-micro">
+            <ui-icon-button
+              size="xs"
+              hover="surface-3"
+              [label]="canManageChannels() ? 'Edit Channel' : 'Notification Settings'"
+              cdkOverlayOrigin
+              #notifOrigin="cdkOverlayOrigin"
+              (click)="openChannelGear(channel, $event)"
+            >
+              <i class="fas fa-gear"></i>
+            </ui-icon-button>
+            <ng-template
+              cdkConnectedOverlay
+              [cdkConnectedOverlayPush]="true"
+              [cdkConnectedOverlayOrigin]="notifOrigin"
+              [cdkConnectedOverlayOpen]="channelNotifTarget() === channel.id"
+              [cdkConnectedOverlayPositions]="channelNotifPositions"
+              [cdkConnectedOverlayHasBackdrop]="true"
+              cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+              (backdropClick)="channelNotifTarget.set(null)"
+              (detach)="channelNotifTarget.set(null)"
+            >
+              <div
+                class="w-52 p-1 rounded-lg bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-slide-down"
+              >
+                <p class="text-2xs font-bold uppercase tracking-wider text-faint px-2 pt-1 pb-0.5">
+                  Notification Settings
+                </p>
+                <button
+                  type="button"
+                  class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                  (click)="setChannelNotif(channel.id, null)"
+                >
+                  <i
+                    class="fas fa-check text-xs w-3.5 text-center"
+                    [class.text-accent]="channelNotifLevel(channel.id) === null"
+                    [class.opacity-0]="channelNotifLevel(channel.id) !== null"
+                  ></i>
+                  Use Server Default
+                </button>
+                @for (opt of notifLevelOptions; track opt.value) {
+                <button
+                  type="button"
+                  class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-muted hover:bg-surface-2 hover:text-primary transition-micro text-left"
+                  (click)="setChannelNotif(channel.id, opt.value)"
+                >
+                  <i
+                    class="fas fa-check text-xs w-3.5 text-center"
+                    [class.text-accent]="channelNotifLevel(channel.id) === opt.value"
+                    [class.opacity-0]="channelNotifLevel(channel.id) !== opt.value"
+                  ></i>
+                  {{ opt.label }}
+                </button>
+                }
+              </div>
+            </ng-template>
+          </div>
+          }
+        </a>
+        }
+    </ng-template>
+    }
+  </div>
+  } @else {
+  <!-- Home column: Friends nav + DM list -->
+  <div class="flex items-center px-4 h-12 min-h-12 border-b border-border-subtle shrink-0">
+    <span class="font-semibold text-primary">Direct Messages</span>
+  </div>
+  <div
+    class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2"
+    (contextmenu)="openDmListMenu($event)"
+  >
+    <a
+      routerLink="/app/friends"
+      routerLinkActive="bg-surface-3 text-primary"
+      class="flex items-center gap-3 px-2 py-2 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro mb-2"
+      (click)="closeDrawer()"
+    >
+      <i class="fas fa-user-group w-5 text-center"></i>
+      <span class="flex-1">Friends</span>
+      @if (friendStore.incomingCount() > 0) {
+      <span
+        class="min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full bg-danger text-white text-2xs font-bold"
+        [title]="friendStore.incomingCount() + ' pending friend request(s)'"
+      >
+        {{ friendStore.incomingCount() }}
+      </span>
+      }
+    </a>
+
+    <div class="flex items-center justify-between px-2 mb-1">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint">Direct Messages</p>
+      <button
+        type="button"
+        class="text-faint hover:text-primary transition-micro"
+        title="Create Group DM"
+        (click)="openGroupModal()"
+      >
+        <i class="fas fa-plus text-xs"></i>
+      </button>
+    </div>
+    @if (dmStore.dms().length === 0) {
+    <p class="text-xs text-faint px-2 py-2">No conversations yet.</p>
+    } @else {
+    <div class="flex flex-col gap-0.5">
+      @for (dm of dmStore.dms(); track dm.channelId) {
+      @let unread = activeDmChannelId() === dm.channelId ? 0 : (unreadStore.counts()[dm.channelId] || 0);
+      @let peer = dmOneToOnePeer(dm);
+      <a
+        [routerLink]="['/app/dm', dm.channelId]"
+        routerLinkActive="bg-surface-3 text-primary"
+        class="dm-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        [class.font-semibold]="unread > 0"
+        [class.text-primary]="unread > 0"
+        (contextmenu)="openDmMenu($event, dm)"
+        (click)="closeDrawer()"
+      >
+        @if (dm.isGroup) {
+        <span
+          class="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted"
+        >
+          @if (dm.iconKey; as icon) {
+          <img [src]="publicFileUrl(icon)" [alt]="dmDisplayName(dm)" class="w-full h-full object-cover" />
+          } @else {
+          <i class="fas fa-user-group text-xs"></i>
+          }
+        </span>
+        } @else if (peer) {
+        <ui-avatar
+          [src]="peer.avatarKey"
+          [alt]="peer.username"
+          [status]="dmAvatarStatus(peer.userId)"
+          size="md"
+        />
+        }
+        <span class="flex-1 truncate-text">{{ dmDisplayName(dm) }}</span>
+        @if (unread > 0) {
+        <span
+          class="shrink-0 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1"
+        >
+          {{ unread > 99 ? '99+' : unread }}
+        </span>
+        } @else {
+        <button
+          type="button"
+          class="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 text-faint hover:text-primary transition-micro"
+          [title]="dm.isGroup ? 'Leave Group' : 'Close DM'"
+          (click)="removeDm(dm, $event)"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+        }
+      </a>
+      }
+    </div>
+    }
+  </div>
+  }
+
+  <!-- Voice control bar (only while connected) — sits just above the user deck, Discord-style. -->
+  <app-voice-bar />
+
+  <!-- User deck -->
+  <div
+    class="relative flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border h-13 min-h-13 shadow-sm animate-slide-up shrink-0"
+  >
+    <!-- Status-select menu — its own CDK overlay (escapes the sidebar's overflow-hidden) -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="statusTrigger"
+      [cdkConnectedOverlayOpen]="showStatusMenu()"
+      [cdkConnectedOverlayPositions]="statusOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showStatusMenu.set(false)"
+    >
+    <div
+      class="w-72 max-w-[calc(100vw-1rem)] p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1 animate-scale-in origin-bottom-left"
+    >
+      <!-- Identity header — who you are + what you're set to + when it auto-clears -->
+      <div class="flex items-center gap-2.5 px-1.5 pt-1 pb-2">
+        <ui-avatar
+          [src]="auth.currentUser()?.avatarKey ?? null"
+          [alt]="auth.currentUser()?.username ?? ''"
+          [status]="myAvatarStatus()"
+          size="md"
+        />
+        <div class="flex flex-col min-w-0 flex-1">
+          <span class="text-sm font-semibold text-primary truncate-text leading-tight">
+            {{ auth.currentUser()?.username }}
+          </span>
+          <span class="text-2xs text-muted leading-tight">
+            {{ currentStatusOption()?.label ?? 'Offline' }}
+            @if (statusExpiryLabel(); as left) {
+            <span class="text-faint">· clears in {{ left }}</span>
+            }
+          </span>
+        </div>
+      </div>
+      <div class="h-px bg-border-subtle mb-0.5"></div>
+
+      <!-- Status options (with descriptions) -->
+      @for (opt of statusOptions; track opt.value) {
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        [class.bg-surface-2]="presenceStore.myStatus() === opt.value"
+        (click)="selectStatus(opt.value)"
+      >
+        <span class="w-3 h-3 rounded-full shrink-0" [class]="opt.dotClass"></span>
+        <span class="flex-1 min-w-0">
+          <span class="block text-sm font-medium">{{ opt.label }}</span>
+          @if (opt.description) {
+          <span class="block text-2xs text-faint leading-snug">{{ opt.description }}</span>
+          }
+        </span>
+        @if (presenceStore.myStatus() === opt.value) {
+        <i class="fas fa-check text-xs text-accent shrink-0"></i>
+        }
+      </button>
+      }
+
+      <div class="h-px bg-border-subtle my-0.5"></div>
+
+      <!-- Clear-after applied to the next status pick -->
+      <div class="px-1.5 pb-1 pt-0.5">
+        <span class="text-3xs font-semibold uppercase tracking-wider text-faint">Clear status after</span>
+        <div class="grid grid-cols-4 gap-1 mt-1.5">
+          @for (e of expiryOptions; track e.label) {
+          <button
+            type="button"
+            class="py-1 rounded-md text-2xs font-medium text-center transition-micro"
+            [class.bg-accent]="selectedExpiry() === e.minutes"
+            [class.text-white]="selectedExpiry() === e.minutes"
+            [class.bg-surface-2]="selectedExpiry() !== e.minutes"
+            [class.text-muted]="selectedExpiry() !== e.minutes"
+            [class.hover:bg-surface-3]="selectedExpiry() !== e.minutes"
+            [class.hover:text-primary]="selectedExpiry() !== e.minutes"
+            (click)="selectedExpiry.set(e.minutes)"
+          >
+            {{ e.label }}
+          </button>
+          }
+        </div>
+      </div>
+
+      <div class="h-px bg-border-subtle my-0.5"></div>
+
+      <!-- Entry point to the separate custom-status editor -->
+      <button
+        type="button"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        (click)="openCustomStatus()"
+      >
+        <i class="fas fa-face-smile w-2.5 text-center text-faint"></i>
+        <span class="flex-1 min-w-0 truncate-text text-sm font-medium">
+          {{ presenceStore.myStatusMessage() ? 'Edit Custom Status' : 'Set a Custom Status' }}
+        </span>
+        <i class="fas fa-chevron-right text-2xs text-faint"></i>
+      </button>
+    </div>
+    </ng-template>
+
+    <!-- Custom-status editor — separate CDK overlay so saving doesn't dismiss the status menu -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="statusTrigger"
+      [cdkConnectedOverlayOpen]="showCustomStatus()"
+      [cdkConnectedOverlayPositions]="statusOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showCustomStatus.set(false)"
+    >
+    <div
+      class="w-72 max-w-[calc(100vw-1rem)] p-2 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-1.5 animate-scale-in origin-bottom-left"
+    >
+      <div class="flex items-center gap-2 px-1 pt-0.5 pb-1">
+        <button
+          type="button"
+          class="text-faint hover:text-primary transition-micro"
+          (click)="showCustomStatus.set(false); showStatusMenu.set(true)"
+          aria-label="Back to status menu"
+        >
+          <i class="fas fa-chevron-left text-xs"></i>
+        </button>
+        <span class="text-sm font-semibold text-primary">Custom Status</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <input
+          type="text"
+          maxlength="128"
+          placeholder="What's happening?"
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-2.5 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-accent"
+          [ngModel]="customDraft()"
+          (ngModelChange)="customDraft.set($event)"
+          (keydown.enter)="saveCustomStatus()"
+        />
+        @if (presenceStore.myStatusMessage()) {
+        <button
+          type="button"
+          class="w-7 h-7 shrink-0 flex items-center justify-center rounded text-faint hover:text-primary hover:bg-surface-2"
+          (click)="clearCustomStatus()"
+          aria-label="Clear custom status"
+        >
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+        }
+      </div>
+      @if (customStatusExpiryLabel(); as left) {
+      <span class="px-1 text-2xs text-faint">Current status clears in {{ left }}</span>
+      }
+      <div class="flex items-center gap-1.5">
+        <span class="text-3xs font-semibold uppercase tracking-wider text-faint shrink-0">Clear after</span>
+        <select
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none"
+          [ngModel]="customExpiry()"
+          (ngModelChange)="customExpiry.set($event)"
+        >
+          @for (e of expiryOptions; track e.label) {
+          <option [ngValue]="e.minutes">{{ e.minutes === null ? "Don't clear" : e.label }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="shrink-0 px-2.5 py-1 rounded-md bg-accent text-white text-xs font-semibold hover:brightness-110"
+          (click)="saveCustomStatus()"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+    </ng-template>
+
+    <button
+      type="button"
+      class="shrink-0"
+      cdkOverlayOrigin
+      #statusTrigger="cdkOverlayOrigin"
+      (click)="toggleStatusMenu()"
+      aria-label="Set status"
+    >
+      <ui-avatar
+        [src]="auth.currentUser()?.avatarKey ?? null"
+        [alt]="auth.currentUser()?.username ?? ''"
+        [status]="myAvatarStatus()"
+      />
+    </button>
+    <div class="flex flex-col flex-1 min-w-0">
+      <span class="text-sm font-semibold text-primary leading-tight truncate-text">
+        {{ auth.currentUser()?.username }}
+      </span>
+      @if (presenceStore.myStatusMessage(); as msg) {
+      <span class="text-xs text-faint leading-tight truncate-text" [title]="msg">{{ msg }}</span>
+      }
+    </div>
+    <div class="flex gap-0.5">
+      <ui-icon-button size="md" hover="surface-3" label="User Settings" (click)="openSettings()">
+        <i class="fas fa-gear"></i>
+      </ui-icon-button>
+    </div>
+  </div>
+</aside>
+
+<!-- Invite People (from the Server dropdown) -->
+@if (showInviteModal() && guildStore.selectedGuildId(); as guildId) {
+<app-invite-people-modal [guildId]="guildId" (close)="showInviteModal.set(false)" />
+}
+
+<!-- Edit Channel (from the channel right-click menu) -->
+@if (editingChannel(); as channel) {
+<app-channel-settings-modal [channel]="channel" (close)="editingChannel.set(null)" />
+}
+
+<!-- New Group DM Modal -->
+@if (showGroupModal()) {
+<app-group-dm-modal
+  (created)="onGroupCreated($event)"
+  (close)="showGroupModal.set(false)"
+/>
+}
+
+<!-- Create Channel Modal -->
+@if (showCreateModal()) {
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  (click)="closeCreateModal()"
+>
+  <div
+    class="bg-surface rounded-2xl shadow-modal w-full max-w-sm mx-4 p-6 flex flex-col gap-5"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="flex flex-col gap-1">
+      <h2 class="text-lg font-bold text-primary text-center">
+        {{ channelType() === 'category' ? 'Create a Category' : 'Create a Channel' }}
+      </h2>
+      <p class="text-sm text-muted text-center">in {{ guildStore.selectedGuild()?.name }}</p>
+    </div>
+
+    <!-- Channel type toggle -->
+    <div class="flex gap-2">
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-micro"
+        [class.border-accent]="channelType() === 'text'"
+        [class.bg-accent-muted]="channelType() === 'text'"
+        [class.text-accent]="channelType() === 'text'"
+        [class.border-border-subtle]="channelType() !== 'text'"
+        [class.text-muted]="channelType() !== 'text'"
+        (click)="channelType.set('text')"
+      >
+        <i class="fas fa-hashtag w-4 text-center"></i> Text
+      </button>
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-micro"
+        [class.border-accent]="channelType() === 'voice'"
+        [class.bg-accent-muted]="channelType() === 'voice'"
+        [class.text-accent]="channelType() === 'voice'"
+        [class.border-border-subtle]="channelType() !== 'voice'"
+        [class.text-muted]="channelType() !== 'voice'"
+        (click)="channelType.set('voice')"
+      >
+        <i class="fas fa-volume-high w-4 text-center"></i> Voice
+      </button>
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-micro"
+        [class.border-accent]="channelType() === 'category'"
+        [class.bg-accent-muted]="channelType() === 'category'"
+        [class.text-accent]="channelType() === 'category'"
+        [class.border-border-subtle]="channelType() !== 'category'"
+        [class.text-muted]="channelType() !== 'category'"
+        (click)="channelType.set('category')"
+      >
+        <i class="fas fa-folder w-4 text-center"></i> Category
+      </button>
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="channel-name">
+        {{ channelType() === 'category' ? 'Category Name' : 'Channel Name' }}
+      </label>
+      <input
+        id="channel-name"
+        type="text"
+        class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+        [placeholder]="channelType() === 'text' ? 'new-channel' : channelType() === 'voice' ? 'General' : 'TEXT CHANNELS'"
+        maxlength="100"
+        [ngModel]="channelName()"
+        (ngModelChange)="channelName.set($event)"
+        (keydown.enter)="submitCreateChannel()"
+      />
+      @if (error()) {
+      <p class="text-xs text-danger">{{ error() }}</p>
+      }
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="closeCreateModal()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro disabled:opacity-50 disabled:cursor-not-allowed"
+        [disabled]="submitting() || !channelName().trim()"
+        (click)="submitCreateChannel()"
+      >
+        @if (submitting()) {
+          <i class="fas fa-yin-yang animate-spin mr-1.5"></i>
+        }
+        {{ channelType() === 'category' ? 'Create Category' : 'Create Channel' }}
+      </button>
+    </div>
+  </div>
+</div>
+}

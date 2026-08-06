@@ -1,0 +1,44 @@
+<div
+  class="w-64 max-h-80 overflow-y-auto rounded-lg bg-surface-2 ring-1 ring-border-subtle shadow-modal py-1"
+>
+  @if (candidates().length === 0) {
+  <p class="text-xs text-faint text-center py-3">No matches</p>
+  } @else {
+  @for (candidate of candidates(); track $index; let i = $index) {
+  <button
+    type="button"
+    class="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-micro"
+    [class.bg-accent]="i === highlightedIndex()"
+    [class.text-white]="i === highlightedIndex()"
+    [class.hover:bg-surface-3]="i !== highlightedIndex()"
+    (click)="select.emit(candidate)"
+  >
+    @if (candidate.role) {
+    <span
+      class="w-6 h-6 flex items-center justify-center rounded-full shrink-0"
+      [style.color]="candidate.color ?? 'var(--color-accent)'"
+      [style.background]="(candidate.color ?? 'var(--color-accent)') + '22'"
+    >
+      <i class="fas fa-at text-2xs"></i>
+    </span>
+    } @else if (candidate.special) {
+    <span class="w-6 h-6 flex items-center justify-center rounded-full bg-accent/20 text-accent shrink-0">
+      <i class="fas fa-at text-2xs"></i>
+    </span>
+    } @else {
+    <ui-avatar [src]="candidate.avatarKey" [alt]="candidate.username" size="sm" />
+    }
+    <span class="flex flex-col min-w-0">
+      <span class="text-sm font-medium truncate">{{ candidate.username }}</span>
+      @if (candidate.description) {
+      <span
+        class="text-2xs truncate"
+        [class.text-white]="i === highlightedIndex()"
+        [class.text-faint]="i !== highlightedIndex()"
+      >{{ candidate.description }}</span>
+      }
+    </span>
+  </button>
+  }
+  }
+</div>

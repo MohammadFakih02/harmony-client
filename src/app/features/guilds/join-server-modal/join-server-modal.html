@@ -1,0 +1,81 @@
+<ui-modal
+  heading="Join a Server"
+  subtitle="Enter an invite code or link to join an existing server."
+  (close)="close.emit()"
+>
+  <div class="px-6 pb-6 flex flex-col gap-5 overflow-y-auto">
+    @if (preview(); as p) {
+    <!-- Preview card -->
+    <div class="flex items-center gap-3 p-3 rounded-lg bg-surface-2 border border-border-subtle">
+      <div
+        class="w-12 h-12 rounded-2xl bg-surface-3 flex items-center justify-center text-primary font-bold shrink-0"
+      >
+        {{ p.guildName.slice(0, 2).toUpperCase() }}
+      </div>
+      <div class="flex flex-col min-w-0">
+        <span class="font-semibold text-primary truncate">{{ p.guildName }}</span>
+        <span class="text-xs text-muted">{{ p.memberCount }} member{{ p.memberCount === 1 ? '' : 's' }}</span>
+      </div>
+    </div>
+
+    @if (error()) {
+    <p class="text-xs text-danger">{{ error() }}</p>
+    }
+
+    <div class="flex gap-2 justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="reset()"
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        [disabled]="joining()"
+        (click)="join()"
+      >
+        {{ joining() ? 'Joining…' : 'Join Server' }}
+      </button>
+    </div>
+    } @else {
+    <!-- Code entry -->
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="invite-code">
+        Invite Link or Code
+      </label>
+      <input
+        id="invite-code"
+        type="text"
+        class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+        placeholder="https://… or aBc12Xy"
+        [ngModel]="raw()"
+        (ngModelChange)="raw.set($event)"
+        (keydown.enter)="lookup()"
+      />
+      @if (error()) {
+      <p class="text-xs text-danger">{{ error() }}</p>
+      }
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="close.emit()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        [disabled]="loading() || !raw().trim()"
+        (click)="lookup()"
+      >
+        {{ loading() ? 'Looking up…' : 'Continue' }}
+      </button>
+    </div>
+    }
+  </div>
+</ui-modal>

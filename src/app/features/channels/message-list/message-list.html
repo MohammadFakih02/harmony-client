@@ -1,0 +1,515 @@
+<!-- "X new messages" jump banner -->
+@if (unreadBanner(); as banner) {
+<button
+  type="button"
+  class="absolute top-0 inset-x-0 z-20 flex items-center justify-between gap-2 px-4 py-1.5 bg-accent text-white text-xs font-semibold shadow-sm hover:brightness-110 transition-micro"
+  (click)="jumpToUnread()"
+>
+  <span class="truncate">
+    {{ banner.count }} new {{ banner.count === 1 ? 'message' : 'messages' }}
+    @if (banner.since) { <span class="font-normal opacity-80">since {{ banner.since }}</span> }
+  </span>
+  <span
+    class="flex items-center gap-1.5 shrink-0 hover:underline"
+    (click)="$event.stopPropagation(); dismissUnreadBanner()"
+  >
+    Mark As Read <i class="fas fa-check text-2xs"></i>
+  </span>
+</button>
+}
+
+<!-- "Jump to Present" pill — shown while viewing a historical window (jumped from search/reply) -->
+@if (messageStore.anchored()) {
+<button
+  type="button"
+  class="absolute bottom-3 right-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-white text-xs font-semibold shadow-lg hover:brightness-110 transition-micro"
+  (click)="jumpToPresent()"
+>
+  Jump to Present <i class="fas fa-arrow-down text-2xs"></i>
+</button>
+} @else if (showJumpToBottom()) {
+<!-- "Jump to latest" — quietly back to the live tail after scrolling up -->
+<button
+  type="button"
+  class="absolute bottom-3 right-4 z-20 w-9 h-9 rounded-full bg-surface border border-border shadow-modal text-muted hover:text-primary hover:bg-surface-2 transition-micro flex items-center justify-center animate-scale-in"
+  title="Jump to latest"
+  (click)="jumpToBottom()"
+>
+  <i class="fas fa-arrow-down text-sm"></i>
+</button>
+}
+
+<!-- Degraded banner (message reads partially failed — Scylla circuit open etc.) -->
+@if (messageStore.degraded()) {
+<div class="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg bg-warning-muted border border-warning text-warning text-xs shrink-0">
+  <i class="fas fa-triangle-exclamation shrink-0"></i>
+  <span>Couldn't load all messages — some history may be missing.</span>
+  <button
+    type="button"
+    class="ml-auto shrink-0 px-2 py-0.5 rounded-md font-semibold hover:bg-warning hover:text-bg transition-micro"
+    (click)="retryLoad()"
+  >
+    Retry
+  </button>
+</div>
+}
+
+<!-- Loading spinner for initial load (delayed so fast loads don't flash it) -->
+@if (showInitialLoading()) {
+<div class="flex items-center justify-center flex-1">
+  <i class="fas fa-yin-yang animate-spin text-2xl text-faint"></i>
+</div>
+} @else if (messageStore.isLoading() && messageStore.messages().length === 0) {
+<!-- Loading but under the delay threshold → render nothing (avoids the flash) -->
+<div class="flex-1"></div>
+} @else if (messageStore.messages().length === 0) {
+<!-- Welcome block — anchored at the bottom, where the conversation will start -->
+<div class="flex flex-col justify-end flex-1 min-h-0 px-4 pb-4 select-none">
+  <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-3">
+    <i
+      class="fas text-2xl text-muted"
+      [class.fa-hashtag]="messageStore.activeGuildId()"
+      [class.fa-comments]="!messageStore.activeGuildId()"
+    ></i>
+  </div>
+  <h3 class="text-2xl font-bold text-primary">{{ emptyTitle() }}</h3>
+  <p class="text-sm text-muted mt-1">{{ emptySubtitle() }} Say hello!</p>
+</div>
+} @else {
+
+<!-- Subtle indicator while older history loads (auto-triggered on scroll-up) -->
+@if (messageStore.isLoading() && messageStore.messages().length > 0) {
+<div class="flex justify-center py-1.5 shrink-0">
+  <i class="fas fa-yin-yang animate-spin text-faint text-sm"></i>
+</div>
+}
+
+<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text pointer-coarse:select-none pb-6">
+  @for (group of messageGroups(); track group.firstMessageId) {
+  <!-- Date separator — this group starts a new calendar day -->
+  @if (group.dayLabel) {
+  <div class="flex items-center gap-3 px-4 pt-5 pb-1 select-none">
+    <div class="flex-1 h-px bg-border-subtle"></div>
+    <span class="text-2xs font-semibold text-faint shrink-0">{{ group.dayLabel }}</span>
+    <div class="flex-1 h-px bg-border-subtle"></div>
+  </div>
+  }
+  <!-- NEW divider — where unread messages began when the channel was opened -->
+  @if (group.firstMessageId === newDividerId()) {
+  <div class="flex items-center px-4 pt-2 pb-1 select-none" aria-label="New messages">
+    <div class="flex-1 h-px bg-danger"></div>
+    <span class="ml-2 px-1.5 py-0.5 rounded-sm bg-danger text-white text-3xs font-bold uppercase tracking-wider leading-none shrink-0">
+      New
+    </span>
+  </div>
+  }
+  <!-- Cozy gives bursts breathing room; compact packs them (Appearance > Message Display) -->
+  <div
+    class="animate-message-in"
+    [ngClass]="isCompact() ? 'mt-0.5' : 'mt-3'"
+    [attr.data-group]="group.firstMessageId"
+  >
+    @if (group.isSystem) {
+    <div class="gap-1 px-4 py-2 text-xs text-muted flex">
+      @if (systemMessageType(group) === 'pin') {
+      <i class="fas fa-thumbtack text-faint shrink-0"></i>
+      <span class="min-w-0 flex items-center">
+        <span class="font-semibold text-primary mr-1">{{ group.authorName }}</span> pinned a message to this channel.
+      </span>
+      } @else if (systemMessageType(group) === 'group_join') {
+      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the group.
+      </span>
+      } @else if (systemMessageType(group) === 'group_leave') {
+      <i class="fas fa-arrow-right-from-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> left the group.
+      </span>
+      } @else if (systemMessageType(group) === 'missed_call') {
+      <i class="fas fa-phone-slash text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> started a call — no one answered.
+      </span>
+      } @else {
+      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
+      <span class="min-w-0">
+        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
+      </span>
+      }
+    </div>
+    } @else if (group.blocked && !revealedBlocked().has(group.firstMessageId)) {
+    <!-- Blocked author — collapsed bar, click to reveal this burst -->
+    <button
+      type="button"
+      class="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-faint hover:text-muted transition-micro select-none"
+      (click)="toggleBlockedReveal(group.firstMessageId)"
+    >
+      <i class="fas fa-eye-slash shrink-0"></i>
+      <span>{{ group.items.length }} blocked {{ group.items.length === 1 ? 'message' : 'messages' }}</span>
+      <span class="ml-auto text-2xs font-semibold uppercase tracking-wider shrink-0">Show</span>
+    </button>
+    } @else {
+    <div class="group flex items-start gap-3 px-4 py-1 rounded-md hover:bg-surface-2 transition-micro">
+    <ui-avatar
+      [src]="group.avatarKey"
+      [alt]="group.username"
+      size="md"
+      ringClass="border-surface-2 group-hover:border-surface-2"
+      class="mt-0.5 shrink-0 cursor-pointer"
+      (click)="openProfile(group, authorOrigin)"
+      (contextmenu)="openAuthorMenu($event, group)"
+    />
+    <div class="flex flex-col gap-0.5 flex-1 min-w-0">
+      <div class="flex items-baseline gap-2">
+        <span
+          cdkOverlayOrigin
+          #authorOrigin="cdkOverlayOrigin"
+          class="text-sm font-semibold leading-tight cursor-pointer hover:underline"
+          [class.text-primary]="!group.authorColor"
+          [style.color]="group.authorColor"
+          (click)="openProfile(group, authorOrigin)"
+          (contextmenu)="openAuthorMenu($event, group)"
+          >{{ group.authorName }}</span
+        >
+        <span class="text-xs text-faint" [title]="fullTime(group.items[0].msg.sentAt)">{{ group.timestamp }}</span>
+        @if (group.blocked) {
+        <button
+          type="button"
+          class="text-2xs font-semibold uppercase tracking-wider text-faint hover:text-muted transition-micro"
+          (click)="toggleBlockedReveal(group.firstMessageId)"
+        >
+          Hide
+        </button>
+        }
+      </div>
+      @for (item of group.items; track item.msg.messageId) {
+      @let msg = item.msg;
+      <div class="relative group/msg" [attr.data-message]="msg.messageId" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
+        @if (editingId() === msg.messageId) {
+        <!-- Inline edit mode -->
+        <div class="relative" cdkOverlayOrigin #editOrigin="cdkOverlayOrigin">
+          <textarea
+            #editInput
+            autofocusEnd
+            class="w-full bg-surface-3 rounded-lg ring-1 ring-border-subtle focus:ring-2 focus:ring-accent outline-none text-sm pl-3 pr-10 py-2 text-primary resize-none leading-relaxed"
+            rows="2"
+            [ngModel]="editDraft()"
+            (ngModelChange)="onEditInput($event)"
+            (keydown)="onEditKeydown($event, msg)"
+          ></textarea>
+          <button
+            type="button"
+            title="Emoji"
+            aria-label="Emoji"
+            class="absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary transition-micro"
+            [class.text-primary]="editEmojiOpen()"
+            (click)="toggleEditEmoji()"
+          >
+            <i class="fas fa-face-smile text-sm"></i>
+          </button>
+        </div>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
+          [cdkConnectedOverlayOrigin]="editOrigin"
+          [cdkConnectedOverlayOpen]="editEmojiOpen()"
+          [cdkConnectedOverlayPositions]="editEmojiOverlayPositions"
+          [cdkConnectedOverlayHasBackdrop]="false"
+          (overlayOutsideClick)="closeEditEmoji()"
+          (detach)="closeEditEmoji()"
+        >
+          <app-emoji-picker (select)="onEditEmojiSelect($event)" />
+        </ng-template>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
+          [cdkConnectedOverlayOrigin]="editOrigin"
+          [cdkConnectedOverlayOpen]="editMentionOpen()"
+          [cdkConnectedOverlayPositions]="editMentionOverlayPositions"
+          [cdkConnectedOverlayHasBackdrop]="false"
+          (overlayOutsideClick)="editMentionTrigger.set(null)"
+        >
+          <app-mention-autocomplete
+            [candidates]="editMentionCandidates()"
+            [highlightedIndex]="editMentionHighlightedIndex()"
+            (select)="selectEditMention($event)"
+          />
+        </ng-template>
+        <div class="text-2xs text-faint mt-0.5">
+          escape to <button class="underline hover:no-underline" (click)="cancelEdit()">cancel</button>
+          · enter to <button class="underline hover:no-underline" (click)="saveEdit(msg)">save</button>
+        </div>
+        } @else {
+        <!-- Reply preview (compact, clickable → jump to the referenced message) -->
+        @if (item.preview; as ref) {
+        <button
+          type="button"
+          class="flex items-center gap-1.5 max-w-full mb-0.5 text-xs text-faint hover:text-muted transition-micro"
+          [class.cursor-pointer]="ref.found"
+          [class.cursor-default]="!ref.found"
+          [disabled]="!ref.found"
+          (click)="jumpToMessage(ref.messageId)"
+        >
+          <i class="fas fa-reply fa-flip-vertical text-2xs shrink-0"></i>
+          @if (ref.found) {
+          <span class="font-semibold shrink-0">{{ ref.authorName }}</span>
+          <span class="truncate opacity-80">{{ ref.content }}</span>
+          } @else {
+          <span class="italic opacity-80">Original message unavailable</span>
+          }
+        </button>
+        }
+        <!-- Forward snapshot (attributed quote of the original) — server-built, above the note.
+             Hidden once the message is deleted (the snapshot isn't part of the "Message deleted" row). -->
+        @if (!msg.isDeleted && msg.forward; as fwd) {
+        <div class="mb-1 border-l-2 border-border pl-2.5 py-0.5 max-w-full">
+          <div class="flex items-center gap-1.5 text-2xs text-faint">
+            <i class="fas fa-share text-2xs shrink-0"></i>
+            <span class="truncate">
+              Forwarded from
+              <span class="font-semibold text-muted">{{ fwd.authorName }}</span>
+              · {{ forwardTime(fwd.sentAt) }}
+            </span>
+          </div>
+          @if (fwd.content) {
+          <div class="text-sm text-muted whitespace-pre-wrap wrap-break-words line-clamp-6">
+            {{ fwd.content }}
+          </div>
+          }
+        </div>
+        }
+        <div
+          class="text-sm leading-relaxed wrap-break-words"
+          [class.text-primary]="!msg.pending && !msg.failed"
+          [class.opacity-60]="msg.pending"
+          [class.text-danger]="msg.failed"
+        >
+          @if (msg.isDeleted) {
+            <span class="italic text-faint">Message deleted</span>
+          } @else {
+            <!-- Markdown-rendered content (interpolation only — XSS-safe; @-mentions become chips) -->
+            <app-message-content [content]="msg.content" [mentionContext]="mentionContext()" />
+            @if (msg.isEdited) {
+              <span class="text-xs text-faint ml-1">(edited)</span>
+            }
+            @if (isPinned(msg)) {
+              <i class="fas fa-thumbtack text-2xs text-faint ml-1" title="Pinned"></i>
+            }
+            @if (msg.failed) {
+              <span class="text-xs ml-1 inline-flex items-center gap-1.5">
+                <i class="fas fa-circle-exclamation"></i>
+                {{ msg.failedReason || 'Failed to send' }}
+                <button
+                  class="underline hover:no-underline text-danger font-medium"
+                  (click)="messageStore.retryMessage(msg.tempId!)"
+                >Retry</button>
+              </span>
+            }
+          }
+        </div>
+
+        <!-- Image attachments (resolved lazily; space reserved from stored dimensions) -->
+        @if (!msg.isDeleted && msg.attachmentIds.length) {
+        <app-message-attachments
+          [attachmentIds]="msg.attachmentIds"
+          [guildId]="msg.guildId"
+          [channelId]="msg.channelId"
+        />
+        }
+
+        <!-- Inline invite cards for any invite links in the message -->
+        @for (code of item.inviteCodes; track code) {
+        <app-invite-embed [code]="code" />
+        }
+
+        <!-- Inline "jump to message" cards for any Harmony message links -->
+        @for (link of item.messageLinks; track link.messageId) {
+        <app-message-link-embed [link]="link" />
+        }
+
+        <!-- Reaction pills (aggregated emoji + count; highlighted when you reacted) -->
+        @if (!msg.isDeleted && msg.reactions?.length) {
+        <div class="flex flex-wrap items-center gap-1 mt-1">
+          @for (r of msg.reactions; track r.emoji) {
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 px-1.5 h-6 rounded-md border text-xs leading-none transition-micro disabled:cursor-default"
+            [ngClass]="r.meReacted
+              ? 'bg-accent/15 border-accent text-accent'
+              : 'bg-surface-2 border-border-subtle text-muted hover:text-primary hover:border-border'"
+            [disabled]="!canReact(msg)"
+            (click)="toggleReaction(msg, r.emoji)"
+          >
+            <span class="text-sm leading-none">{{ r.emoji }}</span>
+            <span class="font-semibold tabular-nums">{{ r.count }}</span>
+          </button>
+          }
+          @if (canReact(msg)) {
+          <button
+            type="button"
+            cdkOverlayOrigin
+            #addReactionPill="cdkOverlayOrigin"
+            class="inline-flex items-center justify-center w-7 h-6 rounded-md border border-border-subtle bg-surface-2 text-faint hover:text-primary hover:border-border transition-micro"
+            title="Add Reaction"
+            aria-label="Add Reaction"
+            (click)="openReactionPicker(msg, addReactionPill)"
+          >
+            <i class="fas fa-face-smile text-xs"></i>
+          </button>
+          }
+        </div>
+        }
+
+        <!-- Hover actions (reply/copy for any message; edit for own; delete for own or ManageMessages).
+             Never rendered on a coarse pointer — touch users get the same actions via long-press. -->
+        @if (hasActions(msg) && !viewport.coarsePointer()) {
+        <div
+          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
+          [class.!flex]="reactionTarget()?.messageId === msg.messageId"
+        >
+          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="fullTime(msg.sentAt)">{{ shortTime(msg.sentAt) }}</span>
+          @if (canReact(msg)) {
+          @for (emoji of quickReactions(); track emoji) {
+          <button
+            type="button"
+            class="w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none hover:bg-surface-2 hover:scale-110 transition-micro"
+            [title]="'React with ' + emoji"
+            (click)="quickReact(msg, emoji)"
+          >
+            {{ emoji }}
+          </button>
+          }
+          <button
+            type="button"
+            cdkOverlayOrigin
+            #addReactionBtn="cdkOverlayOrigin"
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Add Reaction"
+            (click)="openReactionPicker(msg, addReactionBtn)"
+          >
+            <i class="fas fa-face-smile text-xs"></i>
+          </button>
+          }
+          @if (canReply(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Reply"
+            (click)="replyTo(msg)"
+          >
+            <i class="fas fa-reply text-xs"></i>
+          </button>
+          }
+          @if (canCopy(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Copy text"
+            (click)="copyText(msg)"
+          >
+            <i class="fas fa-copy text-xs"></i>
+          </button>
+          }
+          @if (canForward(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Forward"
+            (click)="openForward(msg)"
+          >
+            <i class="fas fa-share text-xs"></i>
+          </button>
+          }
+          @if (canPin(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-surface-2 transition-micro"
+            [class.text-accent]="isPinned(msg)"
+            [class.text-faint]="!isPinned(msg)"
+            [class.hover:text-primary]="!isPinned(msg)"
+            [title]="isPinned(msg) ? 'Unpin' : 'Pin'"
+            (click)="togglePin(msg)"
+          >
+            <i class="fas fa-thumbtack text-xs"></i>
+          </button>
+          }
+          @if (canEdit(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+            title="Edit"
+            (click)="startEdit(msg)"
+          >
+            <i class="fas fa-pen text-xs"></i>
+          </button>
+          }
+          @if (canDelete(msg)) {
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-danger hover:bg-surface-2 transition-micro"
+            title="Delete"
+            (click)="deleteMsg(msg)"
+          >
+            <i class="fas fa-trash text-xs"></i>
+          </button>
+          }
+        </div>
+        }
+        }
+      </div>
+      }
+    </div>
+    </div>
+    }
+  </div>
+  }
+</div>
+
+}
+
+<!-- Author profile popout (anchored to the clicked name/avatar) -->
+@if (profileGroup(); as group) {
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayOrigin]="profileOrigin()!"
+  [cdkConnectedOverlayOpen]="true"
+  [cdkConnectedOverlayPositions]="profilePositions"
+  [cdkConnectedOverlayHasBackdrop]="false"
+  (overlayOutsideClick)="closeProfile()"
+>
+  <app-user-profile-popout
+    [userId]="group.userId"
+    [guildId]="messageStore.activeGuildId()"
+    [fallbackUsername]="group.username"
+    [fallbackAvatarKey]="group.avatarKey"
+    (close)="closeProfile()"
+  />
+</ng-template>
+}
+
+<!-- Add-reaction emoji popover (anchored to the clicked message's reaction button/pill).
+     The origin-less variant is the touch path (long-press menu → "More…") — a bottom sheet. -->
+@if (reactionTarget() && reactionOrigin()) {
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayOrigin]="reactionOrigin()!"
+  [cdkConnectedOverlayOpen]="true"
+  [cdkConnectedOverlayPositions]="reactionPositions"
+  [cdkConnectedOverlayHasBackdrop]="false"
+  (overlayOutsideClick)="closeReactionPicker()"
+  (detach)="closeReactionPicker()"
+>
+  <app-emoji-picker (select)="onReactionPicked($event)" />
+</ng-template>
+} @else if (reactionTarget()) {
+<div class="fixed inset-0 z-1100 bg-black/50" (click)="closeReactionPicker()">
+  <div
+    class="absolute inset-x-0 bottom-0 flex justify-center pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+    (click)="$event.stopPropagation()"
+  >
+    <app-emoji-picker (select)="onReactionPicked($event)" />
+  </div>
+</div>
+}
+
+<!-- Forward picker (re-sends a message to other channels/DMs) -->
+@if (forwardTarget(); as msg) {
+<app-forward-modal [message]="msg" (close)="closeForward()" />
+}

@@ -1,0 +1,56 @@
+.guild-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition:
+    border-radius var(--duration-element) var(--ease-bounce),
+    background-color var(--duration-micro) var(--ease-standard),
+    color var(--duration-micro) var(--ease-standard),
+    border-color var(--duration-element) var(--ease-standard),
+    transform var(--duration-element) var(--ease-bounce);
+
+  // Soft zen expansion hover effect (no glow — the squircle morph + border carry it)
+  &:hover {
+    border-radius: 35%;
+    border-color: var(--color-accent);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95) rotate(0deg);
+  }
+  &::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    width: 4px;
+    height: 0;
+    border-radius: 0 4px 4px 0;
+    background-color: var(--color-text);
+    transform: translateY(-50%);
+    transition: height var(--duration-element) var(--ease-bounce);
+  }
+  // Unread pill (small) → hover (medium) → active (full) — Discord's rail language.
+  &.unread::before {
+    height: 8px;
+  }
+  &:hover::before {
+    height: 20px;
+  }
+  &.active::before {
+    height: 40px;
+  }
+  // The selected guild keeps the morphed squircle shape, not just on hover.
+  &.active {
+    border-radius: 35%;
+  }
+}

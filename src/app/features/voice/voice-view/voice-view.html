@@ -1,0 +1,205 @@
+<!-- Stage: near-black in every dark palette (Discord-style), theme-light in light mode — see the
+     .voice-* utilities in styles.css. #stageRoot is the element taken into true OS fullscreen
+     (rung 3 of the view ladder). -->
+<div #stageRoot class="relative flex-1 min-h-0 flex flex-col voice-stage">
+  @if (participants().length === 0) {
+  <!-- Empty stage: invite to be the first one in -->
+  <div class="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center animate-fade-in">
+    <div class="w-16 h-16 rounded-full voice-chip flex items-center justify-center">
+      <i class="fas fa-volume-high voice-text-muted text-2xl"></i>
+    </div>
+    <h2 class="voice-text text-xl font-bold">{{ channel()?.name ?? 'Voice' }}</h2>
+    <p class="voice-text-faint text-sm -mt-1.5">No one is currently in voice. Ready to talk?</p>
+    <button
+      type="button"
+      class="mt-1 h-10 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
+      [disabled]="connecting()"
+      (click)="join()"
+    >
+      @if (connecting()) {
+      <i class="fas fa-spinner fa-spin"></i> Connecting
+      } @else {
+      Join Voice
+      }
+    </button>
+  </div>
+  } @else {
+  <!-- Channel identity strip: name + live occupancy (gradient so it never fights the tiles) -->
+  <div
+    class="absolute top-0 inset-x-0 z-10 flex items-center gap-2.5 px-5 pt-4 pb-8 voice-fade-top pointer-events-none"
+  >
+    <i class="fas fa-volume-high voice-text-muted text-sm shrink-0"></i>
+    <h2 class="voice-text font-semibold text-sm truncate">{{ channel()?.name }}</h2>
+    <span class="flex items-center gap-1 voice-text-faint text-xs font-medium tabular-nums shrink-0">
+      <i class="fas fa-user text-2xs"></i
+      >{{ participants().length }}@if (channel()?.userLimit) {<span class="opacity-70">/{{ channel()!.userLimit }}</span>}
+    </span>
+  </div>
+
+  @if (focusedTile(); as focused) {
+  <!-- Rung 2/3: one blown-up tile + a filmstrip of the rest. Still in the content pane (sidebars
+       visible) unless fullscreen is toggled. The filmstrip hides on demand while fullscreen. -->
+  <div class="flex-1 min-h-0 flex flex-col gap-3 p-6 pt-14 pb-28 max-md:p-3 max-md:pt-12 max-md:pb-32">
+    <app-voice-tile
+      class="flex-1 min-h-0"
+      [tile]="focused"
+      [channelId]="channel()!.id"
+      [showControls]="connected()"
+      [emphasized]="true"
+      (focusRequested)="toggleFocus(focused.id)"
+    />
+    @if (filmstripTiles().length > 0 && !(isFullscreen() && membersHidden())) {
+    <!-- Centered via first/last auto-margins, NOT justify-center — a centered overflow container
+         clips its leading tiles unreachably (you can only scroll one way). -->
+    <div class="h-24 max-md:h-20 shrink-0 flex gap-2 overflow-x-auto">
+      @for (t of filmstripTiles(); track t.id) {
+      <app-voice-tile
+        class="h-full aspect-video shrink-0 first:ml-auto last:mr-auto"
+        [tile]="t"
+        [channelId]="channel()!.id"
+        [showControls]="connected()"
+        (focusRequested)="toggleFocus(t.id)"
+      />
+      }
+    </div>
+    }
+  </div>
+  } @else {
+  <!-- Rung 1: equal grid of every participant/screenshare tile. Click a tile to focus it.
+       m-auto (not items/justify-center on the scroller) keeps every row reachable on overflow. -->
+  <div class="flex-1 min-h-0 overflow-y-auto flex p-6 pt-14 pb-28 max-md:p-3 max-md:pt-12 max-md:pb-32">
+    <div class="grid gap-3 w-full max-w-4xl m-auto grid-cols-[repeat(auto-fit,minmax(220px,1fr))] max-md:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
+      @for (t of tiles(); track t.id) {
+      <app-voice-tile
+        [tile]="t"
+        [channelId]="channel()!.id"
+        [showControls]="connected()"
+        (focusRequested)="toggleFocus(t.id)"
+      />
+      }
+    </div>
+  </div>
+  }
+  }
+
+  <!-- Bottom controls: a docked pill while connected, a floating Join while spectating an occupied room -->
+  @if (connected()) {
+  <div
+    class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-black/50 backdrop-blur-md ring-1 ring-white/10 max-md:max-w-[calc(100vw-1rem)] max-md:flex-wrap max-md:justify-center max-md:px-2 max-md:py-2 max-md:bottom-[max(0.75rem,env(safe-area-inset-bottom))]"
+  >
+    <!-- Mic / deafen read Discord's language: red with a slash when OFF (danger + lock when
+         server-imposed — the store no-ops while it's on); neutral dark when live. -->
+    @let srvMuted = voiceStore.selfServerMuted();
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="srvMuted ? 'bg-danger text-white cursor-not-allowed' : voiceStore.selfMuted() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="srvMuted ? 'You are server muted' : voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted() || srvMuted"
+      [attr.aria-disabled]="srvMuted"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-microphone]="!voiceStore.selfMuted() && !srvMuted"
+        [class.fa-microphone-slash]="voiceStore.selfMuted() || srvMuted"
+      ></i>
+    </button>
+    @let srvDeafened = voiceStore.selfServerDeafened();
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="srvDeafened ? 'bg-danger text-white cursor-not-allowed' : voiceStore.selfDeafened() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="srvDeafened ? 'You are server deafened' : voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened() || srvDeafened"
+      [attr.aria-disabled]="srvDeafened"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-headphones]="!voiceStore.selfDeafened() && !srvDeafened"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened() || srvDeafened"
+      ></i>
+    </button>
+    @if (canUseVideo()) {
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfVideoOn() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfVideoOn() ? 'Turn off camera' : 'Turn on camera'"
+      [attr.aria-label]="voiceStore.selfVideoOn() ? 'Turn off camera' : 'Turn on camera'"
+      [attr.aria-pressed]="voiceStore.selfVideoOn()"
+      (click)="toggleCamera()"
+    >
+      <i
+        class="fas text-base"
+        [class.fa-video]="voiceStore.selfVideoOn()"
+        [class.fa-video-slash]="!voiceStore.selfVideoOn()"
+      ></i>
+    </button>
+    }
+    @if (canStream()) {
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfStreaming() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen — to also share audio, use Chrome/Edge on Windows, or share a browser tab'"
+      [attr.aria-label]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen'"
+      [attr.aria-pressed]="voiceStore.selfStreaming()"
+      (click)="toggleScreenShare()"
+    >
+      <i class="fas fa-display text-base"></i>
+    </button>
+    }
+    @if (isFullscreen() && focusedTile() && filmstripTiles().length > 0) {
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
+      [title]="membersHidden() ? 'Show members' : 'Hide members'"
+      [attr.aria-label]="membersHidden() ? 'Show members' : 'Hide members'"
+      [attr.aria-pressed]="membersHidden()"
+      (click)="toggleMembers()"
+    >
+      <i class="fas text-base" [class.fa-users]="membersHidden()" [class.fa-users-slash]="!membersHidden()"></i>
+    </button>
+    }
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
+      [title]="isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+      [attr.aria-label]="isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+      [attr.aria-pressed]="isFullscreen()"
+      (click)="toggleFullscreen()"
+    >
+      <i class="fas text-base" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+    </button>
+    <div class="w-px h-8 bg-white/15 mx-0.5"></div>
+    <button
+      type="button"
+      class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+      title="Disconnect"
+      aria-label="Disconnect"
+      (click)="leave()"
+    >
+      <i class="fas fa-phone-slash text-base"></i>
+    </button>
+  </div>
+  } @else if (participants().length) {
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2">
+    <button
+      type="button"
+      class="h-11 px-8 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro flex items-center gap-2 disabled:opacity-60"
+      [disabled]="connecting()"
+      (click)="join()"
+    >
+      @if (connecting()) {
+      <i class="fas fa-spinner fa-spin"></i> Connecting
+      } @else {
+      Join Voice
+      }
+    </button>
+  </div>
+  }
+</div>

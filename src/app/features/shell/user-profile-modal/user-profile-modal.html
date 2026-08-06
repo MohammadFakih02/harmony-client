@@ -1,0 +1,279 @@
+@if (profileModal.target()) {
+<div
+  class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  (click)="close()"
+>
+  <div
+    class="bg-surface rounded-xl shadow-modal border border-border w-full max-w-sm mx-4 overflow-hidden flex flex-col max-h-[85vh] animate-slide-up"
+    (click)="$event.stopPropagation()"
+  >
+    @if (loading() && !view()) {
+    <div class="flex justify-center py-16">
+      <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
+    </div>
+    } @else if (error() && !view()) {
+    <div class="flex flex-col items-center gap-2 py-12 px-6 text-center">
+      <i class="fas fa-circle-exclamation text-2xl text-faint"></i>
+      <p class="text-sm text-muted">{{ error() }}</p>
+    </div>
+    } @else if (view(); as v) {
+    <div class="overflow-y-auto">
+      <!-- ===== Banner: image > picked colour > top-role gradient ===== -->
+      <ui-profile-banner
+        class="h-28"
+        [bannerKey]="v.bannerKey"
+        [bannerColor]="v.bannerColor"
+        [fallback]="bannerStyle()"
+        [alt]="v.username"
+      >
+        <button
+          type="button"
+          class="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 text-white/90 hover:bg-black/60 flex items-center justify-center transition-micro"
+          aria-label="Close"
+          (click)="close()"
+        >
+          <i class="fas fa-xmark text-sm"></i>
+        </button>
+      </ui-profile-banner>
+
+      <div class="px-4 pb-4">
+        <!-- ===== Avatar overlapping the banner + owner badge ===== -->
+        <div class="relative z-10 flex items-end justify-between -mt-10">
+          <div class="inline-block rounded-full p-1.25 bg-surface">
+            <ui-avatar
+              [src]="v.avatarKey"
+              [alt]="v.username"
+              size="2xl"
+              [status]="avatarStatus()"
+              ringClass="border-surface"
+            />
+          </div>
+          @if (isOwner()) {
+          <span
+            class="mb-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning-muted text-warning text-2xs font-semibold shrink-0"
+            title="Server owner"
+          >
+            <i class="fas fa-crown"></i> Owner
+          </span>
+          }
+        </div>
+
+        <!-- ===== Identity ===== -->
+        <div class="mt-2.5 min-w-0">
+          <p class="text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
+          @if (hasNickname() || v.age != null) {
+          <p class="text-xs text-muted truncate mt-0.5">
+            @if (hasNickname()) {
+            <span>{{ v.username }}</span>
+            }
+            @if (hasNickname() && v.age != null) {
+            <span class="text-faint">·</span>
+            }
+            @if (v.age != null) {
+            <span>{{ v.age }} yrs</span>
+            }
+          </p>
+          }
+        </div>
+
+        <!-- Custom status -->
+        @if (v.statusMessage; as msg) {
+        <div class="mt-2 rounded-lg bg-surface-2 border border-border-subtle px-2.5 py-1.5 flex items-start gap-1.5">
+          <i class="fas fa-quote-left text-2xs text-faint mt-1 shrink-0"></i>
+          <span class="text-xs text-muted whitespace-pre-wrap wrap-break-word min-w-0">{{ msg }}</span>
+        </div>
+        }
+
+        <div class="my-3 h-px bg-border-subtle"></div>
+
+        <!-- About me -->
+        @if (v.bio) {
+        <div class="mb-3">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">About Me</p>
+          <p class="text-sm text-muted whitespace-pre-wrap wrap-break-word">{{ v.bio }}</p>
+        </div>
+        }
+
+        <!-- Roles -->
+        @if (roleChips().length) {
+        <div class="mb-3">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
+          <div class="flex flex-wrap gap-1">
+            @for (role of roleChips(); track role.id) {
+            <span
+              class="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-md bg-surface-2 border border-border-subtle text-xs font-medium text-primary"
+            >
+              <span
+                class="w-2.5 h-2.5 rounded-full shrink-0"
+                [style.background-color]="role.color ?? 'var(--color-text-faint)'"
+              ></span>
+              {{ role.name }}
+            </span>
+            }
+          </div>
+        </div>
+        }
+
+        <!-- Member since — Harmony account date + guild join date -->
+        <div class="mb-3">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
+          <div class="flex items-center gap-2 text-xs text-muted min-w-0">
+            <i class="fas fa-yin-yang text-faint shrink-0" title="Joined Harmony"></i>
+            <span class="shrink-0">{{ accountSince() }}</span>
+            @if (serverSince(); as since) {
+            <span class="w-1 h-1 rounded-full bg-border shrink-0"></span>
+            <i class="fas fa-users text-faint shrink-0" title="Joined this server"></i>
+            <span class="truncate">{{ since }}</span>
+            }
+          </div>
+        </div>
+
+        <!-- Server nickname (guild-scoped: self, or a mod with ManageNicknames) -->
+        @if (canEditServerNick()) {
+        <div class="mb-3">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">Server Nickname</p>
+          @if (editingServerNick()) {
+          <div class="flex items-center gap-1.5">
+            <input
+              type="text"
+              maxlength="32"
+              placeholder="Nickname"
+              class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="serverNickDraft()"
+              (ngModelChange)="serverNickDraft.set($event)"
+              (keydown.enter)="saveServerNick()"
+              (keydown.escape)="editingServerNick.set(false)"
+            />
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro shrink-0"
+              [disabled]="savingServerNick()"
+              aria-label="Save nickname"
+              (click)="saveServerNick()"
+            >
+              <i class="fas fa-check text-xs"></i>
+            </button>
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface-2 transition-micro shrink-0"
+              aria-label="Cancel"
+              (click)="editingServerNick.set(false)"
+            >
+              <i class="fas fa-xmark text-xs"></i>
+            </button>
+          </div>
+          } @else {
+          <div class="group flex items-center gap-2 min-w-0">
+            <p class="text-sm truncate" [class]="serverNickname() ? 'text-muted' : 'text-faint'">
+              {{ serverNickname() ?? 'None' }}
+            </p>
+            <button
+              type="button"
+              class="ml-auto w-6 h-6 rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              aria-label="Edit server nickname"
+              (click)="startServerNickEdit()"
+            >
+              <i class="fas fa-pen text-2xs"></i>
+            </button>
+          </div>
+          }
+        </div>
+        }
+
+        <!-- Friend nickname (private, only you see it; for anyone but yourself) -->
+        @if (!isSelf()) {
+        <div class="mb-1">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">Nickname</p>
+          @if (editingFriendNick()) {
+          <div class="flex items-center gap-1.5">
+            <input
+              type="text"
+              maxlength="32"
+              placeholder="Add a nickname"
+              class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="friendNickDraft()"
+              (ngModelChange)="friendNickDraft.set($event)"
+              (keydown.enter)="saveFriendNick()"
+              (keydown.escape)="editingFriendNick.set(false)"
+            />
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro shrink-0"
+              [disabled]="savingFriendNick()"
+              aria-label="Save nickname"
+              (click)="saveFriendNick()"
+            >
+              <i class="fas fa-check text-xs"></i>
+            </button>
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface-2 transition-micro shrink-0"
+              aria-label="Cancel"
+              (click)="editingFriendNick.set(false)"
+            >
+              <i class="fas fa-xmark text-xs"></i>
+            </button>
+          </div>
+          } @else {
+          <div class="group flex items-center gap-2 min-w-0">
+            <p class="text-sm truncate" [class]="friendNickname() ? 'text-muted' : 'text-faint'">
+              {{ friendNickname() ?? 'None' }}
+            </p>
+            <button
+              type="button"
+              class="ml-auto w-6 h-6 rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              aria-label="Edit nickname"
+              (click)="startFriendNickEdit()"
+            >
+              <i class="fas fa-pen text-2xs"></i>
+            </button>
+          </div>
+          }
+          <p class="text-2xs text-faint mt-1">Only you can see this nickname.</p>
+        </div>
+        }
+
+        @if (error()) {
+        <p class="text-xs text-danger mt-2">{{ error() }}</p>
+        }
+
+        <!-- Actions -->
+        <div class="mt-4 flex flex-col gap-1.5">
+          @if (isSelf()) {
+          <button
+            type="button"
+            class="w-full h-9 rounded-lg text-sm font-semibold bg-surface-2 text-primary hover:bg-surface-3 transition-micro flex items-center justify-center gap-2"
+            (click)="editProfile()"
+          >
+            <i class="fas fa-pen text-xs"></i> Edit Profile
+          </button>
+          } @else if (canMessage()) {
+          <button
+            type="button"
+            class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro flex items-center justify-center gap-2"
+            (click)="message()"
+          >
+            <i class="fas fa-message text-xs"></i> Message
+          </button>
+          } @else {
+          <p class="w-full h-9 rounded-lg text-xs text-muted bg-surface-2 flex items-center justify-center gap-1.5">
+            <i class="fas fa-user-lock"></i> Only accepts messages from friends
+          </p>
+          }
+          @if (canAddFriend()) {
+          <button
+            type="button"
+            class="w-full h-9 rounded-lg text-sm font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2 disabled:opacity-60"
+            [disabled]="sendingFriendRequest()"
+            (click)="addFriend()"
+          >
+            <i class="fas fa-user-plus text-xs"></i> Add Friend
+          </button>
+          }
+        </div>
+      </div>
+    </div>
+    }
+  </div>
+</div>
+}

@@ -1,0 +1,846 @@
+/* Inter is loaded from index.html (<link> + preconnect) — a CSS @import here
+   would serialize the font CSS behind this stylesheet's download. */
+@import "tailwindcss";
+
+/* ============================================================
+   Tailwind CSS v4 Configuration Block
+
+   Runtime-theming indirection — why tokens look "circular":
+   @theme registers Tailwind utility names and their CSS output at build time.
+   Values like `--color-bg: var(--color-bg)` are intentional: Tailwind emits
+   `background-color: var(--color-bg)` for `bg-bg`, keeping the value as a live
+   CSS custom property reference. The actual colour is set in the
+   `html.palette-*.mode-*` blocks below and swapped at runtime by ThemeService —
+   no rebuild needed.
+
+   Token naming note:
+   `--color-primary` maps to the primary TEXT colour, not the brand accent.
+   The accent colour is `--color-accent`. This naming mirrors Discord's convention
+   (primary = foreground) and is intentional — renaming would churn every template.
+   ============================================================ */
+@theme {
+  /* Colors */
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-3: var(--color-surface-3);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+
+  --color-primary: var(--color-text);
+  --color-muted: var(--color-text-muted);
+  --color-faint: var(--color-text-faint);
+
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-light: var(--color-accent-light);
+  --color-accent-muted: var(--color-accent-muted);
+
+  --color-danger: var(--color-danger);
+  --color-danger-muted: var(--color-danger-muted);
+  --color-success: var(--color-success);
+  --color-success-muted: var(--color-success-muted);
+  --color-warning: var(--color-warning);
+  --color-warning-muted: var(--color-warning-muted);
+
+  /* Type scale — supplements Tailwind defaults */
+  --text-2xs: 0.6875rem; /* 11px — category headers, metadata */
+  --text-3xs: 0.625rem;  /* 10px — icon-size hints, micro labels */
+
+  /* Spacing */
+  --spacing-18: 4.5rem; /* Enables w-18 / h-18 (72px) for your sidebar */
+
+  /* Fonts */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Shadows */
+  --shadow-panel: var(--shadow-panel);
+  --shadow-modal: var(--shadow-modal);
+  --shadow-tooltip: var(--shadow-tooltip);
+  --shadow-accent-glow: 0 0 20px var(--color-accent-glow); /* Enables shadow-accent-glow */
+
+  /* Animations */
+  --animate-fade-in: fadeIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-fade-out: fadeOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-slide-up: slideUpIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-slide-down: slideDownIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-slide-left: slideLeftIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-slide-right: slideRightIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-scale-in: scaleIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-scale-out: scaleOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-modal-in: modalIn 300ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-modal-out: modalOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-sidebar-in: sidebarIn 300ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-message-in: messageIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
+  --animate-pulse-glow: pulseGlow 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --animate-icon-bounce: iconBounce 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-shake: shake 250ms cubic-bezier(0.4, 0, 0.2, 1) both;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes slideUpIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slideDownIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slideLeftIn {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes slideRightIn {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+  @keyframes modalIn {
+    from {
+      opacity: 0;
+      transform: scale(0.94) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  @keyframes modalOut {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.94) translateY(8px);
+    }
+  }
+  @keyframes sidebarIn {
+    from {
+      opacity: 0;
+      transform: translateX(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes messageIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes pulseGlow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--color-accent-glow);
+    }
+    50% {
+      box-shadow: 0 0 0 8px transparent;
+    }
+  }
+  @keyframes iconBounce {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.3);
+    }
+    70% {
+      transform: scale(0.9);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-6px);
+    }
+    40% {
+      transform: translateX(6px);
+    }
+    60% {
+      transform: translateX(-4px);
+    }
+    80% {
+      transform: translateX(4px);
+    }
+  }
+  @keyframes typingDot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+}
+
+/* ============================================================
+   CSS Custom Properties — Animation Timing System
+   ============================================================ */
+
+:root {
+  --duration-micro: 200ms;
+  --duration-element: 250ms;
+  --duration-page: 300ms;
+  --duration-modal-in: 300ms;
+  --duration-modal-out: 200ms;
+  --duration-message: 250ms;
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --transition-micro: var(--duration-micro) var(--ease-standard);
+  --transition-element: var(--duration-element) var(--ease-standard);
+  --transition-page: var(--duration-page) var(--ease-standard);
+}
+
+/* ============================================================
+   Themes — two axes: Palette (colour identity) × Mode (dark/light).
+   ThemeService puts `palette-{violet|midnight|forest}` + `mode-{dark|light}`
+   on <html>; each combination below is a hand-tuned set, not a generated
+   inversion. index.html's pre-paint boot script duplicates the six --color-bg
+   hexes — update BOTH if a background changes.
+   ============================================================ */
+
+/* ---------- Violet · Dark (default) — violet-cast neutrals ---------- */
+
+:root,
+html.palette-violet.mode-dark {
+  --color-bg: #0b0a10;
+  --color-surface: #15141b;
+  --color-surface-2: #1e1c26;
+  --color-surface-3: #292634;
+  --color-border: #312d40;
+  --color-border-subtle: #221f2e;
+
+  --color-text: #f4f3f7;
+  --color-text-muted: #a29fb1;
+  --color-text-faint: #9490a2; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #7c3aed;
+  --color-accent-light: #a78bfa;
+  --color-accent-muted: rgba(139, 92, 246, 0.15);
+  --color-accent-glow: rgba(139, 92, 246, 0.22);
+
+  --color-danger: #f04747;
+  --color-danger-muted: rgba(240, 71, 71, 0.15);
+  --color-success: #10b981;
+  --color-success-muted: rgba(16, 185, 129, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-muted: rgba(245, 158, 11, 0.15);
+
+  --color-scrollbar: #322f42;
+  --color-scrollbar-hover: #524c6b;
+
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.6);
+  --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Violet · Light — white chat, lavender-gray chrome ---------- */
+
+html.palette-violet.mode-light {
+  --color-bg: #e7e5f0;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2f0f8;
+  --color-surface-3: #e5e2ef;
+  --color-border: #c8c4d9;
+  --color-border-subtle: #e0dcea;
+
+  --color-text: #17151f;
+  --color-text-muted: #5b5768;
+  --color-text-faint: #676375; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #6d28d9;
+  --color-accent-hover: #5b21b6;
+  --color-accent-light: #7c3aed;
+  --color-accent-muted: rgba(109, 40, 217, 0.1);
+  --color-accent-glow: rgba(109, 40, 217, 0.2);
+
+  --color-danger: #dc2626;
+  --color-danger-muted: rgba(220, 38, 38, 0.1);
+  --color-success: #059669;
+  --color-success-muted: rgba(5, 150, 105, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
+
+  --color-scrollbar: #d3cfe0;
+  --color-scrollbar-hover: #6d28d9;
+
+  --shadow-panel: 0 4px 24px rgba(38, 32, 64, 0.1);
+  --shadow-modal: 0 8px 40px rgba(38, 32, 64, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(38, 32, 64, 0.14);
+}
+
+/* ---------- Midnight · Dark — OLED black, icy accent ---------- */
+
+html.palette-midnight.mode-dark {
+  --color-bg: #000000;
+  --color-surface: #0a0a0c;
+  --color-surface-2: #131316;
+  --color-surface-3: #1d1d22;
+  --color-border: #2a2a31;
+  --color-border-subtle: #19191e;
+
+  --color-text: #f7f7f8;
+  --color-text-muted: #9b9ba4;
+  --color-text-faint: #84848f; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #0ea5e9;
+  --color-accent-hover: #0284c7;
+  --color-accent-light: #38bdf8;
+  --color-accent-muted: rgba(14, 165, 233, 0.12);
+  --color-accent-glow: rgba(14, 165, 233, 0.25);
+
+  --color-danger: #f87171;
+  --color-danger-muted: rgba(248, 113, 113, 0.12);
+  --color-success: #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-muted: rgba(251, 191, 36, 0.12);
+
+  --color-scrollbar: #26262c;
+  --color-scrollbar-hover: #0ea5e9;
+
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.8);
+  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.9);
+  --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- Midnight · Light — crisp paper monochrome, icy accent ---------- */
+
+html.palette-midnight.mode-light {
+  --color-bg: #e2e4e9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f3f6;
+  --color-surface-3: #e3e6eb;
+  --color-border: #c3c8d1;
+  --color-border-subtle: #dde1e7;
+
+  --color-text: #101318;
+  --color-text-muted: #545b66;
+  --color-text-faint: #606774; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-light: #0ea5e9;
+  --color-accent-muted: rgba(2, 132, 199, 0.1);
+  --color-accent-glow: rgba(2, 132, 199, 0.2);
+
+  --color-danger: #dc2626;
+  --color-danger-muted: rgba(220, 38, 38, 0.1);
+  --color-success: #059669;
+  --color-success-muted: rgba(5, 150, 105, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
+
+  --color-scrollbar: #ccd1da;
+  --color-scrollbar-hover: #0284c7;
+
+  --shadow-panel: 0 4px 24px rgba(23, 30, 41, 0.1);
+  --shadow-modal: 0 8px 40px rgba(23, 30, 41, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(23, 30, 41, 0.14);
+}
+
+/* ---------- Forest · Dark — deep greens, desaturated sage text ---------- */
+
+html.palette-forest.mode-dark {
+  --color-bg: #0a0e0b;
+  --color-surface: #101712;
+  --color-surface-2: #17211a;
+  --color-surface-3: #223026;
+  --color-border: #2e4234;
+  --color-border-subtle: #1d2a21;
+
+  --color-text: #edf5ef;
+  --color-text-muted: #9db5a4;
+  --color-text-faint: #83998b; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #10b981;
+  --color-accent-hover: #059669;
+  --color-accent-light: #34d399;
+  --color-accent-muted: rgba(16, 185, 129, 0.15);
+  --color-accent-glow: rgba(16, 185, 129, 0.3);
+
+  --color-danger: #f87171;
+  --color-danger-muted: rgba(248, 113, 113, 0.15);
+  --color-success: #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-muted: rgba(251, 191, 36, 0.15);
+
+  --color-scrollbar: #2b3d30;
+  --color-scrollbar-hover: #10b981;
+
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.7);
+  --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Forest · Light — sage & mint ---------- */
+
+html.palette-forest.mode-light {
+  --color-bg: #e2eae4;
+  --color-surface: #fbfdfb;
+  --color-surface-2: #eef4ef;
+  --color-surface-3: #dfe9e2;
+  --color-border: #b9cdbf;
+  --color-border-subtle: #d7e3da;
+
+  --color-text: #131a15;
+  --color-text-muted: #4e6355;
+  --color-text-faint: #5a6c60; /* min 4.5:1 on surface-3 (WCAG AA) */
+
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-light: #10b981;
+  --color-accent-muted: rgba(5, 150, 105, 0.1);
+  --color-accent-glow: rgba(5, 150, 105, 0.2);
+
+  --color-danger: #dc2626;
+  --color-danger-muted: rgba(220, 38, 38, 0.1);
+  --color-success: #047857;
+  --color-success-muted: rgba(4, 120, 87, 0.1);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.1);
+
+  --color-scrollbar: #c6d6cb;
+  --color-scrollbar-hover: #059669;
+
+  --shadow-panel: 0 4px 24px rgba(19, 38, 26, 0.1);
+  --shadow-modal: 0 8px 40px rgba(19, 38, 26, 0.18);
+  --shadow-tooltip: 0 2px 8px rgba(19, 38, 26, 0.14);
+}
+
+/* While dragging a panel resize handle: keep the col-resize cursor everywhere
+   and suppress text selection (added/removed by the ResizeHandle directive). */
+body.is-col-resizing,
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Disable all transitions/animations during window resize so fullscreen
+   toggle is instant. The resize-animation-stopper class is added by JS
+   for the duration of the resize, then removed 300ms after it stops. */
+.resize-animation-stopper *,
+.resize-animation-stopper *::before,
+.resize-animation-stopper *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Compact message display (Appearance > Message Display). The host `.compact` class is
+   added to <app-message-list> when the setting is "compact" — tightens the row rhythm. */
+app-message-list.compact .group {
+  padding-top: 0.0625rem;
+  padding-bottom: 0.0625rem;
+}
+
+/* Accessibility — Reduced Motion (settings toggle adds `.reduce-motion` to <html>).
+   Neutralises non-essential animations/transitions app-wide. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Base size scaled by the Appearance > Font Scale setting (--app-font-scale, default 1). */
+  font-size: calc(15px * var(--app-font-scale, 1));
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: color var(--transition-page);
+}
+
+/* ============================================================
+   Scrollbars
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar);
+  border-radius: 9999px;
+  transition: background var(--transition-micro);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-hover);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar) transparent;
+}
+
+/* ============================================================
+   Focus & Selection
+   ============================================================ */
+
+@layer base {
+  /* Inside @layer base, Tailwind utilities (in @layer utilities) take precedence,
+     so focus-visible:outline-none on any element correctly suppresses this. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+::selection {
+  background-color: var(--color-accent-muted);
+  color: var(--color-text);
+}
+
+/* ============================================================
+   Interactive element transitions
+   ============================================================ */
+
+button,
+a,
+[role="button"] {
+  transition:
+    color var(--transition-micro),
+    background var(--transition-micro),
+    border-color var(--transition-micro),
+    box-shadow var(--transition-micro),
+    opacity var(--transition-micro),
+    transform var(--transition-micro);
+}
+
+/* CDK drag-and-drop previews clone the dragged element's classes, and the multi-property
+   transition above breaks CDK's drop animation in Firefox: the computed transition-duration
+   list isn't padded to the property count, and CDK indexes durations by transform's property
+   index → TypeError mid-drop (stuck preview, frozen drag registry, `dropped` never fires).
+   No transition on previews → CDK short-circuits to a 0ms drop animation and cleans up
+   synchronously; this also removes the preview's pointer-follow lag while dragging. */
+.cdk-drag-preview {
+  transition: none !important;
+}
+
+/* Dim the placeholder (the element left at the origin slot) while dragging. */
+.cdk-drag-placeholder {
+  opacity: 0.35;
+}
+
+button:active:not(:disabled),
+[role="button"]:active {
+  transform: scale(0.97);
+}
+
+/* ============================================================
+   Utility classes
+   ============================================================ */
+
+@layer utilities {
+  /* Animation utilities (animate-fade-in, animate-slide-up, etc.) are
+     generated automatically by Tailwind from the --animate-* tokens in the
+     @theme block above. Do not redeclare them here. */
+
+  .stagger-children > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger-children > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger-children > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .stagger-children > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .stagger-children > *:nth-child(8) {
+    animation-delay: 280ms;
+  }
+
+  .transition-micro {
+    transition:
+      color var(--transition-micro),
+      background-color var(--transition-micro),
+      border-color var(--transition-micro),
+      box-shadow var(--transition-micro),
+      opacity var(--transition-micro),
+      transform var(--transition-micro);
+  }
+  .transition-element {
+    transition:
+      color var(--transition-element),
+      background-color var(--transition-element),
+      border-color var(--transition-element),
+      box-shadow var(--transition-element),
+      opacity var(--transition-element),
+      transform var(--transition-element);
+  }
+  .transition-page {
+    transition:
+      color var(--transition-page),
+      background-color var(--transition-page),
+      border-color var(--transition-page),
+      box-shadow var(--transition-page),
+      opacity var(--transition-page),
+      transform var(--transition-page);
+  }
+
+  .typing-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: currentColor;
+    animation: typingDot 1.2s var(--ease-standard) infinite;
+  }
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  .truncate-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .flex-col-full {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .zen-mesh-bg {
+    background-color: var(--color-bg);
+    position: relative;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      box-shadow:
+        inset 200px 200px 300px color-mix(in srgb, var(--color-accent) 6%, transparent),
+        inset -200px -200px 300px color-mix(in srgb, var(--color-accent) 3%, transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+  }
+  .logo-pulse {
+    will-change: box-shadow;
+    isolation: isolate;
+  }
+  /* Profile banner fallback — accent gradient (the popout/modal use a role-coloured
+     variant of the same recipe inline; keep the two in step). */
+  .profile-banner {
+    background: linear-gradient(
+      135deg,
+      var(--color-accent) 0%,
+      color-mix(in srgb, var(--color-accent) 55%, #000) 100%
+    );
+  }
+
+  /* Voice/call stage colors — the stage stays deliberately near-black in every DARK palette
+     (independent of theme, Discord-style), but follows the theme in light mode. Small chips that
+     sit over video (name pill, per-tile controls, the guild control pill) keep their black chrome
+     in both modes, like any video player's controls — these classes cover only what sits directly
+     on the stage / tile background. */
+  .voice-stage {
+    background-color: #0b0a0e;
+  }
+  .voice-stage-ring {
+    border-color: #0b0a0e;
+  }
+  .voice-tile-bg {
+    background-color: rgb(255 255 255 / 0.05);
+  }
+  .voice-chip {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+  .voice-chip-hover:hover {
+    background-color: rgb(255 255 255 / 0.2);
+  }
+  .voice-text {
+    color: #ffffff;
+  }
+  .voice-text-muted {
+    color: rgb(255 255 255 / 0.7);
+  }
+  .voice-text-faint {
+    color: rgb(255 255 255 / 0.5);
+  }
+  .voice-fade-top {
+    background-image: linear-gradient(to bottom, rgb(0 0 0 / 0.6), transparent);
+  }
+
+  html.mode-light .voice-stage {
+    background-color: var(--color-surface-2);
+  }
+  html.mode-light .voice-stage-ring {
+    border-color: var(--color-surface-2);
+  }
+  html.mode-light .voice-tile-bg {
+    background-color: rgb(0 0 0 / 0.07);
+  }
+  html.mode-light .voice-chip {
+    background-color: rgb(0 0 0 / 0.08);
+  }
+  html.mode-light .voice-chip-hover:hover {
+    background-color: rgb(0 0 0 / 0.15);
+  }
+  html.mode-light .voice-text {
+    color: var(--color-text);
+  }
+  html.mode-light .voice-text-muted {
+    color: var(--color-text-muted);
+  }
+  html.mode-light .voice-text-faint {
+    color: var(--color-text-faint);
+  }
+  html.mode-light .voice-fade-top {
+    background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.75), transparent);
+  }
+}
+
+/* Accessibility: honour the OS "reduce motion" setting — neutralise spinners, bounces, slide-ins
+   and transitions (and CSS smooth-scroll) for users who opt out of animation. Kept at the top level
+   (outside @layer) with !important so it wins over utility animations like animate-spin/bounce. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Touch devices (phones + tablets, any width). Two rules:
+   1. Form fields must render at ≥16px or iOS Safari force-zooms the page on focus (body is 15px).
+   2. Suppress the iOS long-press callout (link preview / save-image sheet) app-wide so a long-press
+      reaches the app's own context menu instead. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+  * {
+    -webkit-touch-callout: none;
+  }
+}
