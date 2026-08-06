@@ -1,13 +1,21 @@
-<!-- Header / tabs -->
-<header class="flex items-center gap-4 px-4 h-12 min-h-12 border-b border-border-subtle shrink-0">
-  <span class="flex items-center gap-2 font-semibold text-primary">
+<!-- Header / tabs (scrollable on narrow screens; the bell sits after a spacer so desktop is unchanged) -->
+<header class="flex items-center gap-4 max-md:gap-2 px-4 max-md:px-2 h-12 min-h-12 border-b border-border-subtle shrink-0 overflow-x-auto scrollbar-none">
+  <button
+    type="button"
+    class="hidden max-md:flex w-9 h-9 items-center justify-center rounded-lg text-muted hover:text-primary shrink-0"
+    aria-label="Open navigation"
+    (click)="mobileNav.openLeft()"
+  >
+    <i class="fas fa-bars"></i>
+  </button>
+  <span class="flex items-center gap-2 font-semibold text-primary shrink-0">
     <i class="fas fa-user-group text-muted"></i> Friends
   </span>
-  <div class="w-px h-6 bg-border-subtle"></div>
+  <div class="w-px h-6 bg-border-subtle shrink-0"></div>
   @for (t of tabs; track t.id) {
   <button
     type="button"
-    class="px-3 py-1 rounded-md text-sm font-medium transition-micro"
+    class="px-3 py-1 rounded-md text-sm font-medium transition-micro shrink-0"
     [class.bg-accent]="tab() === t.id && t.id === 'add'"
     [class.text-white]="tab() === t.id && t.id === 'add'"
     [class.bg-surface-3]="tab() === t.id && t.id !== 'add'"
@@ -71,7 +79,7 @@
             {{ subtitle(f.id) }}
           </span>
         </div>
-        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-micro">
+        <div class="flex gap-2 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-micro">
           <button
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-muted hover:text-primary transition-micro"
@@ -213,6 +221,7 @@
 @if (profileFriend(); as friend) {
 <ng-template
   cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
   [cdkConnectedOverlayOrigin]="profileOrigin()!"
   [cdkConnectedOverlayOpen]="true"
   [cdkConnectedOverlayPositions]="profilePositions"

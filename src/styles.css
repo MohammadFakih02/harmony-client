@@ -284,9 +284,9 @@ html.palette-violet.mode-dark {
   --color-bg: #0b0a10;
   --color-surface: #15141b;
   --color-surface-2: #1e1c26;
-  --color-surface-3: #2c2938;
-  --color-border: #363247;
-  --color-border-subtle: #262334;
+  --color-surface-3: #292634;
+  --color-border: #312d40;
+  --color-border-subtle: #221f2e;
 
   --color-text: #f4f3f7;
   --color-text-muted: #a29fb1;
@@ -296,7 +296,7 @@ html.palette-violet.mode-dark {
   --color-accent-hover: #7c3aed;
   --color-accent-light: #a78bfa;
   --color-accent-muted: rgba(139, 92, 246, 0.15);
-  --color-accent-glow: rgba(139, 92, 246, 0.3);
+  --color-accent-glow: rgba(139, 92, 246, 0.22);
 
   --color-danger: #f04747;
   --color-danger-muted: rgba(240, 71, 71, 0.15);
@@ -306,7 +306,7 @@ html.palette-violet.mode-dark {
   --color-warning-muted: rgba(245, 158, 11, 0.15);
 
   --color-scrollbar: #322f42;
-  --color-scrollbar-hover: #8b5cf6;
+  --color-scrollbar-hover: #524c6b;
 
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.6);
@@ -753,6 +753,67 @@ button:active:not(:disabled),
       color-mix(in srgb, var(--color-accent) 55%, #000) 100%
     );
   }
+
+  /* Voice/call stage colors — the stage stays deliberately near-black in every DARK palette
+     (independent of theme, Discord-style), but follows the theme in light mode. Small chips that
+     sit over video (name pill, per-tile controls, the guild control pill) keep their black chrome
+     in both modes, like any video player's controls — these classes cover only what sits directly
+     on the stage / tile background. */
+  .voice-stage {
+    background-color: #0b0a0e;
+  }
+  .voice-stage-ring {
+    border-color: #0b0a0e;
+  }
+  .voice-tile-bg {
+    background-color: rgb(255 255 255 / 0.05);
+  }
+  .voice-chip {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+  .voice-chip-hover:hover {
+    background-color: rgb(255 255 255 / 0.2);
+  }
+  .voice-text {
+    color: #ffffff;
+  }
+  .voice-text-muted {
+    color: rgb(255 255 255 / 0.7);
+  }
+  .voice-text-faint {
+    color: rgb(255 255 255 / 0.5);
+  }
+  .voice-fade-top {
+    background-image: linear-gradient(to bottom, rgb(0 0 0 / 0.6), transparent);
+  }
+
+  html.mode-light .voice-stage {
+    background-color: var(--color-surface-2);
+  }
+  html.mode-light .voice-stage-ring {
+    border-color: var(--color-surface-2);
+  }
+  html.mode-light .voice-tile-bg {
+    background-color: rgb(0 0 0 / 0.07);
+  }
+  html.mode-light .voice-chip {
+    background-color: rgb(0 0 0 / 0.08);
+  }
+  html.mode-light .voice-chip-hover:hover {
+    background-color: rgb(0 0 0 / 0.15);
+  }
+  html.mode-light .voice-text {
+    color: var(--color-text);
+  }
+  html.mode-light .voice-text-muted {
+    color: var(--color-text-muted);
+  }
+  html.mode-light .voice-text-faint {
+    color: var(--color-text-faint);
+  }
+  html.mode-light .voice-fade-top {
+    background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.75), transparent);
+  }
 }
 
 /* Accessibility: honour the OS "reduce motion" setting — neutralise spinners, bounces, slide-ins
@@ -766,5 +827,20 @@ button:active:not(:disabled),
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Touch devices (phones + tablets, any width). Two rules:
+   1. Form fields must render at ≥16px or iOS Safari force-zooms the page on focus (body is 15px).
+   2. Suppress the iOS long-press callout (link preview / save-image sheet) app-wide so a long-press
+      reaches the app's own context menu instead. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+  * {
+    -webkit-touch-callout: none;
   }
 }

@@ -1,5 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { VoicePrefsService } from '../../../core/services/voice-prefs.service';
+import {
+  ScreenShareFps,
+  ScreenShareResolution,
+  VoicePrefsService,
+} from '../../../core/services/voice-prefs.service';
 import { VoiceService } from '../../../core/services/voice.service';
 import { SettingsToggle } from '../ui/settings-toggle';
 
@@ -101,6 +105,40 @@ import { SettingsToggle } from '../ui/settings-toggle';
         (toggled)="prefs.setAutoGainControl($event)"
       />
     </div>
+
+    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1 mt-6">Screen Share</p>
+    <p class="text-2xs text-faint mb-2">Applies the next time you start sharing. Lower settings use less bandwidth.</p>
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-ss-res">
+          Resolution
+        </label>
+        <select
+          id="voice-ss-res"
+          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          [value]="prefs.prefs().screenShareResolution"
+          (change)="onScreenRes($event)"
+        >
+          <option value="720p">720p — higher quality</option>
+          <option value="480p">480p — saves bandwidth</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-ss-fps">
+          Frame Rate
+        </label>
+        <select
+          id="voice-ss-fps"
+          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          [value]="prefs.prefs().screenShareFps"
+          (change)="onScreenFps($event)"
+        >
+          <option value="30">30 fps — smoother motion</option>
+          <option value="15">15 fps — saves bandwidth</option>
+        </select>
+      </div>
+    </div>
   `,
 })
 export class VoiceSettings {
@@ -133,5 +171,13 @@ export class VoiceSettings {
     else if (kind === 'audiooutput') this.prefs.setSpeakerDevice(value);
     else this.prefs.setCameraDevice(value);
     void this.voice.switchActiveDevice(kind, value);
+  }
+
+  protected onScreenRes(event: Event): void {
+    this.prefs.setScreenShareResolution((event.target as HTMLSelectElement).value as ScreenShareResolution);
+  }
+
+  protected onScreenFps(event: Event): void {
+    this.prefs.setScreenShareFps(Number((event.target as HTMLSelectElement).value) as ScreenShareFps);
   }
 }

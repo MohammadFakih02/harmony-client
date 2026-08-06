@@ -84,7 +84,7 @@
 </div>
 }
 
-<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text pb-6">
+<div #scroller (scroll)="onScroll()" (contextmenu)="openPageMenu($event)" class="flex-1 min-h-0 overflow-y-auto select-text pointer-coarse:select-none pb-6">
   @for (group of messageGroups(); track group.firstMessageId) {
   <!-- Date separator — this group starts a new calendar day -->
   @if (group.dayLabel) {
@@ -211,6 +211,7 @@
         </div>
         <ng-template
           cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
           [cdkConnectedOverlayOrigin]="editOrigin"
           [cdkConnectedOverlayOpen]="editEmojiOpen()"
           [cdkConnectedOverlayPositions]="editEmojiOverlayPositions"
@@ -222,6 +223,7 @@
         </ng-template>
         <ng-template
           cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
           [cdkConnectedOverlayOrigin]="editOrigin"
           [cdkConnectedOverlayOpen]="editMentionOpen()"
           [cdkConnectedOverlayPositions]="editMentionOverlayPositions"
@@ -359,8 +361,9 @@
         </div>
         }
 
-        <!-- Hover actions (reply/copy for any message; edit for own; delete for own or ManageMessages) -->
-        @if (hasActions(msg)) {
+        <!-- Hover actions (reply/copy for any message; edit for own; delete for own or ManageMessages).
+             Never rendered on a coarse pointer — touch users get the same actions via long-press. -->
+        @if (hasActions(msg) && !viewport.coarsePointer()) {
         <div
           class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
           [class.!flex]="reactionTarget()?.messageId === msg.messageId"
@@ -463,6 +466,7 @@
 @if (profileGroup(); as group) {
 <ng-template
   cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
   [cdkConnectedOverlayOrigin]="profileOrigin()!"
   [cdkConnectedOverlayOpen]="true"
   [cdkConnectedOverlayPositions]="profilePositions"
@@ -479,10 +483,12 @@
 </ng-template>
 }
 
-<!-- Add-reaction emoji popover (anchored to the clicked message's reaction button/pill) -->
-@if (reactionTarget()) {
+<!-- Add-reaction emoji popover (anchored to the clicked message's reaction button/pill).
+     The origin-less variant is the touch path (long-press menu → "More…") — a bottom sheet. -->
+@if (reactionTarget() && reactionOrigin()) {
 <ng-template
   cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
   [cdkConnectedOverlayOrigin]="reactionOrigin()!"
   [cdkConnectedOverlayOpen]="true"
   [cdkConnectedOverlayPositions]="reactionPositions"
@@ -492,6 +498,15 @@
 >
   <app-emoji-picker (select)="onReactionPicked($event)" />
 </ng-template>
+} @else if (reactionTarget()) {
+<div class="fixed inset-0 z-1100 bg-black/50" (click)="closeReactionPicker()">
+  <div
+    class="absolute inset-x-0 bottom-0 flex justify-center pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+    (click)="$event.stopPropagation()"
+  >
+    <app-emoji-picker (select)="onReactionPicked($event)" />
+  </div>
+</div>
 }
 
 <!-- Forward picker (re-sends a message to other channels/DMs) -->

@@ -1,18 +1,48 @@
-// While a drag is inside a category's rows list, tint the whole block so "this drop goes INTO
-// the category" is visible — the header strip and the margins between blocks are top-level
-// "place between/above" zones. (The drop list is the rows container, not the block, so the
-// header can act as a top-level target; :has() lifts the tint back onto the block.)
-.channel-category-list:has(> .channel-category-rows.cdk-drop-list-dragging) {
-  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+// --- Drag-and-drop indicators (see sidebar-dnd.ts) --------------------------------------------
+// The list never reflows during a drag (CDK sorting is disabled), so the indicators must not
+// shift layout either: lines are absolutely-positioned pseudo-elements reaching into the gaps.
+
+.drop-anchor {
+  position: relative;
 }
 
-// A collapsed category renders its rows list empty (zero height) — keep a thin permanent strip
-// so it stays a drop target. This must be PERMANENT, not gated on .cdk-drop-list-receiving:
-// CDK caches the list's rect synchronously at drag start, before Angular can apply the receiving
-// class, so a conditional strip would measure as zero-height and never receive. (:empty only
-// matches the collapsed case — an expanded empty category renders the "No channels yet" row.)
-.channel-category-rows:empty {
-  min-height: 8px;
+.drop-line-above::before,
+.drop-line-below::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drop-line-above::before {
+  top: -2px;
+}
+
+.drop-line-below::after {
+  bottom: -2px;
+}
+
+// "This drop goes INTO the category" (append) — whole-block highlight, used when hovering the
+// header of a collapsed or empty category. Outline + tint, neither of which affects layout.
+.drop-into {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+// The body-level drag preview (clone of the row/block) — give it a surface so it doesn't render
+// see-through over whatever it passes. Class applied via cdkDragPreviewClass; the clone carries
+// this component's scoping attributes, so a component style reaches it.
+.sidebar-drag-preview {
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  opacity: 0.95;
 }
 
 .channel-item {

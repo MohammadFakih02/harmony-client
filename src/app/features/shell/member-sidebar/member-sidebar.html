@@ -73,6 +73,7 @@
 @if (profileMember(); as member) {
 <ng-template
   cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
   [cdkConnectedOverlayOrigin]="profileOrigin()!"
   [cdkConnectedOverlayOpen]="true"
   [cdkConnectedOverlayPositions]="profilePositions"

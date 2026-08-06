@@ -1,6 +1,9 @@
 <div class="fixed inset-0 z-50 flex bg-bg select-none">
-  <!-- Nav rail -->
-  <nav class="flex w-60 min-w-60 flex-col overflow-y-auto bg-surface-2 py-12 pl-6 pr-2">
+  <!-- Nav rail. Mobile: a full-width first screen, hidden once a pane is open. -->
+  <nav
+    class="flex w-60 min-w-60 flex-col overflow-y-auto bg-surface-2 py-12 pl-6 pr-2 max-md:w-full max-md:min-w-full max-md:bg-bg max-md:py-6 max-md:px-4"
+    [class.max-md:hidden]="showPane()"
+  >
     <p class="px-2 mb-1 text-2xs font-bold uppercase tracking-wider text-faint truncate">
       {{ guildName() }}
     </p>
@@ -13,7 +16,7 @@
         [class.text-primary]="activeTab() === 'overview'"
         [class.text-muted]="activeTab() !== 'overview'"
         [class.hover:bg-surface-3]="activeTab() !== 'overview'"
-        (click)="activeTab.set('overview')"
+        (click)="selectTab('overview')"
       >
         <i class="fas fa-sliders w-4 text-center"></i>
         <span class="truncate">Overview</span>
@@ -25,7 +28,7 @@
         [class.text-primary]="activeTab() === 'welcome'"
         [class.text-muted]="activeTab() !== 'welcome'"
         [class.hover:bg-surface-3]="activeTab() !== 'welcome'"
-        (click)="activeTab.set('welcome')"
+        (click)="selectTab('welcome')"
       >
         <i class="fas fa-door-open w-4 text-center"></i>
         <span class="truncate">Welcome</span>
@@ -40,7 +43,7 @@
         [class.text-primary]="activeTab() === 'roles'"
         [class.text-muted]="activeTab() !== 'roles'"
         [class.hover:bg-surface-3]="activeTab() !== 'roles'"
-        (click)="activeTab.set('roles')"
+        (click)="selectTab('roles')"
       >
         <i class="fas fa-user-shield w-4 text-center"></i>
         <span class="truncate">Roles</span>
@@ -54,7 +57,7 @@
         [class.text-primary]="activeTab() === 'bans'"
         [class.text-muted]="activeTab() !== 'bans'"
         [class.hover:bg-surface-3]="activeTab() !== 'bans'"
-        (click)="activeTab.set('bans')"
+        (click)="selectTab('bans')"
       >
         <i class="fas fa-gavel w-4 text-center"></i>
         <span class="truncate">Bans</span>
@@ -68,7 +71,7 @@
         [class.text-primary]="activeTab() === 'audit'"
         [class.text-muted]="activeTab() !== 'audit'"
         [class.hover:bg-surface-3]="activeTab() !== 'audit'"
-        (click)="activeTab.set('audit')"
+        (click)="selectTab('audit')"
       >
         <i class="fas fa-scroll w-4 text-center"></i>
         <span class="truncate">Audit Log</span>
@@ -82,7 +85,7 @@
         [class.text-primary]="activeTab() === 'trash'"
         [class.text-muted]="activeTab() !== 'trash'"
         [class.hover:bg-surface-3]="activeTab() !== 'trash'"
-        (click)="activeTab.set('trash')"
+        (click)="selectTab('trash')"
       >
         <i class="fas fa-trash-can w-4 text-center"></i>
         <span class="truncate">Deleted Channels</span>
@@ -91,17 +94,24 @@
     </div>
   </nav>
 
-  <!-- Content pane -->
-  <div class="relative flex-1 overflow-y-auto">
+  <!-- Content pane. Mobile: the second screen, with a back button to the nav list. -->
+  <div class="relative flex-1 overflow-y-auto" [class.max-md:hidden]="!showPane()">
+    <button
+      type="button"
+      class="hidden max-md:flex items-center gap-2 px-4 pt-4 text-sm font-semibold text-muted hover:text-primary"
+      (click)="backToNav()"
+    >
+      <i class="fas fa-chevron-left"></i> {{ guildName() }}
+    </button>
     @switch (activeTab()) {
       @case ('overview') {
       @if (canManageGuild()) {
-      <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-overview [guildId]="guildId" /></div>
+      <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6"><app-guild-overview [guildId]="guildId" /></div>
       }
       }
       @case ('welcome') {
       @if (canManageGuild()) {
-      <div class="mx-auto max-w-2xl px-10 py-12">
+      <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6">
         <app-guild-welcome [guildId]="guildId" [textChannels]="textChannels()" />
       </div>
       }
@@ -111,17 +121,17 @@
       }
       @case ('bans') {
       @if (canBan()) {
-      <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-bans [guildId]="guildId" /></div>
+      <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6"><app-guild-bans [guildId]="guildId" /></div>
       }
       }
       @case ('audit') {
       @if (canViewAuditLog()) {
-      <div class="mx-auto max-w-3xl px-10 py-12"><app-guild-audit-log [guildId]="guildId" /></div>
+      <div class="mx-auto max-w-3xl px-10 py-12 max-md:px-4 max-md:py-6"><app-guild-audit-log [guildId]="guildId" /></div>
       }
       }
       @case ('trash') {
       @if (canManageChannels()) {
-      <div class="mx-auto max-w-2xl px-10 py-12"><app-guild-trash [guildId]="guildId" /></div>
+      <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6"><app-guild-trash [guildId]="guildId" /></div>
       }
       }
     }
@@ -129,14 +139,26 @@
     <!-- Close -->
     <button
       type="button"
-      class="absolute top-12 right-10 flex flex-col items-center text-muted hover:text-primary transition-colors"
+      class="absolute top-12 right-10 max-md:top-4 max-md:right-4 flex flex-col items-center text-muted hover:text-primary transition-colors"
       (click)="close()"
       aria-label="Close server settings (ESC)"
     >
       <span class="flex h-9 w-9 items-center justify-center rounded-full border-2 border-current">
         <i class="fas fa-xmark"></i>
       </span>
-      <span class="mt-1 text-2xs font-semibold">ESC</span>
+      <span class="mt-1 text-2xs font-semibold max-md:hidden">ESC</span>
     </button>
   </div>
+
+  <!-- Mobile close ✕ for the nav-list screen (the pane's close button is hidden with the pane). -->
+  @if (!showPane()) {
+  <button
+    type="button"
+    class="hidden max-md:flex absolute top-4 right-4 h-9 w-9 items-center justify-center rounded-full border-2 border-current text-muted hover:text-primary transition-colors"
+    (click)="close()"
+    aria-label="Close server settings"
+  >
+    <i class="fas fa-xmark"></i>
+  </button>
+  }
 </div>

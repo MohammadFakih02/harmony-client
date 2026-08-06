@@ -1,31 +1,102 @@
-<!-- Embedded DM call stage — always-dark like every call surface, independent of the app theme. -->
+<!-- Embedded DM call stage — near-black in dark palettes, theme-light in light mode (the
+     .voice-* utilities in styles.css). -->
 @if (visible()) {
 @if (connected() || connecting()) {
 <!-- Connected (or connecting): a fixed slice of the pane with the shared tile grid + controls -->
-<div class="relative basis-[45%] min-h-60 shrink-0 flex flex-col bg-[#0b0a0e] animate-fade-in">
+<div
+  #stageRoot
+  class="relative basis-[45%] min-h-60 shrink-0 flex flex-col voice-stage animate-fade-in max-md:basis-[55%] max-md:min-h-48"
+>
   @if (connecting()) {
-  <div class="flex-1 flex items-center justify-center gap-2 text-white/60 text-sm">
+  <div class="flex-1 flex items-center justify-center gap-2 voice-text-muted text-sm">
     <i class="fas fa-spinner fa-spin"></i> Connecting
   </div>
   } @else {
-  <div class="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4 pt-4 pb-20">
-    <div class="grid gap-2 w-full max-w-3xl grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+  @if (focusedTile(); as focused) {
+  <!-- Rung 2/3: one blown-up tile + a filmstrip of the rest (filmstrip hides on demand in fullscreen). -->
+  <div class="flex-1 min-h-0 flex flex-col gap-2 px-4 pt-4 pb-20 max-md:px-2 max-md:pb-24">
+    <app-voice-tile
+      class="flex-1 min-h-0"
+      [tile]="focused"
+      [channelId]="channelId()"
+      [showControls]="connected()"
+      [emphasized]="true"
+      (focusRequested)="toggleFocus(focused.id)"
+    />
+    @if (filmstripTiles().length > 0 && !(isFullscreen() && membersHidden())) {
+    <!-- Centered via first/last auto-margins, NOT justify-center — a centered overflow container
+         clips its leading tiles unreachably (you can only scroll one way). -->
+    <div class="h-20 shrink-0 flex gap-2 overflow-x-auto">
+      @for (t of filmstripTiles(); track t.id) {
+      <app-voice-tile
+        class="h-full aspect-video shrink-0 first:ml-auto last:mr-auto"
+        [tile]="t"
+        [channelId]="channelId()"
+        [showControls]="connected()"
+        (focusRequested)="toggleFocus(t.id)"
+      />
+      }
+    </div>
+    }
+  </div>
+  } @else {
+  <!-- m-auto (not items/justify-center on the scroller) keeps every row reachable on overflow. -->
+  <div class="flex-1 min-h-0 overflow-y-auto flex px-4 pt-4 pb-20 max-md:px-2 max-md:pb-24">
+    <div class="grid gap-2 w-full max-w-3xl m-auto grid-cols-[repeat(auto-fit,minmax(180px,1fr))] max-md:grid-cols-[repeat(auto-fit,minmax(130px,1fr))]">
       @for (t of tiles(); track t.id) {
-      <app-voice-tile [tile]="t" [channelId]="channelId()" (focusRequested)="expand(t.id)" />
+      <app-voice-tile
+        [tile]="t"
+        [channelId]="channelId()"
+        [showControls]="connected()"
+        (focusRequested)="toggleFocus(t.id)"
+      />
       }
     </div>
   </div>
+  }
 
   @if (ringing()) {
   <div
-    class="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white/10 text-white/70 text-xs font-semibold animate-pulse"
+    class="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full voice-chip voice-text-muted text-xs font-semibold animate-pulse"
   >
     Ringing…
   </div>
   }
 
-  <!-- Round call controls (voice-stage styling, compact) -->
-  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
+  <!-- Round call controls — same order + state colours as the guild voice stage (mic, deafen,
+       camera, screen, …): muted/deafened read red, camera/screenshare read white when live.
+       Docked in the same black pill as the guild stage so the white chrome reads on a light stage. -->
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-2.5 py-2 rounded-2xl bg-black/50 backdrop-blur-md ring-1 ring-white/10 max-md:max-w-[calc(100vw-1rem)] max-md:flex-wrap max-md:justify-center">
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfMuted() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
+      [attr.aria-pressed]="voiceStore.selfMuted()"
+      (click)="toggleMute()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-microphone]="!voiceStore.selfMuted()"
+        [class.fa-microphone-slash]="voiceStore.selfMuted()"
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
+      [class]="voiceStore.selfDeafened() ? 'bg-danger/90 hover:bg-danger text-white' : 'bg-white/10 hover:bg-white/20 text-white'"
+      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
+      [attr.aria-pressed]="voiceStore.selfDeafened()"
+      (click)="toggleDeafen()"
+    >
+      <i
+        class="fas text-sm"
+        [class.fa-headphones]="!voiceStore.selfDeafened()"
+        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
+      ></i>
+    </button>
     <button
       type="button"
       class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
@@ -45,51 +116,34 @@
       type="button"
       class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
       [class]="voiceStore.selfStreaming() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen'"
+      [title]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen — to also share audio, use Chrome/Edge on Windows, or share a browser tab'"
       [attr.aria-label]="voiceStore.selfStreaming() ? 'Stop sharing your screen' : 'Share your screen'"
       [attr.aria-pressed]="voiceStore.selfStreaming()"
       (click)="toggleScreenShare()"
     >
       <i class="fas fa-display text-sm"></i>
     </button>
-    <button
-      type="button"
-      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
-      [class]="voiceStore.selfMuted() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-label]="voiceStore.selfMuted() ? 'Unmute' : 'Mute'"
-      [attr.aria-pressed]="voiceStore.selfMuted()"
-      (click)="toggleMute()"
-    >
-      <i
-        class="fas text-sm"
-        [class.fa-microphone]="!voiceStore.selfMuted()"
-        [class.fa-microphone-slash]="voiceStore.selfMuted()"
-      ></i>
-    </button>
-    <button
-      type="button"
-      class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
-      [class]="voiceStore.selfDeafened() ? 'bg-white text-black' : 'bg-white/10 hover:bg-white/20 text-white'"
-      [title]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-label]="voiceStore.selfDeafened() ? 'Undeafen' : 'Deafen'"
-      [attr.aria-pressed]="voiceStore.selfDeafened()"
-      (click)="toggleDeafen()"
-    >
-      <i
-        class="fas text-sm"
-        [class.fa-headphones]="!voiceStore.selfDeafened()"
-        [class.fa-headphones-simple]="voiceStore.selfDeafened()"
-      ></i>
-    </button>
+    @if (isFullscreen() && focusedTile() && filmstripTiles().length > 0) {
     <button
       type="button"
       class="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
-      title="Expand call view"
-      aria-label="Expand call view"
-      (click)="expand()"
+      [title]="membersHidden() ? 'Show members' : 'Hide members'"
+      [attr.aria-label]="membersHidden() ? 'Show members' : 'Hide members'"
+      [attr.aria-pressed]="membersHidden()"
+      (click)="toggleMembers()"
     >
-      <i class="fas fa-expand text-sm"></i>
+      <i class="fas text-sm" [class.fa-users]="membersHidden()" [class.fa-users-slash]="!membersHidden()"></i>
+    </button>
+    }
+    <button
+      type="button"
+      class="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-micro"
+      [title]="isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+      [attr.aria-label]="isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+      [attr.aria-pressed]="isFullscreen()"
+      (click)="toggleFullscreen()"
+    >
+      <i class="fas text-sm" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
     </button>
     <button
       type="button"
@@ -105,13 +159,13 @@
 </div>
 } @else {
 <!-- Ongoing call you haven't joined: slim strip + Join Call -->
-<div class="shrink-0 flex items-center gap-3 px-4 py-3 bg-[#0b0a0e] animate-fade-in">
+<div class="shrink-0 flex items-center gap-3 px-4 py-3 voice-stage animate-fade-in">
   <div class="flex -space-x-2">
     @for (entry of stripEntries(); track entry.userId) {
-    <ui-avatar [src]="entry.avatarKey" [alt]="entry.name" size="sm" ringClass="border-[#0b0a0e]" />
+    <ui-avatar [src]="entry.avatarKey" [alt]="entry.name" size="sm" ringClass="voice-stage-ring" />
     }
   </div>
-  <span class="text-white/70 text-sm flex-1 truncate-text">
+  <span class="voice-text-muted text-sm flex-1 truncate-text">
     {{ stripEntries().length === 1 ? '1 person is' : stripEntries().length + ' people are' }} in the call
   </span>
   <button

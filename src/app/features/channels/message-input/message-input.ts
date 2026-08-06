@@ -13,7 +13,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { GatewayEvents } from '../../../core/hub/gateway-events';
 import { ChannelStore } from '../../../core/stores/channel.store';
 import { MessageStore } from '../../../core/stores/message.store';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -89,6 +91,7 @@ export class MessageInput implements OnDestroy {
   private readonly fileService = inject(FileService);
   private readonly auth = inject(AuthService);
   private readonly signalR = inject(SignalRService);
+  private readonly gateway = inject(GatewayEvents);
   private readonly injector = inject(Injector);
 
   // Throttle outgoing "started typing" pings — at most one per this window while actively typing.
@@ -351,18 +354,19 @@ export class MessageInput implements OnDestroy {
           this.dmGate.set(null);
           return;
         }
-        this.dmService
-          .sendGate(channelId)
-          .then((gate) => {
-            // Ignore a response that arrived after the user already switched away.
-            if (this.messageStore.activeChannelId() === channelId) {
-              this.dmGate.set({ channelId, canSend: gate.canSend, reason: gate.reason });
-            }
-          })
-          .catch(() => {
-            /* fail-open — the server enforces on the actual send regardless */
-          });
+        this.loadDmGate(channelId);
       });
+    });
+
+    // Re-check the gate live when the peer blocks/unblocks me or changes their DM privacy (both now
+    // broadcast DmChannelUpdated to the DM's participants), or when a friendship is severed (a
+    // friends-only gate flips). Without this the composer stays enabled/disabled until a refresh.
+    this.gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+      if (e.type !== 'DmChannelUpdated' && e.type !== 'FriendRemoved') return;
+      const channelId = this.messageStore.activeChannelId();
+      if (!this.isDm() || !channelId) return;
+      if (e.type === 'DmChannelUpdated' && e.channelId !== channelId) return;
+      this.loadDmGate(channelId);
     });
 
     // A slowmode cooldown is per-channel — clear it when switching channels so a new channel
@@ -403,6 +407,24 @@ export class MessageInput implements OnDestroy {
 
   ngOnDestroy(): void {
     clearInterval(this.ticker);
+  }
+
+  /**
+   * Fetches the DM send-gate for `channelId` and stores it (keyed by channel so a response that
+   * lands after the user switched away is ignored). Fail-open — the server still enforces on the
+   * real send. Called on DM open and whenever a block/privacy/friendship change signals a re-check.
+   */
+  private loadDmGate(channelId: string): void {
+    this.dmService
+      .sendGate(channelId)
+      .then((gate) => {
+        if (this.messageStore.activeChannelId() === channelId) {
+          this.dmGate.set({ channelId, canSend: gate.canSend, reason: gate.reason });
+        }
+      })
+      .catch(() => {
+        /* fail-open — the server enforces on the actual send regardless */
+      });
   }
 
   /**
