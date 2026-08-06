@@ -1,0 +1,125 @@
+<!-- One call tile (camera/avatar or screenshare) — dark in dark palettes, theme-aware in light mode
+     (the .voice-* utilities in styles.css); lives inside the stage/overlay grid. -->
+<div
+  class="relative w-full h-full min-h-0 rounded-xl voice-tile-bg flex items-center justify-center overflow-hidden transition-shadow duration-150 animate-fade-in"
+  [class.aspect-video]="!emphasized()"
+  [class.ring-2]="isSpeaking()"
+  [class.ring-success]="isSpeaking()"
+  [class.cursor-pointer]="!emphasized()"
+  (click)="focusRequested.emit()"
+  (contextmenu)="onContextMenu($event)"
+>
+  @if (showVideo()) {
+  <!-- Video elements stay muted: audio plays via VoiceService's hidden <audio> els. -->
+  <video
+    autoplay
+    playsinline
+    muted
+    [appVideoTrack]="track()"
+    class="absolute inset-0 w-full h-full"
+    [class.object-cover]="tile().kind === 'camera'"
+    [class.object-contain]="tile().kind === 'screen'"
+    [class.-scale-x-100]="tile().kind === 'camera' && isSelf()"
+  ></video>
+  } @else if (tile().kind === 'screen' && awaitingWatch()) {
+  <!-- Click-to-watch: the stream stays an inert LIVE tile until the viewer opts in. -->
+  <div class="flex flex-col items-center gap-2.5">
+    <span class="text-2xs font-bold uppercase tracking-wider bg-danger text-white rounded px-1.5 py-0.5">Live</span>
+    <button
+      type="button"
+      class="px-3 py-1.5 rounded-md voice-chip voice-chip-hover voice-text text-xs font-medium transition-micro"
+      (click)="watchStream($event)"
+    >
+      <i class="fas fa-display mr-1.5"></i>Watch Stream
+    </button>
+  </div>
+  } @else if (tile().kind === 'screen') {
+  <!-- Watching, but the track hasn't arrived yet. -->
+  <div class="flex flex-col items-center gap-2 voice-text-faint">
+    <i class="fas fa-display text-2xl"></i>
+    <span class="text-xs">Loading stream…</span>
+  </div>
+  } @else {
+  <ui-avatar [src]="avatarKey()" [alt]="name()" size="2xl" />
+  }
+
+  <!-- Name pill (bottom-left, Discord-style) -->
+  <span
+    class="absolute bottom-2 left-2 max-w-[85%] flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/60 text-white text-xs font-medium"
+  >
+    @if (tile().kind === 'screen') {
+    <i class="fas fa-display text-2xs text-white/70 shrink-0"></i>
+    <span class="truncate-text">{{ name() }}'s screen</span>
+    } @else {
+    <span class="truncate-text">{{ name() }}</span>
+    <!-- A server-imposed mute/deafen renders red (only a moderator can lift it); self state stays soft. -->
+    @if (participant()?.isMuted || participant()?.isDeafened || participant()?.isServerMuted || participant()?.isServerDeafened) {
+    <i
+      class="fas fa-microphone-slash text-2xs shrink-0"
+      [class.text-danger]="participant()?.isServerMuted"
+      [class.text-white/70]="!participant()?.isServerMuted"
+      [title]="participant()?.isServerMuted ? 'Server muted' : 'Muted'"
+    ></i>
+    }
+    @if (participant()?.isDeafened || participant()?.isServerDeafened) {
+    <i
+      class="fas fa-headphones-simple text-2xs shrink-0"
+      [class.text-danger]="participant()?.isServerDeafened"
+      [class.text-white/70]="!participant()?.isServerDeafened"
+      [title]="participant()?.isServerDeafened ? 'Server deafened' : 'Deafened'"
+    ></i>
+    }
+    }
+    @if (locallyMuted()) {
+    <i class="fas fa-volume-xmark text-2xs text-danger shrink-0" title="Muted for you"></i>
+    }
+  </span>
+
+  <!-- Per-tile local hover controls (remote tiles only). Camera: mute-for-me + mic volume.
+       Watched screen: stop-watching + stream-audio volume (independent of their mic volume). -->
+  @if (showControls() && !isSelf() && (tile().kind === 'camera' || watchingThisStream())) {
+  <div
+    class="absolute top-2 right-2 flex items-center gap-2 px-2 py-1 rounded-md bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+    (click)="$event.stopPropagation()"
+  >
+    @if (tile().kind === 'camera') {
+    <button
+      type="button"
+      class="w-6 h-6 flex items-center justify-center rounded text-white/80 hover:text-white transition-micro"
+      [title]="locallyMuted() ? 'Unmute for me' : 'Mute for me'"
+      [attr.aria-label]="locallyMuted() ? 'Unmute for me' : 'Mute for me'"
+      [attr.aria-pressed]="locallyMuted()"
+      (click)="toggleLocalMute($event)"
+    >
+      <i
+        class="fas text-xs"
+        [class.fa-volume-high]="!locallyMuted()"
+        [class.fa-volume-xmark]="locallyMuted()"
+        [class.text-danger]="locallyMuted()"
+      ></i>
+    </button>
+    } @else {
+    <button
+      type="button"
+      class="w-6 h-6 flex items-center justify-center rounded text-white/80 hover:text-white transition-micro"
+      title="Stop watching stream"
+      aria-label="Stop watching stream"
+      (click)="stopWatching($event)"
+    >
+      <i class="fas fa-eye-slash text-xs"></i>
+    </button>
+    }
+    <input
+      type="range"
+      min="0"
+      max="1"
+      step="0.05"
+      class="w-20 accent-white"
+      [value]="volume()"
+      (input)="onVolumeInput($event)"
+      [attr.aria-label]="tile().kind === 'screen' ? 'Stream volume' : 'User volume'"
+      [title]="tile().kind === 'screen' ? 'Stream volume' : 'User volume'"
+    />
+  </div>
+  }
+</div>

@@ -1,0 +1,95 @@
+<ui-modal
+  [heading]="isAddMode() ? 'Add People' : 'New Group'"
+  [subtitle]="isAddMode() ? 'Add friends to this group.' : 'Pick friends to start a group chat.'"
+  size="md"
+  (close)="close.emit()"
+>
+    <!-- Search -->
+    <div class="px-6 shrink-0">
+      <div class="flex items-center gap-2 px-3 h-10 rounded-lg bg-surface-3 ring-1 ring-border-subtle">
+        <i class="fas fa-magnifying-glass text-faint text-xs shrink-0"></i>
+        <input
+          type="text"
+          class="flex-1 bg-transparent border-0 outline-none text-sm text-primary placeholder:text-faint"
+          placeholder="Search friends"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+        />
+      </div>
+    </div>
+
+    <!-- Friend list -->
+    <div class="flex-1 overflow-y-auto px-6 py-3 min-h-0">
+      @if (candidates().length === 0) {
+      <p class="py-8 text-center text-sm text-faint">No friends to add.</p>
+      } @else {
+      @for (friend of candidates(); track friend.id) {
+      <button
+        type="button"
+        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-2 transition-micro text-left"
+        (click)="toggle(friend.id)"
+      >
+        <ui-avatar [src]="friend.avatarKey" [alt]="friend.username" size="sm" class="shrink-0" />
+        <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ friendName(friend) }}</span>
+        <span
+          class="w-5 h-5 flex items-center justify-center rounded-md ring-1 shrink-0 transition-micro"
+          [class.bg-accent]="isSelected(friend.id)"
+          [class.ring-accent]="isSelected(friend.id)"
+          [class.ring-border-subtle]="!isSelected(friend.id)"
+        >
+          @if (isSelected(friend.id)) {
+          <i class="fas fa-check text-2xs text-white"></i>
+          }
+        </span>
+      </button>
+      }
+      }
+    </div>
+
+    <!-- Optional name (create only) + actions -->
+    <div class="flex flex-col gap-3 p-6 pt-3 border-t border-border-subtle shrink-0">
+      @if (error()) {
+      <div class="flex items-center gap-2 text-xs text-danger">
+        <i class="fas fa-circle-exclamation shrink-0"></i>
+        <span>{{ error() }}</span>
+      </div>
+      }
+      @if (!isAddMode()) {
+      <input
+        type="text"
+        maxlength="100"
+        class="w-full px-3 py-2 rounded-lg bg-surface-3 ring-1 ring-border-subtle text-sm text-primary placeholder:text-faint outline-none focus:ring-2 focus:ring-accent transition-micro"
+        placeholder="Group name (optional)"
+        [ngModel]="name()"
+        (ngModelChange)="name.set($event)"
+        (keydown.enter)="confirm()"
+      />
+      }
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary transition-micro"
+          (click)="close.emit()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-micro"
+          [class.bg-accent]="canConfirm()"
+          [class.text-white]="canConfirm()"
+          [class.hover:bg-accent-hover]="canConfirm()"
+          [class.bg-surface-3]="!canConfirm()"
+          [class.text-faint]="!canConfirm()"
+          [class.cursor-not-allowed]="!canConfirm()"
+          [disabled]="!canConfirm()"
+          (click)="confirm()"
+        >
+          @if (busy()) {
+          <i class="fas fa-yin-yang animate-spin"></i>
+          }
+          <span>{{ isAddMode() ? 'Add' : 'Create Group' }}</span>
+        </button>
+      </div>
+    </div>
+</ui-modal>

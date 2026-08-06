@@ -1,0 +1,12 @@
+# Keep the build context small — node_modules is reinstalled from the lockfile
+# inside the image, and dist/coverage are local build output.
+node_modules/
+dist/
+.angular/
+coverage/
+.git/
+.github/
+.vscode/
+.unlighthouse/
+*.md
+.env

@@ -1,0 +1,124 @@
+<!-- Search input -->
+<div class="flex items-center gap-2 px-3 h-11 border-b border-border-subtle shrink-0">
+  <i class="fas fa-magnifying-glass text-faint text-sm"></i>
+  <input
+    #searchInput
+    type="text"
+    class="flex-1 bg-transparent text-sm text-primary placeholder:text-faint outline-none"
+    [placeholder]="dmChannelId() ? 'Search — try from: or has:link' : 'Search — try from: in: has:link'"
+    [value]="query()"
+    (input)="onInput($any($event.target).value)"
+    (keydown)="onKeydown($event)"
+  />
+  @if (loading()) {
+  <i class="fas fa-yin-yang animate-spin text-faint text-sm"></i>
+  }
+  <button type="button" class="text-faint hover:text-primary" (click)="close.emit()">
+    <i class="fas fa-xmark"></i>
+  </button>
+</div>
+
+<!-- Active operator chips -->
+@if (parsed().tokens.length > 0) {
+<div class="flex flex-wrap gap-1.5 px-3 py-2 border-b border-border-subtle shrink-0">
+  @for (token of parsed().tokens; track $index) {
+  <span
+    class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-accent/15 text-accent-light text-xs font-medium"
+  >
+    {{ tokenLabel(token) }}
+    <button
+      type="button"
+      class="w-4 h-4 flex items-center justify-center rounded hover:bg-accent/25 transition-micro"
+      [attr.aria-label]="'Remove ' + tokenLabel(token)"
+      (click)="removeToken(token)"
+    >
+      <i class="fas fa-xmark text-3xs"></i>
+    </button>
+  </span>
+  }
+</div>
+}
+
+<!-- Suggestions (autocomplete) — shown while an operator/value is being typed -->
+@if (suggestions().length > 0) {
+<div class="flex-1 min-h-0 overflow-y-auto py-1">
+  @for (s of suggestions(); track $index) {
+  <button
+    type="button"
+    class="w-full text-left px-3 py-1.5 flex items-center gap-2 transition-micro"
+    [class.bg-surface-3]="$index === highlightedIndex()"
+    [class.hover:bg-surface-3]="$index !== highlightedIndex()"
+    (mouseenter)="highlightedIndex.set($index)"
+    (click)="applySuggestion(s)"
+  >
+    @if (s.avatarKey !== undefined) {
+    <ui-avatar [src]="s.avatarKey" [alt]="s.primary" size="sm" />
+    } @else if (s.icon) {
+    <i class="fas {{ s.icon }} text-faint w-5 text-center"></i>
+    }
+    <span class="text-sm text-primary truncate">{{ s.primary }}</span>
+    @if (s.secondary) {
+    <span class="text-xs text-faint truncate ml-auto">{{ s.secondary }}</span>
+    }
+  </button>
+  }
+</div>
+} @else {
+
+<!-- Results -->
+<div class="flex-1 min-h-0 overflow-y-auto">
+  @if (results().length > 0) {
+  @for (r of results(); track r.messageId) {
+  <button
+    type="button"
+    class="w-full text-left px-3 py-2 flex flex-col gap-1 hover:bg-surface-3 transition-micro border-b border-border-subtle/50"
+    (click)="selectResult(r)"
+  >
+    <div class="flex items-center gap-2 text-xs">
+      <ui-avatar [src]="r.avatarKey" [alt]="r.username" size="sm" />
+      <span class="font-semibold text-primary truncate">{{ r.username }}</span>
+      <span class="text-faint shrink-0">in</span>
+      <span class="text-muted truncate">#{{ r.channelName }}</span>
+      <span class="flex-1"></span>
+      <span class="text-faint shrink-0">{{ formatTime(r.createdAt) }}</span>
+    </div>
+    <p class="text-sm text-secondary line-clamp-2 wrap-break-word">
+      @for (seg of highlight(r.content); track $index) {
+      @if (seg.match) { <span class="font-semibold text-primary">{{ seg.text }}</span> }
+      @else { <span>{{ seg.text }}</span> }
+      }
+    </p>
+  </button>
+  }
+  @if (hasMore()) {
+  <button
+    type="button"
+    class="w-full py-2 text-xs font-medium text-accent hover:bg-surface-3 transition-micro"
+    (click)="loadMore()"
+  >
+    Load more
+  </button>
+  }
+  } @else if (loading()) {
+  <div class="flex items-center justify-center py-10">
+    <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
+  </div>
+  } @else if (searched()) {
+  <div class="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
+    <i class="fas fa-magnifying-glass text-3xl text-faint"></i>
+    <p class="text-sm text-muted">No messages found.</p>
+  </div>
+  } @else {
+  <div class="flex flex-col items-center justify-center py-8 gap-3 text-center px-4">
+    <i class="fas fa-magnifying-glass text-3xl text-faint"></i>
+    <p class="text-sm text-muted">Search for messages{{ dmChannelId() ? '' : ' in this server' }}.</p>
+    <div class="text-xs text-faint flex flex-col gap-1">
+      <span><span class="text-secondary font-medium">from:</span> a user &nbsp;
+        @if (!dmChannelId()) {<span class="text-secondary font-medium">in:</span> a channel &nbsp;}
+        <span class="text-secondary font-medium">has:link</span></span>
+      <span><span class="text-secondary font-medium">after:</span> · <span class="text-secondary font-medium">before:</span> · <span class="text-secondary font-medium">during:</span> a date</span>
+    </div>
+  </div>
+  }
+</div>
+}

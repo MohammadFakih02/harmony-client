@@ -1,0 +1,453 @@
+<div class="flex h-dvh w-screen bg-bg overflow-hidden select-none">
+  <!-- Guild rail + channel sidebar. Desktop: plain flex-row panes (the max-md classes compile
+       away). Mobile: the pair becomes one off-canvas left drawer slid in by the hamburger. -->
+  <div
+    class="flex h-full shrink-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:bg-surface max-md:shadow-modal max-md:transition-transform max-md:duration-300"
+    [class.max-md:-translate-x-full]="!nav.leftDrawerOpen()"
+  >
+    <!-- Guild Navigation Bar -->
+    <div class="flex flex-col h-full w-18 min-w-18 bg-surface overflow-hidden">
+      <app-guild-sidebar />
+    </div>
+
+    <!-- Channel Navigation Panel (drag-resizable via the strip on its right edge; fills the drawer on mobile) -->
+    <div
+      class="flex flex-col h-full bg-surface-2 overflow-hidden border-r border-border-subtle shrink-0 max-md:flex-1 max-md:min-w-0"
+      [style.width.px]="viewport.isMobile() ? null : settings.channelSidebarWidth()"
+    >
+      <app-channel-sidebar />
+    </div>
+    <div
+      class="w-1 -ml-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
+      [appResizeHandle]="settings.channelSidebarWidth()"
+      edge="right"
+      [min]="channelSidebarMin"
+      [max]="channelSidebarMax"
+      (widthChange)="settings.setChannelSidebarWidth($event)"
+    ></div>
+  </div>
+
+  <!-- Mobile left-drawer backdrop -->
+  @if (viewport.isMobile() && nav.leftDrawerOpen()) {
+  <div class="fixed inset-0 z-30 bg-black/50 animate-fade-in" (click)="nav.closeLeft()"></div>
+  }
+
+  <!-- Content Workspace -->
+  <main class="flex-1 h-full bg-surface overflow-hidden flex min-w-0">
+    <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+      <!-- Header bar: channel / DM context on the left, controls on the right. Only shown in
+           a guild channel or a DM — the Friends/home screen renders its own header. -->
+      @if (inGuild() || inDm()) {
+      <header class="flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0">
+        <!-- Mobile: hamburger opens the navigation drawer -->
+        <button
+          type="button"
+          class="hidden max-md:flex w-9 h-9 -ml-1 items-center justify-center rounded-lg text-muted hover:text-primary shrink-0"
+          aria-label="Open navigation"
+          (click)="nav.openLeft()"
+        >
+          <i class="fas fa-bars"></i>
+        </button>
+        @if (inGuild() && headerChannel(); as ch) {
+        <i
+          class="fas text-faint shrink-0"
+          [class.fa-hashtag]="ch.type !== 'voice'"
+          [class.fa-volume-high]="ch.type === 'voice'"
+        ></i>
+        <span class="font-semibold text-primary text-sm truncate shrink-0 max-w-[40%]">{{ ch.name }}</span>
+        @if (ch.topic) {
+        <span class="w-px h-5 bg-border mx-1 shrink-0 max-md:hidden"></span>
+        <span class="text-xs text-muted truncate min-w-0 max-md:hidden">{{ ch.topic }}</span>
+        }
+        } @else if (inDm() && dmChannel()) {
+        @if (dmIsGroup()) {
+        <span class="w-6 h-6 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted shrink-0">
+          @if (dmChannel()?.iconKey; as icon) {
+          <img [src]="publicFileUrl(icon)" [alt]="dmHeaderName()" class="w-full h-full object-cover" />
+          } @else {
+          <i class="fas fa-user-group text-2xs"></i>
+          }
+        </span>
+        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
+        <span class="w-px h-5 bg-border mx-1 shrink-0"></span>
+        <span class="text-xs text-muted truncate min-w-0">{{ dmMembers().length + 1 }} Members</span>
+        } @else if (dmPeer(); as peer) {
+        <ui-avatar [src]="peer.avatarKey" [alt]="peer.username" size="sm" [status]="dmPeerStatus()" />
+        <span class="font-semibold text-primary text-sm truncate shrink-0">{{ dmHeaderName() }}</span>
+        @if (dmPeerMessage(); as msg) {
+        <span class="w-px h-5 bg-border mx-1 shrink-0 max-md:hidden"></span>
+        <span class="text-xs text-muted truncate min-w-0 max-md:hidden" [title]="msg">{{ msg }}</span>
+        }
+        }
+        }
+
+        <div class="flex-1 min-w-0"></div>
+
+        @if (inGuild() && activeGuildId(); as gid) {
+        <ui-icon-button
+          cdkOverlayOrigin
+          #searchOrigin="cdkOverlayOrigin"
+          size="md"
+          [active]="showSearch()"
+          label="Search"
+          (click)="showSearch.set(!showSearch())"
+        >
+          <i class="fas fa-magnifying-glass"></i>
+        </ui-icon-button>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
+          [cdkConnectedOverlayOrigin]="searchOrigin"
+          [cdkConnectedOverlayOpen]="showSearch()"
+          [cdkConnectedOverlayPositions]="searchPanelPositions"
+          [cdkConnectedOverlayHasBackdrop]="true"
+          cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+          (backdropClick)="showSearch.set(false)"
+          (detach)="showSearch.set(false)"
+        >
+          <app-search-panel [guildId]="gid" (close)="showSearch.set(false)" />
+        </ng-template>
+        }
+
+        @if (inDm() && dmChannel(); as dm) {
+        <ui-icon-button
+          cdkOverlayOrigin
+          #dmSearchOrigin="cdkOverlayOrigin"
+          size="md"
+          [active]="showSearch()"
+          label="Search"
+          (click)="showSearch.set(!showSearch())"
+        >
+          <i class="fas fa-magnifying-glass"></i>
+        </ui-icon-button>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
+          [cdkConnectedOverlayOrigin]="dmSearchOrigin"
+          [cdkConnectedOverlayOpen]="showSearch()"
+          [cdkConnectedOverlayPositions]="searchPanelPositions"
+          [cdkConnectedOverlayHasBackdrop]="true"
+          cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+          (backdropClick)="showSearch.set(false)"
+          (detach)="showSearch.set(false)"
+        >
+          <app-search-panel [dmChannelId]="dm.channelId" (close)="showSearch.set(false)" />
+        </ng-template>
+        }
+
+        <ui-icon-button
+          cdkOverlayOrigin
+          #pinsOrigin="cdkOverlayOrigin"
+          size="md"
+          [active]="showPins()"
+          label="Pinned Messages"
+          (click)="showPins.set(!showPins())"
+        >
+          <i class="fas fa-thumbtack"></i>
+        </ui-icon-button>
+        <ng-template
+          cdkConnectedOverlay
+          [cdkConnectedOverlayPush]="true"
+          [cdkConnectedOverlayOrigin]="pinsOrigin"
+          [cdkConnectedOverlayOpen]="showPins()"
+          [cdkConnectedOverlayPositions]="pinsPanelPositions"
+          [cdkConnectedOverlayHasBackdrop]="true"
+          cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+          (backdropClick)="showPins.set(false)"
+          (detach)="showPins.set(false)"
+        >
+          <app-pins-panel (close)="showPins.set(false)" />
+        </ng-template>
+
+        <app-notification-bell />
+        @if (inGuild()) {
+        <ui-icon-button
+          size="md"
+          [active]="showMembers()"
+          label="Toggle Member List"
+          (click)="showMembers.set(!showMembers())"
+        >
+          <i class="fas fa-users"></i>
+        </ui-icon-button>
+        }
+        @if (inDm() && dmChannel(); as dm) {
+        @if (!dmCallConnected()) {
+        <ui-icon-button
+          size="md"
+          [label]="dmCallActive() ? 'Join Call' : 'Start Call'"
+          (click)="startOrJoinCall(dm.channelId)"
+        >
+          <i class="fas fa-phone" [class.text-success]="dmCallActive()"></i>
+        </ui-icon-button>
+        }
+        <ui-icon-button
+          size="md"
+          [active]="showDmProfile()"
+          [label]="dmIsGroup() ? 'Toggle Members' : 'Toggle Profile'"
+          (click)="showDmProfile.set(!showDmProfile())"
+        >
+          <i class="fas" [class.fa-user]="!dmIsGroup()" [class.fa-users]="dmIsGroup()"></i>
+        </ui-icon-button>
+        }
+      </header>
+      }
+      <router-outlet />
+    </div>
+
+    <!-- Mobile right-drawer backdrop (member list / DM profile) -->
+    @if (viewport.isMobile() && ((inGuild() && showMembers()) || (inDm() && showDmProfile() && dmChannel()))) {
+    <div
+      class="fixed inset-0 z-30 bg-black/50 animate-fade-in"
+      (click)="showMembers.set(false); showDmProfile.set(false)"
+    ></div>
+    }
+
+    <!-- Member sidebar (togglable, drag-resizable; a right drawer on mobile) — guild channels only -->
+    @if (inGuild() && showMembers()) {
+    <div
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
+      [appResizeHandle]="settings.rightSidebarWidth()"
+      edge="left"
+      [min]="rightSidebarMin"
+      [max]="rightSidebarMax"
+      (widthChange)="settings.setRightSidebarWidth($event)"
+    ></div>
+    <div
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
+    >
+      <app-member-sidebar />
+    </div>
+    }
+
+    <!-- DM profile / group members panel (togglable, drag-resizable; a right drawer on mobile) — direct messages only -->
+    @if (inDm() && showDmProfile() && dmChannel(); as dm) {
+    <div
+      class="w-1 -mr-1 h-full shrink-0 z-10 hover:bg-accent/50 active:bg-accent/70 transition-micro max-md:hidden"
+      [appResizeHandle]="settings.rightSidebarWidth()"
+      edge="left"
+      [min]="rightSidebarMin"
+      [max]="rightSidebarMax"
+      (widthChange)="settings.setRightSidebarWidth($event)"
+    ></div>
+    <div
+      class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
+    >
+      <!-- Banner: the peer's real banner (image > colour > accent gradient); groups keep the gradient -->
+      @if (!dmIsGroup() && dmPeer(); as peer) {
+      <ui-profile-banner
+        class="h-24"
+        [bannerKey]="dmPeerProfile()?.bannerKey ?? null"
+        [bannerColor]="dmPeerProfile()?.bannerColor ?? null"
+        [alt]="peer.username"
+      />
+      } @else {
+      <div class="h-24 profile-banner"></div>
+      }
+      @if (dmIsGroup()) {
+      <!-- Group: name, member list, add/leave -->
+      <div class="px-4 pb-4">
+        <div class="relative z-10 inline-block -mt-10 group/icon">
+          <div class="w-20 h-20 rounded-full overflow-hidden bg-surface-3 ring-[6px] ring-surface-2 flex items-center justify-center text-muted">
+            @if (dm.iconKey) {
+            <img [src]="publicFileUrl(dm.iconKey)" [alt]="dmHeaderName()" class="w-full h-full object-cover" />
+            } @else {
+            <i class="fas fa-user-group text-2xl"></i>
+            }
+          </div>
+          <label
+            class="absolute inset-0 rounded-full flex items-center justify-center bg-black/50 text-white opacity-0 group-hover/icon:opacity-100 transition-micro cursor-pointer"
+            [class.pointer-events-none]="iconUploading()"
+            title="Change group icon"
+          >
+            @if (iconUploading()) {
+            <i class="fas fa-spinner fa-spin text-sm"></i>
+            } @else {
+            <i class="fas fa-camera text-sm"></i>
+            }
+            <input
+              type="file"
+              class="hidden"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              (change)="onGroupIconSelected(dm.channelId, $event)"
+            />
+          </label>
+          @if (dm.iconKey && !iconUploading()) {
+          <button
+            type="button"
+            class="absolute -top-0.5 -right-0.5 w-6 h-6 rounded-full bg-surface border border-border-subtle text-faint hover:text-danger transition-micro flex items-center justify-center opacity-0 group-hover/icon:opacity-100"
+            aria-label="Remove group icon"
+            (click)="removeGroupIcon(dm.channelId)"
+          >
+            <i class="fas fa-xmark text-2xs"></i>
+          </button>
+          }
+        </div>
+
+        <div class="mt-2.5 min-w-0">
+          @if (editingGroupName()) {
+          <div class="flex items-center gap-1.5">
+            <input
+              type="text"
+              maxlength="100"
+              placeholder="Group name"
+              class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+              [ngModel]="groupNameDraft()"
+              (ngModelChange)="groupNameDraft.set($event)"
+              (keydown.enter)="saveGroupName(dm.channelId)"
+              (keydown.escape)="editingGroupName.set(false)"
+            />
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg bg-accent text-white hover:bg-accent-hover transition-micro shrink-0"
+              aria-label="Save group name"
+              (click)="saveGroupName(dm.channelId)"
+            >
+              <i class="fas fa-check text-xs"></i>
+            </button>
+            <button
+              type="button"
+              class="w-8 h-8 rounded-lg text-muted hover:text-primary hover:bg-surface transition-micro shrink-0"
+              aria-label="Cancel"
+              (click)="editingGroupName.set(false)"
+            >
+              <i class="fas fa-xmark text-xs"></i>
+            </button>
+          </div>
+          } @else {
+          <div class="group flex items-center gap-2 min-w-0">
+            <p class="text-xl font-bold text-primary leading-tight wrap-break-word min-w-0">{{ dmHeaderName() }}</p>
+            <button
+              type="button"
+              class="w-6 h-6 shrink-0 rounded-md text-faint hover:text-primary hover:bg-surface transition-micro opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              aria-label="Rename group"
+              (click)="startGroupRename(dm)"
+            >
+              <i class="fas fa-pen text-2xs"></i>
+            </button>
+          </div>
+          }
+          <p class="text-sm text-muted mt-0.5">{{ dmMembers().length + 1 }} Members</p>
+        </div>
+
+        <div class="mt-3 rounded-xl bg-surface border border-border-subtle p-2">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1 px-1.5">Members</p>
+          <div class="flex flex-col gap-0.5">
+            @for (m of dmMembers(); track m.userId) {
+            <button
+              type="button"
+              class="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-surface-2 transition-micro text-left w-full"
+              (click)="openUserProfile(m.userId)"
+            >
+              <ui-avatar
+                [src]="m.avatarKey"
+                [alt]="m.username"
+                size="md"
+                [status]="participantStatus(m.userId)"
+                ringClass="border-surface"
+              />
+              <span class="flex-1 min-w-0 truncate text-sm text-primary">{{ dmMemberName(m) }}</span>
+              <i class="fas fa-chevron-right text-2xs text-faint shrink-0"></i>
+            </button>
+            }
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5 mt-4">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-semibold bg-surface hover:bg-surface-3 text-primary transition-micro"
+            (click)="openAddPeople()"
+          >
+            <i class="fas fa-user-plus text-xs"></i>
+            <span>Add People</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-2 h-9 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-micro"
+            (click)="leaveGroup()"
+          >
+            <i class="fas fa-arrow-right-from-bracket text-xs"></i>
+            <span>Leave Group</span>
+          </button>
+        </div>
+      </div>
+      } @else if (dmPeer(); as peer) {
+      <!-- 1:1: peer profile -->
+      <div class="px-4 pb-4">
+        <div class="relative z-10 inline-block rounded-full ring-[6px] ring-surface-2 bg-surface-2 -mt-10">
+          <ui-avatar
+            [src]="peer.avatarKey"
+            [alt]="peer.username"
+            size="2xl"
+            [status]="dmPeerStatus()"
+            ringClass="border-surface-2"
+          />
+        </div>
+
+        <div class="mt-2.5 min-w-0">
+          <p class="text-xl font-bold text-primary leading-tight truncate">{{ dmHeaderName() }}</p>
+          @if (dmHeaderName() !== peer.username) {
+          <p class="text-sm text-muted truncate mt-0.5">{{ peer.username }}</p>
+          }
+        </div>
+
+        @if (dmPeerMessage(); as msg) {
+        <div class="mt-2 rounded-lg bg-surface border border-border-subtle px-2.5 py-1.5 flex items-start gap-1.5">
+          <i class="fas fa-quote-left text-2xs text-faint mt-1 shrink-0"></i>
+          <span class="text-xs text-muted whitespace-pre-wrap wrap-break-word min-w-0">{{ msg }}</span>
+        </div>
+        }
+
+        <div class="mt-3 rounded-xl bg-surface border border-border-subtle p-3.5">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
+          <div class="flex items-center gap-2 text-sm text-muted">
+            <i class="fas fa-yin-yang text-faint text-xs shrink-0" title="Joined Harmony"></i>
+            <span>{{ memberSince(peer.userId) }}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="mt-3 w-full h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface hover:bg-surface-3 transition-micro"
+          (click)="openUserProfile(peer.userId)"
+        >
+          View Full Profile
+        </button>
+      </div>
+      }
+    </div>
+    }
+  </main>
+</div>
+
+<!-- App-wide image lightbox -->
+<ui-lightbox />
+
+<!-- Incoming DM/group-DM call ring (app-wide) -->
+<app-incoming-call />
+
+<!-- Add people to the active group DM (from the members panel) -->
+@if (showAddPeople() && dmChannel(); as dm) {
+<app-group-dm-modal
+  [channelId]="dm.channelId"
+  [excludeIds]="dmMemberIds()"
+  (close)="showAddPeople.set(false)"
+/>
+}
+
+<!-- Connection status banner (reconnecting / offline+retry / reconnected flash) -->
+<app-connection-banner />
+
+<!-- Transient toasts (mentions, etc.) -->
+<app-toast-container />
+
+<!-- App-wide confirm/notice dialog (the window.confirm/alert replacement) -->
+<app-confirm-dialog />
+
+<!-- Full-profile modal (opened from any user popout) -->
+<app-user-profile-modal />
+
+<!-- Right-click context menu (users, messages, page) -->
+<app-context-menu />

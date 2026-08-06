@@ -1,0 +1,78 @@
+// --- Drag-and-drop indicators (see sidebar-dnd.ts) --------------------------------------------
+// The list never reflows during a drag (CDK sorting is disabled), so the indicators must not
+// shift layout either: lines are absolutely-positioned pseudo-elements reaching into the gaps.
+
+.drop-anchor {
+  position: relative;
+}
+
+.drop-line-above::before,
+.drop-line-below::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drop-line-above::before {
+  top: -2px;
+}
+
+.drop-line-below::after {
+  bottom: -2px;
+}
+
+// "This drop goes INTO the category" (append) — whole-block highlight, used when hovering the
+// header of a collapsed or empty category. Outline + tint, neither of which affects layout.
+.drop-into {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+// The body-level drag preview (clone of the row/block) — give it a surface so it doesn't render
+// see-through over whatever it passes. Class applied via cdkDragPreviewClass; the clone carries
+// this component's scoping attributes, so a component style reaches it.
+.sidebar-drag-preview {
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  opacity: 0.95;
+}
+
+.channel-item {
+  position: relative;
+  overflow: hidden;
+
+  &.active {
+    background: linear-gradient(
+      90deg,
+      var(--color-accent-muted) 0%,
+      transparent 100%
+    );
+    color: var(--color-text);
+    font-weight: 600;
+
+    i {
+      color: var(--color-accent-light);
+    }
+
+    // Modern left micro-accent indicator
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 25%;
+      height: 50%;
+      width: 3px;
+      border-radius: 0 4px 4px 0;
+      background-color: var(--color-accent);
+      animation: slideUpIn var(--duration-element) var(--ease-enter);
+    }
+  }
+}

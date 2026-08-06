@@ -1,0 +1,223 @@
+<!-- Added: w-full, mx-auto, shrink-0, and a matching max-width (e.g., max-w-5xl) -->
+@if (!canSendInChannel()) {
+<!-- Permission/timeout bar replaces the composer entirely (Discord-style). -->
+<div class="w-full mx-auto px-4 py-3 max-md:px-2 max-md:py-2 shrink-0">
+  <div
+    class="flex items-center gap-2 px-4 min-h-[3.25rem] rounded-xl bg-surface-2 ring-1 ring-border-subtle text-sm text-faint"
+  >
+    <i class="fas fa-lock shrink-0"></i>
+    <span>{{ disabledReason() }}</span>
+  </div>
+</div>
+} @else {
+<div class="w-full mx-auto px-4 py-3 max-md:px-2 max-md:py-2 shrink-0 flex flex-col gap-2">
+  <!-- Replying-to banner -->
+  @if (messageStore.replyTarget(); as reply) {
+  <div
+    class="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-surface-2 ring-1 ring-border-subtle text-xs text-muted -mb-1"
+  >
+    <i class="fas fa-reply fa-flip-vertical text-faint shrink-0"></i>
+    <span class="min-w-0 truncate">
+      Replying to <span class="font-semibold text-primary">{{ reply.authorName }}</span>
+    </span>
+    <button
+      type="button"
+      class="ml-auto shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-faint hover:text-primary hover:bg-surface-3 transition-micro"
+      title="Cancel reply"
+      aria-label="Cancel reply"
+      (click)="messageStore.clearReplyTarget()"
+    >
+      <i class="fas fa-xmark text-2xs"></i>
+    </button>
+  </div>
+  }
+
+  <!-- Upload error -->
+  @if (attachError()) {
+  <div class="flex items-center gap-2 text-xs text-danger">
+    <i class="fas fa-circle-exclamation shrink-0"></i>
+    <span>{{ attachError() }}</span>
+  </div>
+  }
+
+  <!-- Staged attachments (thumbnails with upload progress) -->
+  @if (staged().length) {
+  <div class="flex flex-wrap gap-2">
+    @for (file of staged(); track file.localId) {
+    <div
+      class="relative w-20 h-20 rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 group/att"
+    >
+      @if (file.kind === 'image') {
+      <img [src]="file.previewUrl" [alt]="file.name" class="w-full h-full object-cover" />
+      } @else {
+      <div class="w-full h-full flex flex-col items-center justify-center gap-1 px-1 text-center">
+        <i class="fas {{ file.icon }} text-xl text-muted"></i>
+        <span class="text-2xs text-faint leading-tight line-clamp-2 break-all">{{ file.name }}</span>
+      </div>
+      }
+
+      <!-- Uploading overlay + determinate progress bar along the bottom edge -->
+      @if (file.status === 'uploading') {
+      <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
+        <i class="fas fa-yin-yang animate-spin text-white text-sm"></i>
+        <span class="text-2xs text-white">{{ file.progress }}%</span>
+      </div>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+        <div class="h-full bg-accent transition-[width] duration-150" [style.width.%]="file.progress"></div>
+      </div>
+      } @else if (file.status === 'error') {
+      <div class="absolute inset-0 bg-danger/60 flex items-center justify-center">
+        <i class="fas fa-triangle-exclamation text-white"></i>
+      </div>
+      }
+
+      <!-- Remove -->
+      <button
+        type="button"
+        class="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-micro"
+        title="Remove"
+        (click)="removeStaged(file.localId)"
+      >
+        <i class="fas fa-xmark text-2xs"></i>
+      </button>
+    </div>
+    }
+  </div>
+  }
+
+  <!-- Formatting toolbar — toggle-wraps the selection in the markdown the renderer supports. -->
+  <div class="flex items-center gap-0.5 -mb-1.5 flex-wrap">
+    @for (action of formatActions; track action.label) {
+    <button
+      type="button"
+      [title]="action.label"
+      [attr.aria-label]="action.label"
+      class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
+      (mousedown)="$event.preventDefault()"
+      (click)="applyFormat(action.open, action.close, action.placeholder)"
+    >
+      <i class="fas {{ action.icon }} text-xs"></i>
+    </button>
+    }
+  </div>
+
+  <div class="flex items-end gap-2">
+    <div
+      #composerOrigin
+      cdkOverlayOrigin
+      class="flex-1 flex items-end bg-surface-3 rounded-xl min-h-[3.25rem] ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
+    >
+      @if (canAttach()) {
+      <input
+        #fileInput
+        type="file"
+        class="hidden"
+        accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,audio/webm,application/pdf,text/plain,text/csv,text/markdown,application/zip"
+        multiple
+        (change)="onFilesSelected($event)"
+      />
+      <button
+        type="button"
+        title="Attach files"
+        aria-label="Attach files"
+        class="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl text-faint hover:text-primary transition-micro"
+        (click)="fileInput.click()"
+      >
+        <i class="fas fa-circle-plus text-xl"></i>
+      </button>
+      }
+      <textarea
+      #draftInput
+      autoGrow
+      [maxHeight]="320"
+      [autoGrowValue]="draft()"
+      class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm py-2.5 pr-4 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
+      [class.pl-4]="!canAttach()"
+      [class.pl-1]="canAttach()"
+      [placeholder]="composerPlaceholder()"
+      [ngModel]="draft()"
+      (ngModelChange)="onDraftInput($event)"
+      (keydown)="onKeydown($event)"
+      (paste)="onPaste($event)"
+      rows="1"
+    ></textarea>
+
+    <!-- Emoji picker trigger -->
+    <button
+      type="button"
+      title="Emoji"
+      aria-label="Emoji"
+      class="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl text-faint hover:text-primary transition-micro"
+      [class.text-primary]="emojiOpen()"
+      (click)="toggleEmoji()"
+    >
+      <i class="fas fa-face-smile text-xl"></i>
+    </button>
+
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="composerOrigin"
+      [cdkConnectedOverlayOpen]="mentionOpen()"
+      [cdkConnectedOverlayPositions]="mentionOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="closeMentionAutocomplete()"
+    >
+      <app-mention-autocomplete
+        [candidates]="mentionCandidates()"
+        [highlightedIndex]="mentionHighlightedIndex()"
+        (select)="selectMention($event)"
+      />
+    </ng-template>
+
+    <!-- :shortcode emoji autocomplete (same anchor as the mention popup; never open together) -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="composerOrigin"
+      [cdkConnectedOverlayOpen]="emojiSuggestOpen()"
+      [cdkConnectedOverlayPositions]="mentionOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="closeEmojiSuggest()"
+    >
+      <app-emoji-suggest
+        [candidates]="emojiSuggestions()"
+        [highlightedIndex]="emojiHighlightedIndex()"
+        (select)="selectEmojiSuggestion($event)"
+      />
+    </ng-template>
+
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="composerOrigin"
+      [cdkConnectedOverlayOpen]="emojiOpen()"
+      [cdkConnectedOverlayPositions]="emojiOverlayPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="closeEmoji()"
+      (detach)="closeEmoji()"
+    >
+      <app-emoji-picker (select)="onEmojiSelect($event)" />
+    </ng-template>
+  </div>
+  <button
+    class="flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-micro text-sm font-medium"
+    [class.bg-accent]="canSend()"
+    [class.text-white]="canSend()"
+    [class.hover:bg-accent-hover]="canSend()"
+    [class.bg-surface-3]="!canSend()"
+    [class.text-faint]="!canSend()"
+    [class.cursor-not-allowed]="!canSend()"
+    [disabled]="!canSend() || sending()"
+    (click)="send()"
+    title="Send message"
+  >
+    @if (sending()) {
+    <i class="fas fa-yin-yang animate-spin"></i>
+    } @else {
+    <i class="fas fa-paper-plane"></i>
+    }
+  </button>
+  </div>
+</div>
+}

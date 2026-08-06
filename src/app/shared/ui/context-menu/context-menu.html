@@ -1,0 +1,140 @@
+@if (contextMenu.state(); as s) {
+<!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. Transparent on desktop,
+     dimmed behind the mobile bottom sheet. -->
+<div
+  class="fixed inset-0 z-1100 max-md:bg-black/50"
+  (click)="close()"
+  (contextmenu)="close($event)"
+  (auxclick)="close()"
+>
+  @if (viewport.isMobile()) {
+  <!-- Mobile: bottom sheet. Submenus expand inline (accordion) instead of hover fly-outs. -->
+  <div
+    class="fixed inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl bg-surface shadow-modal border-t border-border flex flex-col gap-0.5 animate-slide-up"
+    (click)="$event.stopPropagation()"
+    (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    @for (entry of s.entries; track $index) {
+      @if (isSep(entry)) {
+      <div class="h-px bg-border-subtle my-0.5"></div>
+      } @else if (asItem(entry); as it) {
+        @if (it.children?.length) {
+        <ng-container
+          *ngTemplateOutlet="row; context: { $implicit: it, hasSub: true, subIndex: $index, expanded: expandedSub() === $index }"
+        ></ng-container>
+        @if (expandedSub() === $index) {
+        <div class="flex flex-col gap-0.5 pl-5">
+          @for (child of it.children; track $index) {
+            @if (isSep(child)) {
+            <div class="h-px bg-border-subtle my-0.5"></div>
+            } @else if (asItem(child); as ch) {
+            <ng-container *ngTemplateOutlet="row; context: { $implicit: ch }"></ng-container>
+            }
+          }
+        </div>
+        }
+        } @else {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: it }"></ng-container>
+        }
+      }
+    }
+  </div>
+  } @else {
+  <div
+    #menu
+    class="absolute w-52 p-1.5 rounded-xl bg-surface shadow-modal border border-border flex flex-col gap-0.5 animate-scale-in origin-top-left"
+    [style.left.px]="pos().x"
+    [style.top.px]="pos().y"
+    (click)="$event.stopPropagation()"
+    (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    @for (entry of s.entries; track $index) {
+      @if (isSep(entry)) {
+      <div class="h-px bg-border-subtle my-0.5"></div>
+      } @else if (asItem(entry); as it) {
+        @if (it.children?.length) {
+        <!-- Item with a one-level hover submenu -->
+        <div class="relative group/sub">
+          <ng-container *ngTemplateOutlet="row; context: { $implicit: it, hasSub: true }"></ng-container>
+          <div
+            class="hidden group-hover/sub:flex flex-col gap-0.5 absolute -top-1.5 w-52 max-h-72 overflow-y-auto p-1.5 rounded-xl bg-surface shadow-modal border border-border"
+            [class.left-full]="!openLeft()"
+            [class.right-full]="openLeft()"
+          >
+            @for (child of it.children; track $index) {
+              @if (isSep(child)) {
+              <div class="h-px bg-border-subtle my-0.5"></div>
+              } @else if (asItem(child); as ch) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: ch }"></ng-container>
+              }
+            }
+          </div>
+        </div>
+        } @else {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: it }"></ng-container>
+        }
+      }
+    }
+  </div>
+  }
+</div>
+}
+
+<ng-template #row let-item let-hasSub="hasSub" let-subIndex="subIndex" let-expanded="expanded">
+  @if (item.slider) {
+  <!-- Slider row (per-user volume etc.) — label + live % on top, full-width range below. -->
+  <div class="flex flex-col gap-1 w-full px-2.5 py-1.5">
+    <div class="flex items-center gap-2.5 text-sm font-medium text-primary">
+      @if (item.icon) {
+      <i class="fas w-4 text-center text-xs shrink-0 text-faint" [ngClass]="item.icon"></i>
+      }
+      <span class="flex-1 truncate">{{ item.label }}</span>
+      <span class="shrink-0 text-xs text-faint tabular-nums">{{ sliderPct(item) }}%</span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      class="w-full accent-accent cursor-pointer"
+      [value]="sliderPct(item)"
+      (input)="onSliderInput(item, $event)"
+      [attr.aria-label]="item.label"
+    />
+  </div>
+  } @else {
+  <button
+    type="button"
+    class="group/item flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 max-md:py-2.5 rounded-lg text-sm font-medium transition-micro disabled:opacity-40 disabled:hover:bg-transparent"
+    [class.text-danger]="item.danger"
+    [class.hover:bg-danger]="item.danger && !item.disabled"
+    [class.text-primary]="!item.danger"
+    [class.hover:bg-accent]="!item.danger && !item.disabled"
+    [class.hover:text-white]="!item.disabled"
+    [disabled]="item.disabled"
+    (click)="run(item, subIndex)"
+  >
+    @if (item.icon) {
+    <i
+      class="fas w-4 text-center text-xs shrink-0 text-faint group-hover/item:text-white transition-micro"
+      [ngClass]="item.icon"
+    ></i>
+    }
+    <span class="flex-1 truncate">{{ item.label }}</span>
+    @if (item.checked) {
+    <!-- Right-side checkbox for toggle items (role assignments etc.) -->
+    <span class="w-4 h-4 flex items-center justify-center rounded-sm ring-1 ring-current/40 shrink-0">
+      @if (item.checked()) {
+      <i class="fas fa-check text-2xs"></i>
+      }
+    </span>
+    }
+    @if (hasSub) {
+    <i
+      class="fas fa-chevron-right text-2xs text-faint group-hover/item:text-white shrink-0 transition-micro"
+      [class.rotate-90]="expanded"
+    ></i>
+    }
+  </button>
+  }
+</ng-template>

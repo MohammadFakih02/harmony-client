@@ -1,0 +1,91 @@
+<div class="flex flex-col h-full">
+  <div class="px-4 h-12 min-h-12 flex items-center gap-2 border-b border-border-subtle shrink-0">
+    <span class="text-xs font-bold uppercase tracking-wider text-faint">
+      Members — {{ visibleMembers().length }}
+    </span>
+  </div>
+
+  <div class="flex-1 overflow-y-auto py-2 px-2" (contextmenu)="openEmptySpaceMenu($event)">
+    @if (memberStore.loading()) {
+    <div class="flex justify-center pt-6">
+      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+    </div>
+    } @else if (visibleMembers().length === 0) {
+    <p class="text-xs text-faint text-center pt-6">No members found.</p>
+    } @else {
+    @for (section of sections(); track section.key) {
+      <div class="px-2 pt-3 pb-1 text-2xs font-bold uppercase tracking-wider text-faint truncate">
+        {{ section.label }} — {{ section.rows.length }}
+      </div>
+      @for (row of section.rows; track row.member.userId) {
+      <div
+        cdkOverlayOrigin
+        #origin="cdkOverlayOrigin"
+        class="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-3 transition-micro cursor-pointer"
+        [class.opacity-45]="row.dimmed"
+        (click)="openProfile(row.member, origin)"
+        (contextmenu)="openUserMenu($event, row.member)"
+      >
+        <ui-avatar
+          [src]="row.member.avatarKey"
+          [alt]="displayName(row.member)"
+          size="md"
+          [status]="row.status"
+        />
+        <div class="flex flex-col min-w-0 flex-1">
+          <div class="flex items-center gap-1 min-w-0">
+            <span
+              class="text-sm font-medium truncate leading-tight"
+              [class.text-primary]="!row.color"
+              [style.color]="row.color"
+            >
+              {{ displayName(row.member) }}
+            </span>
+            @if (row.member.isOwner) {
+            <i class="fas fa-crown text-warning text-xs shrink-0"></i>
+            }
+            @if (row.timedOut) {
+            <i class="fas fa-clock text-faint text-xs shrink-0" title="Timed out"></i>
+            }
+          </div>
+          @if (row.statusMessage) {
+          <span class="text-xs text-faint truncate leading-tight" [title]="row.statusMessage">{{ row.statusMessage }}</span>
+          } @else if (row.member.nickname) {
+          <span class="text-xs text-faint truncate leading-tight">{{ row.member.username }}</span>
+          }
+        </div>
+        <button
+          type="button"
+          class="text-faint hover:text-primary text-xs opacity-0 group-hover:opacity-100 transition-micro shrink-0 px-1"
+          aria-label="Member actions"
+          (click)="$event.stopPropagation(); openUserMenu($event, row.member)"
+        >
+          <i class="fas fa-ellipsis-vertical"></i>
+        </button>
+      </div>
+      }
+    }
+    }
+  </div>
+</div>
+
+<!-- Profile popout (anchored to the clicked row, opening leftward) -->
+@if (profileMember(); as member) {
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayOrigin]="profileOrigin()!"
+  [cdkConnectedOverlayOpen]="true"
+  [cdkConnectedOverlayPositions]="profilePositions"
+  [cdkConnectedOverlayHasBackdrop]="false"
+  (overlayOutsideClick)="closeProfile()"
+>
+  <app-user-profile-popout
+    [userId]="member.userId"
+    [guildId]="guildStore.selectedGuildId()"
+    [fallbackUsername]="member.username"
+    [fallbackAvatarKey]="member.avatarKey"
+    (close)="closeProfile()"
+  />
+</ng-template>
+}

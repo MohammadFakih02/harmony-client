@@ -1,0 +1,212 @@
+<nav
+  class="flex flex-col items-center w-full h-full py-3 gap-1 overflow-y-auto overflow-x-hidden scrollbar-none"
+  (contextmenu)="openRailMenu($event)"
+>
+  <!-- Home / DM -->
+  <div class="flex flex-col items-center gap-1 w-full">
+    <a
+      routerLink="/app/friends"
+      class="guild-icon hover:text-white relative"
+      [class.active]="homeSelected()"
+      [class.bg-accent]="homeSelected()"
+      [class.text-white]="homeSelected()"
+      [class.bg-surface-2]="!homeSelected()"
+      [class.text-accent-light]="!homeSelected()"
+      title="Direct Messages"
+    >
+      <i class="fas fa-yin-yang text-2xl"></i>
+      @if (friendStore.incomingCount() > 0) {
+      <span
+        class="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold ring-2 ring-bg"
+        [title]="friendStore.incomingCount() + ' pending friend request(s)'"
+      >
+        {{ friendStore.incomingCount() }}
+      </span>
+      }
+    </a>
+
+    <!-- Unread DM senders — surfaced as avatar pills so an incoming DM is reachable from a server -->
+    @for (dm of unreadDms(); track dm.channelId) {
+    <button
+      class="guild-icon bg-surface-2 text-muted hover:text-primary transition-micro relative"
+      [title]="dmLabelOf(dm)"
+      (click)="openDm(dm.channelId)"
+    >
+      @if (dmAvatarOf(dm); as avatar) {
+        <img
+          [src]="avatar"
+          [alt]="dmLabelOf(dm)"
+          class="w-full h-full object-cover rounded-[inherit]"
+        />
+      } @else if (dm.isGroup) {
+        <span class="text-sm select-none"><i class="fas fa-user-group"></i></span>
+      } @else {
+        <span class="text-sm font-semibold select-none">{{ dmInitials(dmLabelOf(dm)) }}</span>
+      }
+      <span
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface"
+      >
+        {{ dmUnreadCount(dm.channelId) > 99 ? '99+' : dmUnreadCount(dm.channelId) }}
+      </span>
+    </button>
+    }
+
+    <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
+  </div>
+
+  <!-- Guild list — drag to reorder (persisted as a personal preference) -->
+  <div
+    class="flex flex-col items-center gap-2 w-full flex-1"
+    cdkDropList
+    (cdkDropListDropped)="onGuildDrop($event)"
+  >
+    @for (guild of guildStore.guilds(); track guild.id) {
+    @let muted = isGuildMuted(guild.id);
+    @let guildUnread = muted ? 0 : unreadStore.guildUnreadCount(guild.id);
+    <button
+      cdkDrag
+      cdkDragLockAxis="y"
+      class="guild-icon text-muted hover:text-primary transition-micro relative"
+      [class.active]="activeRailGuildId() === guild.id"
+      [class.unread]="guildUnread > 0"
+      [class.bg-accent]="activeRailGuildId() === guild.id"
+      [class.text-white]="activeRailGuildId() === guild.id"
+      [class.bg-surface-2]="activeRailGuildId() !== guild.id"
+      [class.opacity-45]="muted && activeRailGuildId() !== guild.id"
+      [title]="guild.name"
+      (click)="navigateToGuild(guild.id)"
+      (contextmenu)="openGuildMenu($event, guild)"
+    >
+      @if (guild.iconKey) {
+        <img
+          [src]="guildIconUrl(guild.iconKey)"
+          [alt]="guild.name"
+          class="w-full h-full object-cover rounded-[inherit]"
+        />
+      } @else {
+        <span class="text-sm font-semibold select-none">{{ guildInitials()[guild.id] }}</span>
+      }
+
+      <!-- Unread count badge (sum across the guild's channels) -->
+      @if (guildUnread > 0) {
+      <span
+        class="absolute -bottom-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-danger text-white text-3xs font-bold px-1 ring-2 ring-surface"
+      >
+        {{ guildUnread > 99 ? '99+' : guildUnread }}
+      </span>
+      }
+    </button>
+    }
+  </div>
+
+  <!-- Add server + utility -->
+  <div class="flex flex-col items-center gap-2 w-full">
+    <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
+    <button
+      class="guild-icon bg-surface-2 text-success hover:bg-success hover:text-white"
+      title="Add a Server"
+      cdkOverlayOrigin
+      #addTrigger="cdkOverlayOrigin"
+      (click)="showAddMenu.set(!showAddMenu())"
+    >
+      <i class="fas fa-plus"></i>
+    </button>
+    <!-- Create / Join chooser — its own CDK overlay (escapes the rail's overflow-x-hidden) -->
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayOrigin]="addTrigger"
+      [cdkConnectedOverlayOpen]="showAddMenu()"
+      [cdkConnectedOverlayPositions]="addMenuPositions"
+      [cdkConnectedOverlayHasBackdrop]="false"
+      (overlayOutsideClick)="showAddMenu.set(false)"
+    >
+      <div
+        class="w-44 bg-surface rounded-lg shadow-modal border border-border-subtle p-1 flex flex-col"
+      >
+        <button
+          class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
+          (click)="chooseCreate()"
+        >
+          <i class="fas fa-plus text-success w-4"></i> Create a Server
+        </button>
+        <button
+          class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
+          (click)="chooseJoin()"
+        >
+          <i class="fas fa-right-to-bracket text-accent w-4"></i> Join a Server
+        </button>
+        <button
+          class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-surface-2 transition-micro text-left"
+          (click)="chooseDiscover()"
+        >
+          <i class="fas fa-compass text-warning w-4"></i> Discover Servers
+        </button>
+      </div>
+    </ng-template>
+    <div class="w-8 h-0.5 rounded-full bg-surface-3 my-1"></div>
+    <button
+      class="guild-icon bg-surface-2 text-muted hover:bg-danger hover:text-white"
+      title="Log out"
+      (click)="logout()"
+    >
+      <i class="fas fa-right-from-bracket"></i>
+    </button>
+  </div>
+</nav>
+
+<!-- Create Server Modal -->
+@if (showCreateModal()) {
+<ui-modal
+  heading="Create a Server"
+  subtitle="Give your new server a name to get started."
+  (close)="closeCreateModal()"
+>
+  <div class="px-6 pb-6 flex flex-col gap-5">
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-muted" for="guild-name">
+        Server Name
+      </label>
+      <input
+        id="guild-name"
+        type="text"
+        class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+        placeholder="My Awesome Server"
+        maxlength="100"
+        [ngModel]="guildName()"
+        (ngModelChange)="guildName.set($event)"
+        (keydown.enter)="submitCreateGuild()"
+      />
+      @if (error()) {
+      <p class="text-xs text-danger">{{ error() }}</p>
+      }
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
+        (click)="closeCreateModal()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro disabled:opacity-50 disabled:cursor-not-allowed"
+        [disabled]="submitting() || !guildName().trim()"
+        (click)="submitCreateGuild()"
+      >
+        @if (submitting()) {
+          <i class="fas fa-yin-yang animate-spin mr-1.5"></i>
+        }
+        Create Server
+      </button>
+    </div>
+  </div>
+</ui-modal>
+}
+
+<!-- Join Server Modal -->
+@if (showJoinModal()) {
+<app-join-server-modal (close)="showJoinModal.set(false)" />
+}

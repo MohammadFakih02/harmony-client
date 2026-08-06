@@ -1,0 +1,33 @@
+<div class="relative">
+  <input
+    [id]="inputId()"
+    [type]="effectiveType()"
+    [placeholder]="placeholder()"
+    [autocomplete]="autocomplete()"
+    [value]="value()"
+    [disabled]="isDisabled()"
+    [class]="inputClass()"
+    [class.pr-11]="isPassword()"
+    [attr.aria-invalid]="error() ? 'true' : null"
+    [attr.aria-describedby]="error() ? inputId() + '-error' : null"
+    (input)="onInput($event)"
+    (blur)="onBlur()"
+  />
+  @if (isPassword()) {
+  <button
+    type="button"
+    tabindex="-1"
+    [attr.aria-label]="revealed() ? 'Hide password' : 'Show password'"
+    [attr.aria-pressed]="revealed()"
+    class="absolute inset-y-0 right-0 flex items-center px-3 text-faint hover:text-primary transition-colors focus:outline-none"
+    (click)="toggleReveal()"
+  >
+    <i class="fas" [class.fa-eye]="!revealed()" [class.fa-eye-slash]="revealed()"></i>
+  </button>
+  }
+</div>
+@if (error()) {
+<p [id]="inputId() + '-error'" role="alert" class="mt-1 text-xs text-danger">
+  {{ error() }}
+</p>
+}

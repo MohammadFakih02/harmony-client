@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HarmonyClient</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Harmony — a real-time communication platform with servers, channels, direct messages, and voice.">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Inter font: preconnect + direct <link> so the font CSS is discovered
+       immediately, instead of serially behind styles.css (was an @import there). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+
+  <!-- Google Identity Services — powers the "Sign in with Google" button (GoogleSignInButton).
+       ?hl=en pins the library's language; without it GIS renders the button in the
+       browser/OS locale (and can ignore renderButton's `locale` option). -->
+  <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
+
+  <!-- Apply the saved theme + background BEFORE first paint, so there's no
+       white flash and no wrong-theme flash while Angular boots. -->
+  <script>
+    (function () {
+      try {
+        // Stored as "{palette}:{mode}". Legacy single-axis values are mapped;
+        // the bg hexes duplicate styles.css --color-bg (must run before CSS loads).
+        var raw = localStorage.getItem('harmony-theme') || 'violet:dark';
+        var legacy = {
+          'theme-dark': 'violet:dark',
+          'theme-light': 'violet:light',
+          'theme-midnight': 'midnight:dark',
+          'theme-forest': 'forest:dark'
+        };
+        raw = legacy[raw] || raw;
+        var bgs = {
+          'violet:dark': '#0b0a10',
+          'violet:light': '#e7e5f0',
+          'midnight:dark': '#000000',
+          'midnight:light': '#e2e4e9',
+          'forest:dark': '#0a0e0b',
+          'forest:light': '#e2eae4'
+        };
+        if (!bgs[raw]) raw = 'violet:dark';
+        var parts = raw.split(':');
+        document.documentElement.classList.add('palette-' + parts[0], 'mode-' + parts[1]);
+        document.documentElement.style.backgroundColor = bgs[raw];
+      } catch (e) { /* localStorage blocked → fall back to CSS default */ }
+    })();
+  </script>
+
+  <!-- Boot splash styles. CSS-var fallbacks cover the moment before styles.css
+       loads; once it does, the values resolve per active theme. -->
+  <style>
+    #app-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      background-color: var(--color-bg, #0b0a10);
+      color: var(--color-text, #f4f3f7);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    #app-splash .app-splash-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    #app-splash .app-splash-brand .yin {
+      display: inline-block;
+      font-size: 1.4rem;
+      color: var(--color-accent, #8b5cf6);
+      animation: app-splash-spin 3s linear infinite;
+    }
+    #app-splash .app-splash-spinner {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 3px solid var(--color-surface-3, #2c2938);
+      border-top-color: var(--color-accent, #8b5cf6);
+      animation: app-splash-spin 0.8s linear infinite;
+    }
+    #app-splash .app-splash-msg {
+      font-size: 0.875rem;
+      color: var(--color-muted, #a1a1aa);
+      min-height: 1.25rem;
+      transition: opacity 0.25s ease;
+    }
+    @keyframes app-splash-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #app-splash .app-splash-spinner,
+      #app-splash .app-splash-brand .yin { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <app-root>
+    <!-- Shown until Angular bootstraps and replaces <app-root>'s contents. -->
+    <div id="app-splash">
+      <div class="app-splash-brand"><span class="yin">☯</span> Harmony</div>
+      <div class="app-splash-spinner"></div>
+      <div class="app-splash-msg" id="app-splash-msg">Starting up…</div>
+    </div>
+  </app-root>
+
+  <script>
+    (function () {
+      var el = document.getElementById('app-splash-msg');
+      if (!el) return;
+      var msgs = [
+        'Connecting to the server…',
+        'Establishing the realtime link…',
+        'Loading your guilds…',
+        'Syncing messages…',
+        'Almost ready…'
+      ];
+      var i = 0;
+      var id = setInterval(function () {
+        // Angular replaced <app-root> → splash gone → stop the timer.
+        if (!document.getElementById('app-splash-msg')) { clearInterval(id); return; }
+        i = (i + 1) % msgs.length;
+        el.style.opacity = '0';
+        setTimeout(function () {
+          if (!el.isConnected) return;
+          el.textContent = msgs[i];
+          el.style.opacity = '1';
+        }, 250);
+      }, 1600);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+@if (lightbox.current(); as img) {
+<div
+  class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-8 animate-fade-in cursor-zoom-out"
+  (click)="lightbox.close()"
+>
+  <img
+    [src]="img.url"
+    [alt]="img.alt"
+    class="max-w-full max-h-full object-contain rounded-lg shadow-modal cursor-default"
+    (click)="$event.stopPropagation()"
+  />
+  <div class="absolute top-4 right-4 flex items-center gap-2" (click)="$event.stopPropagation()">
+    <button
+      class="w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-micro disabled:opacity-60"
+      title="Download"
+      aria-label="Download image"
+      [disabled]="downloading()"
+      (click)="download()"
+    >
+      <i class="fas" [class.fa-download]="!downloading()" [class.fa-spinner]="downloading()" [class.fa-spin]="downloading()"></i>
+    </button>
+    <button
+      class="w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-micro"
+      title="Close"
+      aria-label="Close"
+      (click)="lightbox.close()"
+    >
+      <i class="fas fa-xmark text-lg"></i>
+    </button>
+  </div>
+</div>
+}

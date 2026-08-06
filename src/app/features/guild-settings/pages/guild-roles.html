@@ -1,0 +1,160 @@
+<div class="flex h-full flex-col">
+  <div class="shrink-0 px-8 pt-12 pb-3">
+    <h2 class="text-xl font-bold text-primary">Roles</h2>
+    <p class="text-sm text-muted">Organize members and control their permissions.</p>
+  </div>
+
+  <div class="flex min-h-0 flex-1 border-t border-border-subtle">
+    <!-- Role list -->
+    <div class="flex w-52 min-w-52 flex-col border-r border-border-subtle">
+      <button
+        type="button"
+        class="m-2 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 transition-micro"
+        (click)="createRole()"
+      >
+        <i class="fas fa-plus mr-1"></i> Create Role
+      </button>
+      <div class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
+        @for (role of roles(); track role.id) {
+        <div
+          class="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-micro"
+          [class]="role.id === selectedId() ? 'bg-surface-3' : 'hover:bg-surface-2'"
+          (click)="select(role)"
+        >
+          <span
+            class="h-2.5 w-2.5 shrink-0 rounded-full"
+            [style.background]="colorHex(role.color) ?? 'var(--color-faint, #888)'"
+          ></span>
+          <span class="flex-1 truncate text-sm text-primary">{{ role.name }}</span>
+          @if (!role.isDefault) {
+          <span class="flex flex-col opacity-0 transition-micro group-hover:opacity-100">
+            <button type="button" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'up'); $event.stopPropagation()">
+              <i class="fas fa-caret-up"></i>
+            </button>
+            <button type="button" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'down'); $event.stopPropagation()">
+              <i class="fas fa-caret-down"></i>
+            </button>
+          </span>
+          }
+        </div>
+        }
+      </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="flex min-w-0 flex-1 flex-col">
+      <div class="flex-1 overflow-y-auto p-6">
+        @if (selected(); as role) {
+        <div class="flex flex-col gap-5">
+          @if (error()) {
+          <p class="text-sm text-danger">{{ error() }}</p>
+          }
+
+          <!-- Display -->
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold uppercase tracking-wider text-muted">Role name</label>
+              <input
+                type="text"
+                maxlength="100"
+                class="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-primary transition-micro focus:border-accent focus:outline-none disabled:opacity-60"
+                [ngModel]="name()"
+                (ngModelChange)="name.set($event)"
+                (keydown.enter)="dirty() && save()"
+                [disabled]="role.isDefault"
+              />
+              @if (role.isDefault) {
+              <span class="text-2xs text-faint">The @&#8203;everyone role's name can't be changed.</span>
+              }
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold uppercase tracking-wider text-muted">Color</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  class="flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle text-faint"
+                  title="No color"
+                  (click)="color.set(0)"
+                >
+                  @if (color() === 0) { <i class="fas fa-check text-xs"></i> }
+                </button>
+                @for (preset of colorPresets; track preset) {
+                <button
+                  type="button"
+                  class="flex h-7 w-7 items-center justify-center rounded-md"
+                  [style.background]="colorHex(preset)"
+                  (click)="color.set(preset)"
+                >
+                  @if (color() === preset) { <i class="fas fa-check text-xs text-white"></i> }
+                </button>
+                }
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
+                <input type="checkbox" [ngModel]="hoisted()" (ngModelChange)="hoisted.set($event)" />
+                Display role members separately from online members
+              </label>
+              <label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
+                <input type="checkbox" [ngModel]="mentionable()" (ngModelChange)="mentionable.set($event)" />
+                Allow anyone to @&#8203;mention this role
+              </label>
+            </div>
+          </div>
+
+          <!-- Permissions -->
+          <div class="flex flex-col gap-4">
+            @for (group of groups; track group.category) {
+            <div class="flex flex-col gap-1.5">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-muted">{{ group.category }}</h3>
+              @for (perm of group.perms; track perm.bit) {
+              <label class="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-micro hover:bg-surface-2">
+                <input
+                  type="checkbox"
+                  class="mt-0.5"
+                  [checked]="hasBit(bits(), perm.bit)"
+                  (change)="togglePerm(perm.bit)"
+                />
+                <span class="flex min-w-0 flex-col">
+                  <span class="text-sm leading-tight text-primary">{{ perm.label }}</span>
+                  <span class="text-xs leading-tight text-faint">{{ perm.description }}</span>
+                </span>
+              </label>
+              }
+            </div>
+            }
+          </div>
+        </div>
+        } @else {
+        <p class="pt-10 text-center text-sm text-faint">Select a role to edit, or create one.</p>
+        }
+      </div>
+
+      <!-- Footer actions -->
+      @if (selected(); as role) {
+      <div class="flex shrink-0 items-center gap-2 border-t border-border-subtle px-6 py-3">
+        @if (!role.isDefault) {
+        <button
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-sm text-danger transition-micro hover:bg-danger/10"
+          (click)="deleteRole()"
+        >
+          Delete Role
+        </button>
+        }
+        <div class="flex-1"></div>
+        <button
+          type="button"
+          class="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition-micro hover:opacity-90 disabled:opacity-40"
+          [disabled]="!dirty() || saving()"
+          (click)="save()"
+        >
+          {{ saving() ? 'Saving…' : 'Save Changes' }}
+        </button>
+      </div>
+      }
+    </div>
+  </div>
+</div>

@@ -1,0 +1,869 @@
+import {
+  Component,
+  ElementRef,
+  Injector,
+  OnDestroy,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { GatewayEvents } from '../../../core/hub/gateway-events';
+import { ChannelStore } from '../../../core/stores/channel.store';
+import { MessageStore } from '../../../core/stores/message.store';
+import { MemberStore } from '../../../core/stores/member.store';
+import { RoleStore } from '../../../core/stores/role.store';
+import { DmStore } from '../../../core/stores/dm.store';
+import { NicknameStore } from '../../../core/stores/nickname.store';
+import { dmLabel } from '../../../core/models/direct-message.models';
+import { ConfettiService } from '../../../core/services/confetti.service';
+import { DirectMessageService } from '../../../core/services/direct-message.service';
+import { DraftService } from '../../../core/services/draft.service';
+import { FileService } from '../../../core/services/file.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { SignalRService } from '../../../core/services/signalr.service';
+import { AutoGrow } from '../../../shared/directives/auto-grow.directive';
+import { MentionAutocomplete, EmojiPicker, EmojiSuggest } from '../../../shared/ui';
+import { MentionCandidate } from '../../../core/models/member.models';
+import { buildGuildMentionCandidates } from '../../../shared/util/mention-candidates';
+import { fuzzyFilter } from '../../../shared/util/fuzzy-match';
+import {
+  MentionTrigger,
+  applyMention,
+  detectMentionTrigger,
+} from '../../../shared/util/mention-trigger';
+import {
+  EmojiTrigger,
+  applyEmoji,
+  convertCompletedShortcode,
+  detectEmojiTrigger,
+} from '../../../shared/util/emoji-shortcode';
+import { EmojiItem, searchEmojis } from '../../../shared/util/emoji-data';
+import { pushRecent } from '../../../shared/util/emoji-recents';
+import { toggleWrap } from '../../../shared/util/format-toggle';
+import {
+  FileKind,
+  fileIcon,
+  fileKind,
+  isAllowedType,
+  effectiveContentType,
+} from '../../../shared/util/file-kind';
+
+const MAX_SIZE_BYTES = 50 * 1024 * 1024; // mirrors backend MaxFileSizeBytes
+const MAX_FILES = 10; // mirrors backend MessageService.MaxAttachments
+
+let _localIdCounter = 0;
+
+interface StagedFile {
+  localId: number;
+  name: string;
+  kind: FileKind;
+  icon: string; // FA class for the non-image tile
+  previewUrl: string; // object URL for the image thumbnail ('' for non-images)
+  progress: number; // 0-100 (PUT progress)
+  status: 'uploading' | 'done' | 'error';
+  fileId?: string; // server id, once confirmed
+}
+
+@Component({
+  selector: 'app-message-input',
+  standalone: true,
+  imports: [FormsModule, AutoGrow, OverlayModule, MentionAutocomplete, EmojiPicker, EmojiSuggest],
+  templateUrl: './message-input.html',
+})
+export class MessageInput implements OnDestroy {
+  protected readonly channelStore = inject(ChannelStore);
+  protected readonly messageStore = inject(MessageStore);
+  private readonly memberStore = inject(MemberStore);
+  private readonly roleStore = inject(RoleStore);
+  private readonly dmStore = inject(DmStore);
+  private readonly nicknameStore = inject(NicknameStore);
+  private readonly dmService = inject(DirectMessageService);
+  private readonly confetti = inject(ConfettiService);
+  private readonly drafts = inject(DraftService);
+  private readonly fileService = inject(FileService);
+  private readonly auth = inject(AuthService);
+  private readonly signalR = inject(SignalRService);
+  private readonly gateway = inject(GatewayEvents);
+  private readonly injector = inject(Injector);
+
+  // Throttle outgoing "started typing" pings — at most one per this window while actively typing.
+  private lastTypingAt = 0;
+
+  protected readonly draftInput = viewChild<ElementRef<HTMLTextAreaElement>>('draftInput');
+
+  // Emitted when the user presses ArrowUp on an empty composer — the channel wires this
+  // to the message list to start editing their last message (Discord shortcut).
+  readonly editLastRequested = output<void>();
+
+  protected readonly draft = signal('');
+  protected readonly sending = signal(false);
+  protected readonly staged = signal<StagedFile[]>([]);
+  protected readonly attachError = signal<string | null>(null);
+
+  // --- @-mention autocomplete ---
+
+  protected readonly mentionTrigger = signal<MentionTrigger | null>(null);
+  protected readonly mentionOpen = computed(() => this.mentionTrigger() !== null);
+  protected readonly mentionHighlightedIndex = signal(0);
+
+  // Anchored above the composer (Discord-style), aligned to its left edge.
+  protected readonly mentionOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+  ];
+
+  private readonly guildCandidates = computed<MentionCandidate[]>(() => {
+    const guildId = this.messageStore.activeGuildId();
+    if (!guildId) return [];
+    return buildGuildMentionCandidates(
+      this.memberStore.membersOf(guildId),
+      this.roleStore.rolesOf(guildId),
+    );
+  });
+
+  private readonly dmCandidates = computed<MentionCandidate[]>(() => {
+    const channelId = this.messageStore.activeChannelId();
+    if (!channelId) return [];
+    // Every other participant is mentionable (a single peer for a 1:1, all members for a group).
+    return this.dmStore.find(channelId)?.participants ?? [];
+  });
+
+  protected readonly mentionCandidates = computed<MentionCandidate[]>(() => {
+    const trigger = this.mentionTrigger();
+    if (!trigger) return [];
+    // You can't mention yourself — exclude your own member/participant entry (the broadcast
+    // and role entries carry an empty userId, so they're never filtered out).
+    const myId = this.auth.currentUser()?.id;
+    const pool = (this.isDm() ? this.dmCandidates() : this.guildCandidates()).filter(
+      (c) => c.userId !== myId,
+    );
+    // Fuzzy match so "owner" finds "seed_owner" and a small typo still resolves.
+    return fuzzyFilter(pool, trigger.query, (c) => c.username).slice(0, 10);
+  });
+
+  // --- :shortcode emoji autocomplete (the emoji sibling of the '@' popup above) ---
+
+  protected readonly emojiTrigger = signal<EmojiTrigger | null>(null);
+  protected readonly emojiSuggestOpen = computed(() => this.emojiTrigger() !== null);
+  protected readonly emojiHighlightedIndex = signal(0);
+
+  protected readonly emojiSuggestions = computed<EmojiItem[]>(() => {
+    const trigger = this.emojiTrigger();
+    return trigger ? searchEmojis(trigger.query, 8) : [];
+  });
+
+  // --- formatting toolbar ---
+
+  /**
+   * Wraps in the markdown subset `markdown.ts` renders; `close` defaults to `open`. `placeholder`
+   * is the sample text inserted (and auto-selected) when the button is clicked with nothing
+   * selected, so the user types over it instead of navigating between empty markers.
+   */
+  protected readonly formatActions: {
+    icon: string;
+    label: string;
+    open: string;
+    close?: string;
+    placeholder: string;
+  }[] = [
+    { icon: 'fa-bold', label: 'Bold', open: '**', placeholder: 'bold text' },
+    { icon: 'fa-italic', label: 'Italic', open: '*', placeholder: 'italic text' },
+    { icon: 'fa-underline', label: 'Underline', open: '__', placeholder: 'underlined text' },
+    { icon: 'fa-strikethrough', label: 'Strikethrough', open: '~~', placeholder: 'strikethrough' },
+    { icon: 'fa-eye-slash', label: 'Spoiler', open: '||', placeholder: 'spoiler' },
+    { icon: 'fa-code', label: 'Inline code', open: '`', placeholder: 'code' },
+    { icon: 'fa-file-code', label: 'Code block', open: '```\n', close: '\n```', placeholder: 'code' },
+  ];
+
+  // --- emoji picker ---
+
+  protected readonly emojiOpen = signal(false);
+
+  // Anchored above the composer, aligned to its right edge (where the emoji button sits).
+  protected readonly emojiOverlayPositions: ConnectionPositionPair[] = [
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
+  ];
+
+  protected readonly channelName = computed(
+    () => this.channelStore.selectedChannel()?.name ?? 'channel',
+  );
+
+  // Composer placeholder: "Message #general" in a guild channel, "Message @Alice" / "Message
+  // <group>" in a DM (no leading '#'), or the slowmode countdown while cooling down.
+  protected readonly composerPlaceholder = computed(() => {
+    if (this.cooldownRemaining() > 0) return `Slowmode active — wait ${this.cooldownRemaining()}s`;
+    if (this.isDm()) {
+      const channelId = this.messageStore.activeChannelId();
+      const dm = channelId ? this.dmStore.find(channelId) : undefined;
+      if (!dm) return 'Message';
+      const name = dmLabel(dm, (p) => this.nicknameStore.nicknameOf(p.userId) ?? p.username);
+      return `Message ${dm.isGroup ? name : '@' + name}`;
+    }
+    return `Message #${this.channelName()}`;
+  });
+
+  // Wall-clock signal so the composer re-enables itself the moment a timeout lapses. A timeout emits
+  // MemberUpdated only when set / manually cleared — never on natural expiry — so we re-evaluate
+  // against the clock. Gated on an active self-timeout so it idles once the timeout is gone.
+  private readonly now = signal(Date.now());
+  // 1s so the slowmode countdown ticks smoothly; gated on an active timeout OR cooldown so it idles.
+  private readonly ticker = setInterval(() => {
+    const timeout = this.myTimeoutUntil();
+    const cooldown = this.cooldownUntil();
+    if ((timeout != null && timeout > this.now()) || (cooldown != null && cooldown > this.now())) {
+      this.now.set(Date.now());
+    }
+  }, 1000);
+
+  // Slowmode — the active channel's per-user cooldown (0 = off / DM / moderator). Moderators
+  // (ManageMessages or ManageChannels) are exempt, matching the server gate.
+  private readonly slowmodeSeconds = computed(() => {
+    const channel = this.channelStore.selectedChannel();
+    if (!channel || this.isDm()) return 0;
+    const caps = this.channelStore.currentCapabilities();
+    if (caps?.canManageMessages || caps?.canManageChannels) return 0;
+    return channel.slowmodeSeconds ?? 0;
+  });
+
+  // When the current cooldown ends (unix-ms), or null. Set after each successful send; reset on
+  // channel switch (the effect in the constructor).
+  private readonly cooldownUntil = signal<number | null>(null);
+
+  /** Remaining whole seconds of the slowmode cooldown, or 0 when not cooling down. */
+  protected readonly cooldownRemaining = computed(() => {
+    const until = this.cooldownUntil();
+    if (until == null) return 0;
+    return Math.max(0, Math.ceil((until - this.now()) / 1000));
+  });
+
+  // The caller's own member record in the active guild (null in a DM, or before members load).
+  // `communicationDisabledUntil` here tracks live via the MemberUpdated gateway event, so a timeout
+  // applied/cleared mid-session is reflected without a channel switch.
+  private readonly myTimeoutUntil = computed<number | null>(() => {
+    const guildId = this.messageStore.activeGuildId();
+    const myId = this.auth.currentUser()?.id;
+    if (!guildId || !myId) return null;
+    return this.memberStore.membersOf(guildId).find((m) => m.userId === myId)
+      ?.communicationDisabledUntil ?? null;
+  });
+
+  /** Live timeout state — derived from my member record + the wall clock (not the load-time cap). */
+  protected readonly timedOut = computed(() => {
+    const until = this.myTimeoutUntil();
+    return until != null && until > this.now();
+  });
+
+  // Whether the caller has permission to send here, independent of any timeout. The capability's
+  // `canSend` is timeout-aware at load time, so recover the pure-permission bit as `canSend OR
+  // timedOut` (defaults true while caps load). The one imperfect corner — lacking SendMessage *and*
+  // being timed out — resolves on the next channel switch, and the server enforces regardless.
+  private readonly canSendPermission = computed(() => {
+    const caps = this.channelStore.currentCapabilities();
+    if (!caps) return true;
+    return caps.canSend || caps.timedOut;
+  });
+
+  // A DM send can be blocked by the peer's DM-privacy checklist or a block — no guild capability
+  // covers DMs. Fetched from /dm/{id}/send-gate on DM open (the effect below); fail-open (true)
+  // while loading or on error, since the server still enforces on the actual send. Keyed by channel
+  // so a stale response from a DM the user already left is ignored.
+  private readonly dmGate = signal<{
+    channelId: string;
+    canSend: boolean;
+    reason: string | null;
+  } | null>(null);
+
+  private readonly dmCanSend = computed(() => {
+    if (!this.isDm()) return true;
+    const gate = this.dmGate();
+    return gate?.channelId === this.messageStore.activeChannelId() ? gate.canSend : true;
+  });
+
+  // Whether the caller may send here right now: has permission, isn't timed out (live), and — in a
+  // DM — passes the peer's block/privacy gate.
+  protected readonly canSendInChannel = computed(
+    () => this.canSendPermission() && !this.timedOut() && this.dmCanSend(),
+  );
+
+  // A DM (no active guild) has no capability endpoint — attaching is always allowed there.
+  protected readonly isDm = computed(
+    () => this.messageStore.activeChannelId() != null && this.messageStore.activeGuildId() == null,
+  );
+
+  // Attach button is hidden when the caller lacks AttachFiles (defaults to false until
+  // capabilities load — the server enforces regardless). Always available in DMs.
+  protected readonly canAttach = computed(
+    () => this.isDm() || (this.channelStore.currentCapabilities()?.canAttach ?? false),
+  );
+
+  // Explains a disabled input — DM block/privacy, live timeout, or missing permission.
+  protected readonly disabledReason = computed(() => {
+    if (this.canSendInChannel()) return null;
+    if (!this.dmCanSend()) return this.dmGate()?.reason ?? "You can't message this user.";
+    return this.timedOut()
+      ? "You're timed out and can't send messages."
+      : 'You do not have permission to send messages in this channel.';
+  });
+
+  protected readonly uploading = computed(() =>
+    this.staged().some((s) => s.status === 'uploading'),
+  );
+
+  private readonly hasConfirmedAttachments = computed(() =>
+    this.staged().some((s) => s.status === 'done'),
+  );
+
+  protected readonly canSend = computed(
+    () =>
+      (this.draft().trim().length > 0 || this.hasConfirmedAttachments()) &&
+      !this.sending() &&
+      !this.uploading() &&
+      this.canSendInChannel() &&
+      this.cooldownRemaining() === 0,
+  );
+
+  constructor() {
+    // Guild mention candidates need the member list cached before the user types '@' —
+    // load it as soon as a guild channel is active (same trigger as member-sidebar).
+    effect(() => {
+      const guildId = this.messageStore.activeGuildId();
+      if (guildId) this.memberStore.loadIfNeeded(guildId);
+    });
+
+    // Focus the composer when the user starts a reply (Reply clicked in the message list).
+    effect(() => {
+      if (this.messageStore.replyTarget()) {
+        queueMicrotask(() => this.draftInput()?.nativeElement.focus());
+      }
+    });
+
+    // Load the DM send-gate whenever a DM is opened, so the composer locks like a no-permission
+    // channel (block / friends-only) instead of letting a doomed send fail. Guild channels use caps.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      const isDm = this.isDm();
+      untracked(() => {
+        if (!channelId || !isDm) {
+          this.dmGate.set(null);
+          return;
+        }
+        this.loadDmGate(channelId);
+      });
+    });
+
+    // Re-check the gate live when the peer blocks/unblocks me or changes their DM privacy (both now
+    // broadcast DmChannelUpdated to the DM's participants), or when a friendship is severed (a
+    // friends-only gate flips). Without this the composer stays enabled/disabled until a refresh.
+    this.gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
+      if (e.type !== 'DmChannelUpdated' && e.type !== 'FriendRemoved') return;
+      const channelId = this.messageStore.activeChannelId();
+      if (!this.isDm() || !channelId) return;
+      if (e.type === 'DmChannelUpdated' && e.channelId !== channelId) return;
+      this.loadDmGate(channelId);
+    });
+
+    // A slowmode cooldown is per-channel — clear it when switching channels so a new channel
+    // isn't blocked by the previous one's countdown.
+    effect(() => {
+      this.messageStore.activeChannelId();
+      untracked(() => this.cooldownUntil.set(null));
+    });
+
+    // Load this channel's saved draft on open, so an unsent message survives a channel switch and a
+    // reload. Each keystroke persists via writeDraft(), so switching away already saved the latest;
+    // this only reads it back. A raw set() (not writeDraft) — loading must not re-persist.
+    effect(() => {
+      const channelId = this.messageStore.activeChannelId();
+      untracked(() => {
+        this.draft.set(channelId ? this.drafts.get(channelId) : '');
+        // Drop any autocomplete popup that belonged to the channel we just left.
+        this.mentionTrigger.set(null);
+        this.emojiTrigger.set(null);
+      });
+    });
+
+    // Restore the server-authoritative cooldown on channel open: the gate's Redis TTL survives a
+    // leave/rejoin even though the local timer doesn't, so read the remaining seconds reported by
+    // the open load and rebuild the countdown from it. Gated on slowmode actually applying to us
+    // (moderators/DMs are exempt → slowmodeSeconds() is 0), so a stale key never blocks an exempt
+    // sender. Runs after the reset effect above (the store value lands once the load completes).
+    effect(() => {
+      const remaining = this.messageStore.slowmodeRemainingSeconds();
+      const applies = this.slowmodeSeconds() > 0;
+      untracked(() => {
+        if (remaining > 0 && applies) {
+          this.cooldownUntil.set(Date.now() + remaining * 1000);
+        }
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.ticker);
+  }
+
+  /**
+   * Fetches the DM send-gate for `channelId` and stores it (keyed by channel so a response that
+   * lands after the user switched away is ignored). Fail-open — the server still enforces on the
+   * real send. Called on DM open and whenever a block/privacy/friendship change signals a re-check.
+   */
+  private loadDmGate(channelId: string): void {
+    this.dmService
+      .sendGate(channelId)
+      .then((gate) => {
+        if (this.messageStore.activeChannelId() === channelId) {
+          this.dmGate.set({ channelId, canSend: gate.canSend, reason: gate.reason });
+        }
+      })
+      .catch(() => {
+        /* fail-open — the server enforces on the actual send regardless */
+      });
+  }
+
+  /**
+   * Sets the composer text AND saves it as this channel's draft (so it survives a channel switch and
+   * a reload). Every user-driven edit routes through here; programmatic clears on send and the
+   * channel-open load use a raw draft.set() instead so they don't re-persist.
+   */
+  private writeDraft(text: string): void {
+    this.draft.set(text);
+    const channelId = this.messageStore.activeChannelId();
+    if (channelId) this.drafts.set(channelId, text);
+  }
+
+  onDraftInput(value: string): void {
+    const el = this.draftInput()?.nativeElement;
+    const caret = el?.selectionStart ?? value.length;
+
+    // A just-completed exact `:shortcode:` converts to its emoji in place.
+    const converted = convertCompletedShortcode(value, caret);
+    if (converted) {
+      this.writeDraft(converted.text);
+      this.emojiTrigger.set(null);
+      this.restoreCaret(converted.caret);
+      this.signalTyping(converted.text);
+      return;
+    }
+
+    this.writeDraft(value);
+    const trigger = detectMentionTrigger(value, caret);
+    if (trigger) this.closeEmoji(); // don't stack the emoji picker over the mention popup
+    this.mentionTrigger.set(trigger);
+    this.mentionHighlightedIndex.set(0);
+    const emojiTrigger = trigger ? null : detectEmojiTrigger(value, caret);
+    if (emojiTrigger) this.closeEmoji(); // ...nor over the shortcode popup
+    this.emojiTrigger.set(emojiTrigger);
+    this.emojiHighlightedIndex.set(0);
+    this.signalTyping(value);
+  }
+
+  /** Refocuses the composer and parks the caret (collapsed) at `caret` after the DOM syncs. */
+  private restoreCaret(caret: number): void {
+    queueMicrotask(() => {
+      const input = this.draftInput()?.nativeElement;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
+  /** Sends a throttled "started typing" ping (or an immediate "stopped" once the composer empties). */
+  private signalTyping(value: string): void {
+    const channelId = this.messageStore.activeChannelId();
+    if (!channelId) return;
+    if (!value.trim()) {
+      this.stopTypingSignal();
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastTypingAt > 3000) {
+      this.signalR.startTyping(channelId);
+      this.lastTypingAt = now;
+    }
+  }
+
+  private stopTypingSignal(): void {
+    const channelId = this.messageStore.activeChannelId();
+    this.lastTypingAt = 0;
+    if (channelId) this.signalR.stopTyping(channelId);
+  }
+
+  selectMention(candidate: MentionCandidate): void {
+    const trigger = this.mentionTrigger();
+    if (!trigger) return;
+
+    const { text, caret } = applyMention(this.draft(), trigger, candidate.username);
+    this.writeDraft(text);
+    this.closeMentionAutocomplete();
+
+    queueMicrotask(() => {
+      const el = this.draftInput()?.nativeElement;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
+  }
+
+  closeMentionAutocomplete(): void {
+    this.mentionTrigger.set(null);
+  }
+
+  /** Replaces the `:query` trigger with the picked emoji and records it as a recent. */
+  selectEmojiSuggestion(emoji: EmojiItem): void {
+    const trigger = this.emojiTrigger();
+    if (!trigger) return;
+    const { text, caret } = applyEmoji(this.draft(), trigger, emoji.char);
+    this.writeDraft(text);
+    this.emojiTrigger.set(null);
+    pushRecent(emoji.char);
+    this.restoreCaret(caret);
+  }
+
+  closeEmojiSuggest(): void {
+    this.emojiTrigger.set(null);
+  }
+
+  /**
+   * Applies a markdown marker pair — the toolbar buttons and the Ctrl+B/I/U shortcuts. With a
+   * selection it toggle-wraps it (so toggles round-trip). With nothing selected it inserts
+   * `placeholder` between the markers and auto-selects it, so the user just types over the sample
+   * text instead of navigating between two empty markers.
+   */
+  applyFormat(open: string, close: string | undefined, placeholder: string): void {
+    const el = this.draftInput()?.nativeElement;
+    const value = this.draft();
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+
+    let text: string;
+    let selectionStart: number;
+    let selectionEnd: number;
+    if (start === end) {
+      const closeMarker = close ?? open;
+      text = value.slice(0, start) + open + placeholder + closeMarker + value.slice(end);
+      selectionStart = start + open.length;
+      selectionEnd = selectionStart + placeholder.length;
+    } else {
+      const result = toggleWrap(value, start, end, open, close);
+      text = result.text;
+      selectionStart = result.selectionStart;
+      selectionEnd = result.selectionEnd;
+    }
+
+    this.writeDraft(text);
+    // Restore the selection AFTER Angular commits the ngModel write. draft.set() schedules change
+    // detection, whose writeValue re-assigns textarea.value and resets the caret to the end — a
+    // queueMicrotask restore races ahead of that and loses the highlight. afterNextRender runs once
+    // the DOM write has landed, so the placeholder stays selected for the user to type over.
+    afterNextRender(
+      () => {
+        const input = this.draftInput()?.nativeElement;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(selectionStart, selectionEnd);
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /**
+   * Refocuses the composer — called after an inline message edit closes so the ArrowUp-to-edit
+   * shortcut keeps working (the edit box, not the composer, held focus; without this the next
+   * ArrowUp lands on the message list and just scrolls it).
+   */
+  focus(): void {
+    queueMicrotask(() => this.draftInput()?.nativeElement.focus());
+  }
+
+  toggleEmoji(): void {
+    const opening = !this.emojiOpen();
+    if (opening) {
+      this.closeMentionAutocomplete(); // the overlays share the composer origin — never stack
+      this.closeEmojiSuggest();
+    }
+    this.emojiOpen.set(opening);
+  }
+
+  closeEmoji(): void {
+    this.emojiOpen.set(false);
+  }
+
+  /** Inserts the chosen emoji at the caret and keeps the picker open (Discord-style). */
+  onEmojiSelect(char: string): void {
+    this.insertAtCaret(char);
+  }
+
+  /** Splices `text` into the draft at the current caret (or the end), then restores the caret after it. */
+  private insertAtCaret(text: string): void {
+    const el = this.draftInput()?.nativeElement;
+    const value = this.draft();
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const next = value.slice(0, start) + text + value.slice(end);
+    this.writeDraft(next);
+
+    queueMicrotask(() => {
+      const input = this.draftInput()?.nativeElement;
+      if (!input) return;
+      const caret = start + text.length;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
+  async send(): Promise<void> {
+    const content = this.draft().trim();
+    const fileIds = this.staged()
+      .filter((s) => s.status === 'done' && s.fileId)
+      .map((s) => s.fileId!);
+
+    if (
+      (!content && fileIds.length === 0) ||
+      this.sending() ||
+      this.uploading() ||
+      !this.canSendInChannel() ||
+      // Enter calls send() directly, so the slowmode cooldown must be enforced here too —
+      // the disabled send button (canSend) alone doesn't cover the keyboard path.
+      this.cooldownRemaining() > 0
+    )
+      return;
+
+    // Snapshot + clear the reply target before the await so the banner disappears immediately;
+    // the id rides along on the optimistic message (and survives a retry).
+    const replyToId = this.messageStore.replyTarget()?.messageId ?? null;
+    this.messageStore.clearReplyTarget();
+
+    // Easter egg: sending a 🎉 rains confetti (client-side only, honours reduce-motion).
+    if (content.includes('🎉')) this.confetti.burst();
+
+    this.sending.set(true);
+    this.draft.set('');
+    // The message is committed — drop the saved draft so it doesn't reappear on the next open.
+    const sentChannelId = this.messageStore.activeChannelId();
+    if (sentChannelId) this.drafts.clear(sentChannelId);
+    this.stopTypingSignal(); // the message is on its way — clear our typing indicator for others
+    this.closeMentionAutocomplete();
+    this.closeEmojiSuggest();
+    // Clear staging up front; the optimistic message carries the ids and can be retried
+    // (the ids are already confirmed, so retryMessage re-sends the same ones).
+    const toRevoke = this.staged();
+    this.staged.set([]);
+    this.attachError.set(null);
+
+    try {
+      await this.messageStore.sendMessage(content, fileIds, replyToId);
+      // Start the slowmode cooldown optimistically (the server enforces the real gate; this just
+      // reflects it in the UI). Moderators/DMs have slowmodeSeconds() === 0, so no cooldown.
+      const cooldown = this.slowmodeSeconds();
+      if (cooldown > 0) {
+        this.now.set(Date.now());
+        this.cooldownUntil.set(Date.now() + cooldown * 1000);
+      }
+    } finally {
+      this.sending.set(false);
+      toRevoke.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+    }
+  }
+
+  onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = ''; // reset so re-picking the same file fires change again
+    this.stageFiles(files);
+  }
+
+  /**
+   * Paste an image (or any file) straight into the composer — the screenshot → Ctrl+V flow. Only
+   * intercepts when the clipboard actually carries files; plain-text pastes fall through untouched.
+   */
+  onPaste(event: ClipboardEvent): void {
+    const files = Array.from(event.clipboardData?.files ?? []);
+    if (files.length === 0) return; // ordinary text/markup paste — leave it to the textarea
+    if (!this.canAttach()) return; // no attach permission here — nothing to stage
+    event.preventDefault();
+    this.stageFiles(files);
+  }
+
+  /** Validates + uploads a batch of files (from the picker or a paste), stopping at the cap. */
+  private stageFiles(files: File[]): void {
+    this.attachError.set(null);
+    for (const file of files) {
+      if (this.tryStage(file) === 'full') {
+        this.attachError.set(`You can attach up to ${MAX_FILES} files.`);
+        break;
+      }
+    }
+  }
+
+  /** Runs one file through the size/type/count guards and starts its upload when it passes. */
+  private tryStage(file: File): 'staged' | 'rejected' | 'full' {
+    if (this.staged().length >= MAX_FILES) return 'full';
+    // Fall back to a filename-extension MIME for signature-less text (.md reports empty file.type).
+    const contentType = effectiveContentType(file);
+    if (!isAllowedType(contentType)) {
+      this.attachError.set("This file type isn't supported.");
+      return 'rejected';
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      this.attachError.set('Files must be 50 MB or smaller.');
+      return 'rejected';
+    }
+    this.startUpload(file, contentType);
+    return 'staged';
+  }
+
+  private async startUpload(file: File, contentType: string): Promise<void> {
+    const localId = ++_localIdCounter;
+    const kind = fileKind(contentType);
+    const entry: StagedFile = {
+      localId,
+      name: file.name,
+      kind,
+      icon: fileIcon(contentType),
+      // Only images get a thumbnail object URL; other kinds show an icon tile.
+      previewUrl: kind === 'image' ? URL.createObjectURL(file) : '',
+      progress: 0,
+      status: 'uploading',
+    };
+    this.staged.update((s) => [...s, entry]);
+
+    const guildId = this.messageStore.activeGuildId(); // null for a DM
+    const channelId = this.messageStore.activeChannelId();
+    if (!channelId) {
+      this.patchStaged(localId, { status: 'error' });
+      return;
+    }
+
+    try {
+      const presign = await this.fileService.presign(guildId, channelId, {
+        filename: file.name,
+        contentType,
+        sizeBytes: file.size,
+      });
+      // The presigned PUT binds Content-Type into the signature — send the effective type, not the
+      // File's own (which the browser leaves empty for .md), or the upload fails the signature check.
+      await this.fileService.upload(presign.uploadUrl, file, (pct) =>
+        this.patchStaged(localId, { progress: pct }),
+        contentType,
+      );
+      const confirmed = await this.fileService.confirm(guildId, channelId, presign.fileId);
+      this.patchStaged(localId, { status: 'done', fileId: confirmed.id, progress: 100 });
+    } catch (err) {
+      console.error('[attach] upload failed', err);
+      this.patchStaged(localId, { status: 'error' });
+      this.attachError.set(
+        err instanceof Error ? err.message : 'Upload failed. Check your connection and try again.',
+      );
+    }
+  }
+
+  removeStaged(localId: number): void {
+    const entry = this.staged().find((s) => s.localId === localId);
+    if (entry) URL.revokeObjectURL(entry.previewUrl);
+    this.staged.update((s) => s.filter((x) => x.localId !== localId));
+  }
+
+  private patchStaged(localId: number, partial: Partial<StagedFile>): void {
+    this.staged.update((s) =>
+      s.map((x) => (x.localId === localId ? { ...x, ...partial } : x)),
+    );
+  }
+
+  onKeydown(event: KeyboardEvent): void {
+    if (this.mentionOpen()) {
+      const candidates = this.mentionCandidates();
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          this.mentionHighlightedIndex.set(
+            candidates.length ? (this.mentionHighlightedIndex() + 1) % candidates.length : 0,
+          );
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.mentionHighlightedIndex.set(
+            candidates.length
+              ? (this.mentionHighlightedIndex() - 1 + candidates.length) % candidates.length
+              : 0,
+          );
+          return;
+        case 'Enter':
+        case 'Tab':
+          event.preventDefault();
+          if (candidates.length > 0) this.selectMention(candidates[this.mentionHighlightedIndex()]);
+          else this.closeMentionAutocomplete();
+          return;
+        case 'Escape':
+          event.preventDefault();
+          this.closeMentionAutocomplete();
+          return;
+      }
+    }
+
+    if (this.emojiSuggestOpen()) {
+      const suggestions = this.emojiSuggestions();
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          this.emojiHighlightedIndex.set(
+            suggestions.length ? (this.emojiHighlightedIndex() + 1) % suggestions.length : 0,
+          );
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.emojiHighlightedIndex.set(
+            suggestions.length
+              ? (this.emojiHighlightedIndex() - 1 + suggestions.length) % suggestions.length
+              : 0,
+          );
+          return;
+        case 'Enter':
+        case 'Tab':
+          event.preventDefault();
+          if (suggestions.length > 0)
+            this.selectEmojiSuggestion(suggestions[this.emojiHighlightedIndex()]);
+          else this.closeEmojiSuggest();
+          return;
+        case 'Escape':
+          event.preventDefault();
+          this.closeEmojiSuggest();
+          return;
+      }
+    }
+
+    // Formatting shortcuts (Discord-style): Ctrl/Cmd + B / I / U.
+    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+      const fmt = (
+        {
+          b: ['**', 'bold text'],
+          i: ['*', 'italic text'],
+          u: ['__', 'underlined text'],
+        } as Record<string, [string, string]>
+      )[event.key.toLowerCase()];
+      if (fmt) {
+        event.preventDefault();
+        this.applyFormat(fmt[0], undefined, fmt[1]);
+        return;
+      }
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.send();
+      return;
+    }
+
+    // ArrowUp on an empty composer jumps to editing your last message.
+    if (event.key === 'ArrowUp' && this.draft() === '' && this.staged().length === 0) {
+      event.preventDefault();
+      this.editLastRequested.emit();
+    }
+  }
+}
