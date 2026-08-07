@@ -4,6 +4,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { PushService } from './push.service';
+import { MessageCacheDb } from './message-cache.db';
+import { BootstrapCacheDb } from './bootstrap-cache.db';
 import { environment } from '../../../environments/environment';
 
 describe('AuthService', () => {
@@ -349,6 +351,28 @@ describe('AuthService', () => {
     await promise;
 
     expect(service.currentUser()?.email).toBe('alice@example.com');
+  });
+
+  it('logout() clears the session and wipes the local-first IndexedDB caches', async () => {
+    const loginPromise = service.login('alice@example.com', 'Password123!');
+    httpMock.expectOne(`${base}/auth/login`).flush({ accessToken: 'tokLogout', user });
+    await loginPromise;
+    expect(service.isAuthenticated()).toBe(true);
+
+    // AuthService resolves these lazily from the same root injector on logout — spy the singletons.
+    const clearMessages = vi.spyOn(TestBed.inject(MessageCacheDb), 'clearAll');
+    const clearBootstrap = vi.spyOn(TestBed.inject(BootstrapCacheDb), 'clear');
+
+    const promise = service.logout();
+    // logout() awaits push.disable() before issuing the POST — let those microtasks settle so the
+    // request is registered before we match it.
+    await new Promise((r) => setTimeout(r));
+    httpMock.expectOne(`${base}/auth/logout`).flush(null);
+    await promise;
+
+    expect(service.isAuthenticated()).toBe(false);
+    expect(clearMessages).toHaveBeenCalled();
+    expect(clearBootstrap).toHaveBeenCalled();
   });
 
   it('changeUsername() posts the password and new username and patches it locally', async () => {

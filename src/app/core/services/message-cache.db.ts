@@ -26,11 +26,33 @@ interface CacheOps {
   clearChannel(channelId: string): Promise<void>;
 }
 
+/** Resolves to `fallback` if `p` hasn't settled within `ms` (a hung worker never rejects). */
+async function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+/**
+ * Newest settled messages for a channel is on the awaited critical path (MessageStore.loadMessages
+ * blocks on it before painting). `new Worker(...)` can *construct* successfully yet the module never
+ * loads at runtime (a stale/404 lazy chunk after a redeploy, a late CSP block) — a Comlink call to
+ * such a worker never resolves AND never rejects, so a bare `await` would hang the channel open
+ * forever (stuck spinner). This bounds that read so it degrades to an empty cache instead.
+ */
+const WORKER_READ_TIMEOUT_MS = 3000;
+
 @Injectable({ providedIn: 'root' })
 export class MessageCacheDb implements OnDestroy {
   /** Whether the cache is usable in this environment. Callers gate scheduling on this. */
   readonly enabled: boolean;
-  private readonly backend: CacheOps | null;
+  private backend: CacheOps | null;
   private readonly worker: Worker | null = null;
 
   constructor() {
@@ -40,6 +62,12 @@ export class MessageCacheDb implements OnDestroy {
           type: 'module',
         });
         this.worker = worker;
+        // A runtime worker failure (module load error, uncaught throw inside) surfaces here, not at
+        // construction — drop to the no-op backend so subsequent calls short-circuit fast rather
+        // than posting messages into a dead worker that will never reply.
+        worker.onerror = () => {
+          this.backend = null;
+        };
         this.backend = Comlink.wrap<MessageCacheCore>(worker) as unknown as CacheOps;
         this.enabled = true;
         return;
@@ -60,7 +88,7 @@ export class MessageCacheDb implements OnDestroy {
   async loadChannel(channelId: string, limit?: number): Promise<MessageResponse[]> {
     if (!this.backend) return [];
     try {
-      return await this.backend.loadChannel(channelId, limit);
+      return await withTimeout(this.backend.loadChannel(channelId, limit), WORKER_READ_TIMEOUT_MS, []);
     } catch {
       return [];
     }

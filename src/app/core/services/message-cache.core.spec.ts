@@ -119,4 +119,35 @@ describe('MessageCacheCore', () => {
 
     expect(await cache.loadChannel('C')).toEqual([]);
   });
+
+  it('proactively evicts least-recently-viewed channels over the storage high-water mark', async () => {
+    // usageRatio() reads navigator.storage.estimate. Feed a sequence: two low readings while the
+    // three channels are populated (no eviction), then over-high-water on the third put → evict the
+    // single oldest-viewed channel, which drops us back under target so the sweep stops. quota=1 so
+    // the ratio equals the usage value.
+    const usages = [0.5, 0.5, 0.9, 0.5];
+    const estimate = vi.fn(async () => ({ usage: usages.shift() ?? 0, quota: 1 }));
+    vi.stubGlobal('navigator', { storage: { estimate } });
+    // The sweep is throttled to once/60s off Date.now(); step time forward so each put re-checks,
+    // and so the lastViewedAt stamps order the channels A < B < C (C most-recently-viewed). The base
+    // is far in the future because this MessageCacheCore instance is shared across the file — earlier
+    // tests already stamped lastQuotaCheckAt with a real ~now, and the first check must be past it.
+    const base = 4_000_000_000_000;
+    const now = vi.spyOn(Date, 'now');
+    try {
+      now.mockReturnValue(base);
+      await cache.putMessages('A', [makeMsg({ channelId: 'A', messageId: '1' })]);
+      now.mockReturnValue(base + 61_000);
+      await cache.putMessages('B', [makeMsg({ channelId: 'B', messageId: '2' })]);
+      now.mockReturnValue(base + 122_000);
+      await cache.putMessages('C', [makeMsg({ channelId: 'C', messageId: '3' })]);
+
+      expect(await cache.loadChannel('A')).toEqual([]); // oldest-viewed → evicted
+      expect(ids(await cache.loadChannel('B'))).toEqual(['2']);
+      expect(ids(await cache.loadChannel('C'))).toEqual(['3']); // newest-viewed → always kept
+    } finally {
+      now.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
 });

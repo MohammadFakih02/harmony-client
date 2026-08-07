@@ -14,6 +14,8 @@ import { FriendStore } from '../stores/friend.store';
 import { DmStore } from '../stores/dm.store';
 import { NicknameStore } from '../stores/nickname.store';
 import { NotificationStore } from '../stores/notification.store';
+import { AuthService } from './auth.service';
+import { BootstrapCacheDb } from './bootstrap-cache.db';
 
 /**
  * Wire shape of GET /api/users/me/bootstrap. Each field mirrors the corresponding standalone
@@ -21,7 +23,7 @@ import { NotificationStore } from '../stores/notification.store';
  * fetched themselves. The profile expiry timestamps are `long?` server-side → strings on the
  * wire (LongStringConverter), coerced below like presence.getMyProfile does.
  */
-interface BootstrapResponse {
+export interface BootstrapResponse {
   profile: {
     preferredStatus: string;
     statusMessage: string | null;
@@ -40,8 +42,12 @@ interface BootstrapResponse {
 
 /**
  * One-round-trip startup load: fetches the aggregated boot payload and distributes it into the
- * stores that used to each fetch their own slice (9 requests → 1). Returns whether it succeeded
- * — the shell falls back to the individual per-store loads when it didn't.
+ * stores that used to each fetch their own slice (9 requests → 1). Returns whether the shell is
+ * populated — the shell falls back to the individual per-store loads only when it isn't.
+ *
+ * Local-first (Track A1 slice 2): the last successful payload is persisted to IndexedDB and painted
+ * back instantly on the next boot, so the shell renders from cache while the network request is in
+ * flight, then reconciles when it lands. The in-memory signal stores stay the source of truth.
  */
 @Injectable({ providedIn: 'root' })
 export class BootstrapService {
@@ -54,17 +60,45 @@ export class BootstrapService {
   private readonly dmStore = inject(DmStore);
   private readonly nicknameStore = inject(NicknameStore);
   private readonly notificationStore = inject(NotificationStore);
+  private readonly auth = inject(AuthService);
+  private readonly cache = inject(BootstrapCacheDb);
 
   async load(): Promise<boolean> {
-    let payload: BootstrapResponse;
-    try {
-      payload = await firstValueFrom(
-        this.http.get<BootstrapResponse>(`${this.base}/users/me/bootstrap`),
-      );
-    } catch {
-      return false; // the shell falls back to the individual loads
+    const userId = this.auth.currentUser()?.id;
+
+    // Start the network request FIRST so the cache read below can never delay it.
+    const fetchPromise = firstValueFrom(
+      this.http.get<BootstrapResponse>(`${this.base}/users/me/bootstrap`),
+    );
+
+    // Paint the shell from the last cached payload (this same user's) while the request is in flight.
+    // Skipped when there's no user id yet or no cache → identical to the pre-cache path.
+    let paintedFromCache = false;
+    if (userId) {
+      const cached = await this.cache.read(userId).catch(() => null);
+      if (cached) {
+        this.distribute(cached);
+        paintedFromCache = true;
+      }
     }
 
+    let payload: BootstrapResponse;
+    try {
+      payload = await fetchPromise;
+    } catch {
+      // Network/bootstrap failed. If a cached shell is already painted, treat boot as done (live
+      // gateway events + the next successful boot reconcile) instead of firing the individual
+      // fallback loads, which would fail too when offline. With no cache, fall back as before.
+      return paintedFromCache;
+    }
+
+    this.distribute(payload);
+    if (userId) void this.cache.write(userId, payload);
+    return true;
+  }
+
+  /** Fan the boot payload out into every store that used to fetch its own slice. Idempotent. */
+  private distribute(payload: BootstrapResponse): void {
     this.guildStore.setGuilds(payload.guilds);
     this.unreadStore.applyAll(payload.unread);
     this.presenceStore.applyMyProfile({
@@ -83,6 +117,5 @@ export class BootstrapService {
     this.dmStore.set(payload.dms);
     this.nicknameStore.setAll(payload.nicknames);
     this.notificationStore.set(payload.notifications, payload.notificationUnreadCount);
-    return true;
   }
 }

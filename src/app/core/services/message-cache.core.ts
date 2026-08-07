@@ -28,6 +28,18 @@ const PER_CHANNEL_KEEP = 500;
 /** Newest-N painted on hydrate — a screen-plus, aligned with MessageStore's in-memory window. */
 const DEFAULT_HYDRATE_LIMIT = 200;
 
+/**
+ * Proactive quota management (Track A1 tail). The per-channel cap bounds each channel, but a very
+ * active user across many channels can still approach the origin's storage quota; on quota exhaustion
+ * IndexedDB starts rejecting writes. Rather than only reacting to a QuotaExceededError, we check
+ * `navigator.storage.estimate()` (throttled — it hits disk) and, when usage crosses the high-water
+ * mark, drop whole channels least-recently-viewed first until back under the target. The active
+ * channel was just written (newest lastViewedAt) so it is never the one evicted.
+ */
+const QUOTA_CHECK_INTERVAL_MS = 60_000;
+const QUOTA_HIGH_WATER = 0.85;
+const QUOTA_TARGET = 0.6;
+
 export function idbAvailable(): boolean {
   try {
     return typeof indexedDB !== 'undefined' && indexedDB !== null;
@@ -67,6 +79,8 @@ export class MessageCacheCore {
   /** Whether IndexedDB is usable in THIS context (worker or main thread). */
   readonly enabled = idbAvailable();
   private db: HarmonyCacheDb | null = null;
+  /** Last wall-clock time the storage estimate was polled (throttles the proactive sweep). */
+  private lastQuotaCheckAt = 0;
 
   private get instance(): HarmonyCacheDb | null {
     if (!this.enabled) return null;
@@ -112,6 +126,11 @@ export class MessageCacheCore {
       await db.messages.bulkPut(rows);
       await this.evict(db, channelId);
       await db.meta.put({ channelId, lastViewedAt: Date.now() });
+      // Proactive, throttled (self-skips within the interval), best-effort. Awaited rather than
+      // fired-and-forgotten because callers already treat putMessages as fire-and-forget (the store
+      // does `void cache.putMessages(...)`), so nothing user-facing waits on it — and awaiting keeps
+      // the sweep deterministic and its errors contained in this method's own try/catch.
+      await this.maybeEnforceQuota(db);
     } catch (err) {
       // Quota or transient IndexedDB error → best-effort reclaim, never surfaced to the UI.
       if ((err as { name?: string })?.name === 'QuotaExceededError') {
@@ -157,5 +176,40 @@ export class MessageCacheCore {
     keys.sort((a, b) => compareSnowflakes(a[1], b[1]));
     const overflow = keys.slice(0, count - PER_CHANNEL_KEEP);
     await db.messages.bulkDelete(overflow);
+  }
+
+  /**
+   * Throttled proactive quota sweep. Polls the storage estimate at most once per interval; when usage
+   * crosses the high-water mark, drops whole channels least-recently-viewed first (via the meta
+   * lastViewedAt stamp) until back under the target — never touching the most-recently-viewed channel
+   * (the one just written). Entirely best-effort: any failure is swallowed, persistence is a nicety.
+   */
+  private async maybeEnforceQuota(db: HarmonyCacheDb): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastQuotaCheckAt < QUOTA_CHECK_INTERVAL_MS) return;
+    this.lastQuotaCheckAt = now;
+    try {
+      if ((await this.usageRatio()) < QUOTA_HIGH_WATER) return;
+      // Oldest-viewed first; the last entry (newest, incl. the active channel) is never evicted.
+      const metas = (await db.meta.toArray()).sort((a, b) => a.lastViewedAt - b.lastViewedAt);
+      for (let i = 0; i < metas.length - 1; i++) {
+        await db.messages.where('channelId').equals(metas[i].channelId).delete();
+        await db.meta.delete(metas[i].channelId);
+        if ((await this.usageRatio()) < QUOTA_TARGET) break;
+      }
+    } catch {
+      /* best-effort — the reactive QuotaExceededError path in putMessages remains the backstop */
+    }
+  }
+
+  /** Fraction of the origin's storage quota in use (0–1), or 0 when the estimate is unavailable. */
+  private async usageRatio(): Promise<number> {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return 0;
+      const { usage, quota } = await navigator.storage.estimate();
+      return quota ? (usage ?? 0) / quota : 0;
+    } catch {
+      return 0;
+    }
   }
 }

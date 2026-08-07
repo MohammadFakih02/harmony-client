@@ -1,9 +1,11 @@
-import { Injectable, signal, computed } from "@angular/core";
+import { Injectable, Injector, inject, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { environment } from "../../../environments/environment";
 import { PushService } from "./push.service";
+import { MessageCacheDb } from "./message-cache.db";
+import { BootstrapCacheDb } from "./bootstrap-cache.db";
 
 export interface User {
   id: string;
@@ -58,6 +60,11 @@ export class AuthService {
   readonly accessToken = this._accessToken.asReadonly();
 
   private refreshPromise: Promise<boolean> | null = null;
+
+  // Resolved lazily (not injected as fields) so visiting the login page never eagerly spins up the
+  // cache worker — the caches are only touched on logout/session-clear, by which point they either
+  // already exist or there's leaked data worth the one-time instantiation to wipe.
+  private readonly injector = inject(Injector);
 
   constructor(
     private http: HttpClient,
@@ -381,5 +388,11 @@ export class AuthService {
     // re-running refresh() while the cookie is still technically alive.
     this.sessionChecked = true; // ← was false
     this.sessionValid = false;
+    // Wipe the local-first IndexedDB caches so no message content or social-graph snapshot is left
+    // behind for the next account on a shared browser. The bootstrap cache's userId guard already
+    // prevents cross-user *painting*, but the data still persists (and the message cache is
+    // un-stamped) until cleared. Best-effort + fire-and-forget — both no-op when unavailable.
+    void this.injector.get(MessageCacheDb).clearAll();
+    void this.injector.get(BootstrapCacheDb).clear();
   }
 }

@@ -10,6 +10,8 @@ import { FriendStore } from '../stores/friend.store';
 import { DmStore } from '../stores/dm.store';
 import { NicknameStore } from '../stores/nickname.store';
 import { NotificationStore } from '../stores/notification.store';
+import { AuthService } from './auth.service';
+import { BootstrapCacheDb } from './bootstrap-cache.db';
 
 describe('BootstrapService', () => {
   let service: BootstrapService;
@@ -21,6 +23,12 @@ describe('BootstrapService', () => {
   let dmStore: { set: ReturnType<typeof vi.fn> };
   let nicknameStore: { setAll: ReturnType<typeof vi.fn> };
   let notificationStore: { set: ReturnType<typeof vi.fn> };
+  let auth: { currentUser: ReturnType<typeof vi.fn> };
+  let cache: {
+    read: ReturnType<typeof vi.fn>;
+    write: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+  };
 
   // Wire-shape payload: ids/timestamps arrive as strings (LongStringConverter), exactly as the
   // standalone endpoints deliver them — distribution must pass them through untouched, except
@@ -52,6 +60,10 @@ describe('BootstrapService', () => {
     dmStore = { set: vi.fn() };
     nicknameStore = { setAll: vi.fn() };
     notificationStore = { set: vi.fn() };
+    // Default: no signed-in user id → the cache path is skipped, so these two mirror the pre-cache
+    // behaviour exactly. The cache-path tests override currentUser + read.
+    auth = { currentUser: vi.fn(() => null) };
+    cache = { read: vi.fn().mockResolvedValue(null), write: vi.fn(), clear: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [
@@ -64,6 +76,8 @@ describe('BootstrapService', () => {
         { provide: DmStore, useValue: dmStore },
         { provide: NicknameStore, useValue: nicknameStore },
         { provide: NotificationStore, useValue: notificationStore },
+        { provide: AuthService, useValue: auth },
+        { provide: BootstrapCacheDb, useValue: cache },
       ],
     });
     service = TestBed.inject(BootstrapService);
@@ -98,5 +112,47 @@ describe('BootstrapService', () => {
     await expect(load).resolves.toBe(false);
     expect(guildStore.setGuilds).not.toHaveBeenCalled();
     expect(notificationStore.set).not.toHaveBeenCalled();
+  });
+
+  const cachedPayload = { ...payload, guilds: [{ id: '99', name: 'Cached Guild' }] };
+
+  it('paints the cached shell first, then reconciles with the fetched payload', async () => {
+    auth.currentUser.mockReturnValue({ id: 'u1' });
+    cache.read.mockResolvedValue(cachedPayload);
+
+    const load = service.load();
+    http.expectOne(`${environment.apiUrl}/users/me/bootstrap`).flush(payload);
+
+    await expect(load).resolves.toBe(true);
+    expect(cache.read).toHaveBeenCalledWith('u1');
+    // Distributed twice — cached snapshot first (instant paint), fresh payload second (reconcile).
+    expect(guildStore.setGuilds).toHaveBeenNthCalledWith(1, cachedPayload.guilds);
+    expect(guildStore.setGuilds).toHaveBeenNthCalledWith(2, payload.guilds);
+    // The fresh payload is persisted for the next boot; the cache read never triggers a write.
+    expect(cache.write).toHaveBeenCalledExactlyOnceWith('u1', payload);
+  });
+
+  it('keeps the cached shell (returns true) and does not persist when the fetch fails', async () => {
+    auth.currentUser.mockReturnValue({ id: 'u1' });
+    cache.read.mockResolvedValue(cachedPayload);
+
+    const load = service.load();
+    http.expectOne(`${environment.apiUrl}/users/me/bootstrap`).error(new ProgressEvent('error'));
+
+    await expect(load).resolves.toBe(true);
+    expect(guildStore.setGuilds).toHaveBeenCalledExactlyOnceWith(cachedPayload.guilds);
+    expect(cache.write).not.toHaveBeenCalled();
+  });
+
+  it('skips the cache and behaves as before when there is no cached snapshot', async () => {
+    auth.currentUser.mockReturnValue({ id: 'u1' });
+    cache.read.mockResolvedValue(null);
+
+    const load = service.load();
+    http.expectOne(`${environment.apiUrl}/users/me/bootstrap`).flush(payload);
+
+    await expect(load).resolves.toBe(true);
+    expect(guildStore.setGuilds).toHaveBeenCalledExactlyOnceWith(payload.guilds);
+    expect(cache.write).toHaveBeenCalledExactlyOnceWith('u1', payload);
   });
 });
