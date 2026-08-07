@@ -115,9 +115,15 @@ const SYSTEM_MESSAGE_TYPES = new Set([
 ]);
 
 const GROUP_BREAK_MS = 5 * 60 * 1000;
-const LOAD_OLDER_THRESHOLD_PX = 100;
-// While anchored (viewing history), scrolling this close to the bottom loads the next newer page.
-const LOAD_NEWER_THRESHOLD_PX = 120;
+// Load-ahead distance: the older page is fetched while the viewport top is still this far (~1.5
+// screens) from the content top, NOT once the user has hit the wall. Prepending + rendering a page
+// is a synchronous burst; firing it early means it lands while there's still loaded content above
+// to scroll through, so the burst is absorbed off the user's visual path instead of stuttering at
+// the top edge. Serialized by the isLoading guard; the position-anchoring math is unchanged.
+const LOAD_OLDER_THRESHOLD_PX = 1200;
+// While anchored (viewing history), the next newer page is fetched this far ahead of the bottom edge
+// (same load-ahead rationale as older, mirrored for downward scroll).
+const LOAD_NEWER_THRESHOLD_PX = 1200;
 // The off-viewport window trims (deep-history browsing) only run when the edge being cut is at
 // least this far outside the viewport (~1.5 screens) — removal that close could shift what's
 // visible; beyond it, cutting is imperceptible.
@@ -1132,6 +1138,21 @@ export class MessageList {
     // the live tail. Never while anchored — the jump effect centres on the target instead.
     effect(() => {
       if (this.scroller() && !this.messageStore.anchored()) this.scrollToBottom();
+    });
+
+    // Scroll handling runs NATIVELY (not via a `(scroll)="onScroll()"` template binding). In a
+    // zoneless app that binding would schedule a change-detection pass on EVERY scroll event —
+    // pinning the main thread against the large message list even when nothing changed. onScroll's
+    // only reactive writes are signals (showJumpToBottom, store load/trim) that notify the scheduler
+    // themselves, and then only when a value actually changes; the rest is plain-field / imperative
+    // scroll math that needs no CD. The effect re-binds if the container element is replaced and
+    // tears the listener down on destroy.
+    effect((onCleanup) => {
+      const el = this.scroller()?.nativeElement;
+      if (!el) return;
+      const handler = (): void => this.onScroll();
+      el.addEventListener('scroll', handler, { passive: true });
+      onCleanup(() => el.removeEventListener('scroll', handler));
     });
 
     // React to message list changes
