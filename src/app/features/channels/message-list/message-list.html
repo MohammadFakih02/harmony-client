@@ -33,6 +33,7 @@
   type="button"
   class="absolute bottom-3 right-4 z-20 w-9 h-9 rounded-full bg-surface border border-border shadow-modal text-muted hover:text-primary hover:bg-surface-2 transition-micro flex items-center justify-center animate-scale-in"
   title="Jump to latest"
+  aria-label="Jump to latest"
   (click)="jumpToBottom()"
 >
   <i class="fas fa-arrow-down text-sm"></i>
@@ -375,6 +376,7 @@
             type="button"
             class="w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none hover:bg-surface-2 hover:scale-110 transition-micro"
             [title]="'React with ' + emoji"
+            [attr.aria-label]="'React with ' + emoji"
             (click)="quickReact(msg, emoji)"
           >
             {{ emoji }}
@@ -386,6 +388,7 @@
             #addReactionBtn="cdkOverlayOrigin"
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Add Reaction"
+            aria-label="Add Reaction"
             (click)="openReactionPicker(msg, addReactionBtn)"
           >
             <i class="fas fa-face-smile text-xs"></i>
@@ -395,6 +398,7 @@
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Reply"
+            aria-label="Reply"
             (click)="replyTo(msg)"
           >
             <i class="fas fa-reply text-xs"></i>
@@ -404,6 +408,7 @@
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Copy text"
+            aria-label="Copy text"
             (click)="copyText(msg)"
           >
             <i class="fas fa-copy text-xs"></i>
@@ -413,6 +418,7 @@
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Forward"
+            aria-label="Forward"
             (click)="openForward(msg)"
           >
             <i class="fas fa-share text-xs"></i>
@@ -425,6 +431,7 @@
             [class.text-faint]="!isPinned(msg)"
             [class.hover:text-primary]="!isPinned(msg)"
             [title]="isPinned(msg) ? 'Unpin' : 'Pin'"
+            [attr.aria-label]="isPinned(msg) ? 'Unpin' : 'Pin'"
             (click)="togglePin(msg)"
           >
             <i class="fas fa-thumbtack text-xs"></i>
@@ -434,6 +441,7 @@
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Edit"
+            aria-label="Edit"
             (click)="startEdit(msg)"
           >
             <i class="fas fa-pen text-xs"></i>
@@ -443,6 +451,7 @@
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-danger hover:bg-surface-2 transition-micro"
             title="Delete"
+            aria-label="Delete"
             (click)="deleteMsg(msg)"
           >
             <i class="fas fa-trash text-xs"></i>

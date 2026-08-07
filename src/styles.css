@@ -534,6 +534,16 @@ html.reduce-motion *::after {
   box-sizing: border-box;
 }
 
+/* Tell the UA which palette native controls (scrollbars, form controls, the
+   canvas) should adopt, so they match the active theme instead of the OS one.
+   Keyed on the mode class so it follows runtime theme switches. */
+html {
+  color-scheme: dark;
+}
+html.mode-light {
+  color-scheme: light;
+}
+
 html,
 body {
   height: 100%;

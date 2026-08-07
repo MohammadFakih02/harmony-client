@@ -6,6 +6,7 @@ import { FileKind, fileIcon, fileKind, formatBytes } from '../../../shared/util/
 import { ContextMenuService } from '../../../core/services/context-menu.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ContextMenuEntry } from '../../../core/models/context-menu.models';
+import { blurhashToDataUrl, buildSrcset } from '../../../shared/util/image-preview';
 
 const MAX_W = 400;
 const MAX_H = 300;
@@ -20,6 +21,10 @@ interface RenderedAttachment {
   // Reserved display box — sized from metadata so layout is stable before the bytes load.
   width: number;
   height: number;
+  // A6: blurred placeholder (CSS `url(...)`, or null) shown behind the image until it paints, and
+  // the responsive `srcset` attribute (or null) so the browser fetches the right variant for the box.
+  blurCss: string | null;
+  srcset: string | null;
 }
 
 /** Renders a message's attachments inline. Resolves each id → short-lived presigned URL via
@@ -62,6 +67,12 @@ export class MessageAttachments {
   // Ids currently being saved via the file-card Download button (cross-origin blob fetch).
   private readonly downloading = signal<ReadonlySet<string>>(new Set());
 
+  // A6: ids whose full image has painted → fade it in over the blur placeholder.
+  private readonly loaded = signal<ReadonlySet<string>>(new Set());
+
+  // A6: memoized BlurHash → CSS `url(...)` so a hash decodes once, not on every change-detection.
+  private readonly blurCache = new Map<string, string | null>();
+
   protected readonly rendered = computed<RenderedAttachment[]>(() => {
     const cache = this.fileStore.cache();
     return this.attachmentIds().map((id) => {
@@ -76,9 +87,33 @@ export class MessageAttachments {
         sizeLabel: meta ? formatBytes(meta.sizeBytes) : '',
         width,
         height,
+        blurCss: this.blurCss(meta),
+        srcset: buildSrcset(meta?.srcset),
       };
     });
   });
+
+  /** Memoized blur placeholder for an image, as a ready-to-bind CSS `url("...")` (or null). */
+  private blurCss(meta: FileDownloadResponse | undefined): string | null {
+    const hash = meta?.blurHash;
+    if (!hash) return null;
+    let css = this.blurCache.get(hash);
+    if (css === undefined) {
+      const url = blurhashToDataUrl(hash, meta!.width ?? 1, meta!.height ?? 1);
+      css = url ? `url("${url}")` : null;
+      this.blurCache.set(hash, css);
+    }
+    return css;
+  }
+
+  protected isLoaded(id: string): boolean {
+    return this.loaded().has(id);
+  }
+
+  protected markLoaded(id: string): void {
+    if (this.loaded().has(id)) return;
+    this.loaded.update((s) => new Set(s).add(id));
+  }
 
   // Cap to the display bounds while preserving aspect ratio. Unknown dims → a neutral
   // placeholder box (rare; only non-image or pre-resolve).

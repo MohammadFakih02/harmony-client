@@ -27,6 +27,11 @@ export class UiAvatar {
       })[this.size()],
   );
 
+  /** Intrinsic pixel size (matches sizeClass) so the <img> reserves layout box and avoids CLS. */
+  protected sizePx = computed(
+    () => ({ sm: 24, md: 32, lg: 40, xl: 48, "2xl": 80 })[this.size()],
+  );
+
   /** Status dot scaled to the avatar — a fixed 10px dot disappears on the 80px profile avatar. */
   protected dotClass = computed(
     () =>

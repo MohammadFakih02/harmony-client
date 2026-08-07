@@ -7,6 +7,9 @@ import {
   input,
   output,
 } from '@angular/core';
+import { A11yModule } from '@angular/cdk/a11y';
+
+let modalHeadingSeq = 0;
 
 /**
  * Shared modal shell: dimmed blurred backdrop, centred card, optional centred heading/subtitle,
@@ -16,10 +19,13 @@ import {
 @Component({
   selector: 'ui-modal',
   standalone: true,
+  imports: [A11yModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-modal.html',
 })
 export class UiModal implements OnDestroy {
+  /** Stable id linking the dialog to its heading via aria-labelledby. */
+  protected readonly headingId = `ui-modal-heading-${modalHeadingSeq++}`;
   heading = input('');
   subtitle = input('');
   size = input<'xs' | 'sm' | 'md' | 'lg'>('sm');

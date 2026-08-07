@@ -6,6 +6,7 @@ import { AuthService } from '../services/auth.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
 import { FileStore } from './file.store';
+import { MessageCacheDb } from '../services/message-cache.db';
 import { MessageResponse } from '../models/message.models';
 
 const makeMsg = (overrides: Partial<MessageResponse> & { messageId: string }): MessageResponse => ({
@@ -752,13 +753,15 @@ describe('MessageStore', () => {
       });
       await TestBed.runInInjectionContext(() => store.jumpToMessage('1', '1', '100'));
 
-      const fullPage = Array.from({ length: 50 }, (_, i) => makeMsg({ messageId: String(200 + i) }));
+      // A full anchored page is SCROLL_PAGE_SIZE (25) — reaching it means there may be more, so we
+      // stay anchored.
+      const fullPage = Array.from({ length: 25 }, (_, i) => makeMsg({ messageId: String(200 + i) }));
       service.getMessages.mockResolvedValueOnce({ messages: fullPage, degraded: false });
 
       await TestBed.runInInjectionContext(() => store.loadNewer());
 
-      expect(service.getMessages).toHaveBeenLastCalledWith('1', '1', { after: '100' });
-      expect(store.messages().length).toBe(51);
+      expect(service.getMessages).toHaveBeenLastCalledWith('1', '1', { after: '100', limit: 25 });
+      expect(store.messages().length).toBe(26);
       expect(store.anchored()).toBe(true);
     });
 
@@ -874,6 +877,85 @@ describe('MessageStore', () => {
       await TestBed.runInInjectionContext(() => store.toggleReaction(pendingMsg, '😀'));
 
       expect(reactions.add).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('prefetchChannel() (A4 hover-prefetch)', () => {
+    // The default suite injects the real (jsdom-disabled) MessageCacheDb; prefetch is gated on
+    // cache.enabled, so we rebuild the module here with an enabled cache mock to assert the L2 warm.
+    let cacheMock: {
+      enabled: boolean;
+      putMessages: ReturnType<typeof vi.fn>;
+      loadChannel: ReturnType<typeof vi.fn>;
+    };
+
+    beforeEach(() => {
+      cacheMock = {
+        enabled: true,
+        putMessages: vi.fn().mockResolvedValue(undefined),
+        loadChannel: vi.fn().mockResolvedValue([]),
+      };
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          MessageStore,
+          { provide: MessageService, useValue: service },
+          { provide: SignalRService, useValue: signalr },
+          { provide: AuthService, useValue: auth },
+          { provide: ReactionService, useValue: reactions },
+          { provide: ToastService, useValue: { info: vi.fn() } },
+          { provide: FileStore, useValue: fileStore },
+          { provide: MessageCacheDb, useValue: cacheMock },
+        ],
+      });
+      store = TestBed.inject(MessageStore);
+    });
+
+    it('warms a channel’s latest page into the persistent cache (reversed to oldest-first)', async () => {
+      service.getMessages.mockResolvedValue({
+        messages: [makeMsg({ messageId: '3' }), makeMsg({ messageId: '2' }), makeMsg({ messageId: '1' })],
+        degraded: false,
+      });
+
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '99'));
+
+      expect(service.getMessages).toHaveBeenCalledWith('1', '99');
+      const [channelId, msgs] = cacheMock.putMessages.mock.calls[0];
+      expect(channelId).toBe('99');
+      expect((msgs as MessageResponse[]).map((m) => m.messageId)).toEqual(['1', '2', '3']);
+      // Purely additive — never touches the live view.
+      expect(store.messages()).toEqual([]);
+      expect(store.activeChannelId()).toBeNull();
+    });
+
+    it('warms each channel at most once per session', async () => {
+      service.getMessages.mockResolvedValue({ messages: [makeMsg({ messageId: '1' })], degraded: false });
+
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '99'));
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '99'));
+
+      expect(service.getMessages).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not warm the already-open channel', async () => {
+      service.getMessages.mockResolvedValue({ messages: [makeMsg({ messageId: '1' })], degraded: false });
+      await TestBed.runInInjectionContext(() => store.loadMessages('1', '5'));
+      service.getMessages.mockClear();
+
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '5'));
+
+      expect(service.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('re-arms after a failed warm so a later hover retries', async () => {
+      service.getMessages.mockRejectedValueOnce(new Error('network'));
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '99'));
+      expect(cacheMock.putMessages).not.toHaveBeenCalled();
+
+      service.getMessages.mockResolvedValue({ messages: [makeMsg({ messageId: '1' })], degraded: false });
+      await TestBed.runInInjectionContext(() => store.prefetchChannel('1', '99'));
+
+      expect(cacheMock.putMessages).toHaveBeenCalledTimes(1);
     });
   });
 });

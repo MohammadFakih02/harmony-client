@@ -8,6 +8,7 @@
     [disabled]="isDisabled()"
     [class]="inputClass()"
     [class.pr-11]="isPassword()"
+    [attr.aria-label]="label() || null"
     [attr.aria-invalid]="error() ? 'true' : null"
     [attr.aria-describedby]="error() ? inputId() + '-error' : null"
     (input)="onInput($event)"

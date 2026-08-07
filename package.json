@@ -22,6 +22,7 @@
     "@livekit/components-core": "^0.12.13",
     "@microsoft/signalr": "^10.0.0",
     "@ngrx/signals": "^21.1.0",
+    "blurhash": "^2.0.5",
     "comlink": "^4.4.2",
     "dexie": "^4.4.4",
     "livekit-client": "^2.18.9",

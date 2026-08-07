@@ -4,7 +4,12 @@
   (click)="close.emit()"
 >
   <div
-    class="relative w-full mx-4 flex flex-col max-h-[85vh] rounded-2xl bg-surface border border-border-subtle shadow-modal overflow-hidden animate-modal-in"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-labelledby]="heading() ? headingId : null"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="true"
+    class="relative w-full mx-4 flex flex-col max-h-[85vh] overscroll-contain rounded-2xl bg-surface border border-border-subtle shadow-modal overflow-hidden animate-modal-in"
     [class]="sizeClass()"
     (click)="$event.stopPropagation()"
   >
@@ -20,7 +25,7 @@
     @if (heading()) {
     <!-- px-10 keeps a long centered heading clear of the absolute ✕ button. -->
     <div class="flex flex-col gap-1 px-10 pt-6 pb-3 shrink-0 text-center">
-      <h2 class="text-lg font-bold text-primary">{{ heading() }}</h2>
+      <h2 [id]="headingId" class="text-lg font-bold text-primary">{{ heading() }}</h2>
       @if (subtitle()) {
       <p class="text-sm text-muted">{{ subtitle() }}</p>
       }

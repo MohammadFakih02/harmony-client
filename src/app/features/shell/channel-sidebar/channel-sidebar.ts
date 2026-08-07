@@ -9,6 +9,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/ro
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChannelStore } from '../../../core/stores/channel.store';
+import { MessageStore } from '../../../core/stores/message.store';
 import { Channel, ChannelCategory, SidebarEntry } from '../../../core/models/channel.models';
 import {
   BandRow,
@@ -103,6 +104,7 @@ export class ChannelSidebar {
   protected readonly auth = inject(AuthService);
   protected readonly guildStore = inject(GuildStore);
   protected readonly channelStore = inject(ChannelStore);
+  private readonly messageStore = inject(MessageStore);
   protected readonly memberStore = inject(MemberStore);
   protected readonly unreadStore = inject(UnreadStore);
   protected readonly presenceStore = inject(PresenceStore);
@@ -143,6 +145,19 @@ export class ChannelSidebar {
   /** Closes the mobile left drawer after a navigation tap (harmless no-op on desktop). */
   protected closeDrawer(): void {
     this.mobileNav.closeLeft();
+  }
+
+  /** A4: warm a text channel's latest page on hover so opening it is instant. Skipped on touch —
+   *  there's no hover, and the tap that follows loads it anyway, so a warm would just double-fetch. */
+  protected prefetchChannel(channel: Channel): void {
+    if (this.viewport.coarsePointer() || channel.type !== 'text') return;
+    void this.messageStore.prefetchChannel(this.guildStore.selectedGuildId(), channel.id);
+  }
+
+  /** A4: warm a DM's latest page on hover (DMs have no owning guild). */
+  protected prefetchDm(channelId: string): void {
+    if (this.viewport.coarsePointer()) return;
+    void this.messageStore.prefetchChannel(null, channelId);
   }
 
   constructor() {

@@ -47,4 +47,17 @@ export interface FileDownloadResponse {
    * open / download always use `url` (the untouched original).
    */
   thumbnailUrl: string | null;
+  /** A6: compact BlurHash rendered as a blurred placeholder until the bytes paint. Null = none. */
+  blurHash: string | null;
+  /**
+   * A6: presigned WebP responsive variants (ascending width) for the inline `<img srcset>`; the
+   * browser picks by display size × DPR. Null/empty when the image had no generated variants.
+   */
+  srcset: ImageVariant[] | null;
+}
+
+/** One entry of a responsive srcset: a presigned variant URL and its intrinsic pixel width. */
+export interface ImageVariant {
+  url: string;
+  width: number;
 }

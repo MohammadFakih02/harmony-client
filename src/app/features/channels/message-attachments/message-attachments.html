@@ -5,19 +5,27 @@
         @case ('image') {
           <button
             type="button"
-            class="block rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 cursor-zoom-in hover:ring-accent transition-micro"
+            class="block rounded-lg overflow-hidden ring-1 ring-border-subtle bg-surface-2 cursor-zoom-in hover:ring-accent transition-micro bg-cover bg-center"
             [style.width.px]="att.width"
             [style.height.px]="att.height"
+            [style.background-image]="att.blurCss"
             title="Click to expand"
             (click)="open(att.meta)"
             (contextmenu)="openAttachmentMenu($event, att)"
           >
-            <!-- Inline preview uses the WebP thumbnail when one exists; the lightbox opens the original. -->
+            <!-- A6: the browser picks a WebP variant by box size × DPR (srcset); src is the small
+                 fallback. The image fades in over its BlurHash placeholder once decoded. The lightbox
+                 opens the untouched original. -->
             <img
               [src]="att.meta.thumbnailUrl || att.meta.url"
+              [attr.srcset]="att.srcset"
+              [attr.sizes]="att.srcset ? att.width + 'px' : null"
               [alt]="att.meta.filename"
               loading="lazy"
-              class="w-full h-full object-cover"
+              decoding="async"
+              (load)="markLoaded(att.id)"
+              class="w-full h-full object-cover transition-opacity duration-300"
+              [class.opacity-0]="att.blurCss && !isLoaded(att.id)"
             />
           </button>
         }
@@ -58,6 +66,7 @@
               type="button"
               class="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-3 transition-micro disabled:opacity-50"
               title="Download"
+              aria-label="Download"
               [disabled]="isDownloading(att.id)"
               (click)="download(att.meta)"
             >

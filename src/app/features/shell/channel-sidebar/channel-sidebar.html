@@ -460,6 +460,7 @@
           [class.opacity-45]="muted"
           [attr.aria-label]="'Open ' + channel.name"
           (contextmenu)="openChannelMenu($event, channel)"
+          (pointerenter)="prefetchChannel(channel)"
           (click)="closeDrawer()"
         >
           <!-- Unread pill at the sidebar edge (Discord's unread marker) -->
@@ -574,6 +575,7 @@
         type="button"
         class="text-faint hover:text-primary transition-micro"
         title="Create Group DM"
+        aria-label="Create Group DM"
         (click)="openGroupModal()"
       >
         <i class="fas fa-plus text-xs"></i>
@@ -593,6 +595,7 @@
         [class.font-semibold]="unread > 0"
         [class.text-primary]="unread > 0"
         (contextmenu)="openDmMenu($event, dm)"
+        (pointerenter)="prefetchDm(dm.channelId)"
         (click)="closeDrawer()"
       >
         @if (dm.isGroup) {
@@ -600,7 +603,7 @@
           class="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted"
         >
           @if (dm.iconKey; as icon) {
-          <img [src]="publicFileUrl(icon)" [alt]="dmDisplayName(dm)" class="w-full h-full object-cover" />
+          <img [src]="publicFileUrl(icon)" [alt]="dmDisplayName(dm)" width="32" height="32" loading="lazy" class="w-full h-full object-cover" />
           } @else {
           <i class="fas fa-user-group text-xs"></i>
           }
@@ -625,6 +628,7 @@
           type="button"
           class="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 text-faint hover:text-primary transition-micro"
           [title]="dm.isGroup ? 'Leave Group' : 'Close DM'"
+          [attr.aria-label]="dm.isGroup ? 'Leave Group' : 'Close DM'"
           (click)="removeDm(dm, $event)"
         >
           <i class="fas fa-xmark text-xs"></i>
@@ -793,7 +797,7 @@
       <div class="flex items-center gap-1.5">
         <span class="text-3xs font-semibold uppercase tracking-wider text-faint shrink-0">Clear after</span>
         <select
-          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none"
+          class="flex-1 min-w-0 bg-surface-2 rounded-md px-1.5 py-1 text-xs text-muted outline-none focus:ring-1 focus:ring-accent"
           [ngModel]="customExpiry()"
           (ngModelChange)="customExpiry.set($event)"
         >

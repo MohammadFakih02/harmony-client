@@ -23,7 +23,7 @@
     class="w-12 h-12 rounded-2xl overflow-hidden bg-surface-3 shrink-0 flex items-center justify-center"
   >
     @if (p.iconKey) {
-    <img [src]="p.iconKey" [alt]="p.guildName" class="w-full h-full object-cover" />
+    <img [src]="p.iconKey" [alt]="p.guildName" width="48" height="48" loading="lazy" class="w-full h-full object-cover" />
     } @else {
     <span class="text-sm font-bold text-muted select-none">{{ initials() }}</span>
     }

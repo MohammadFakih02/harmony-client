@@ -13,6 +13,8 @@ const makeMeta = (id: string, overrides: Partial<FileDownloadResponse> = {}): Fi
   url: `https://minio/${id}`,
   expiresAt: Date.now() + 900_000, // fresh — well past the 30s refresh margin
   thumbnailUrl: null,
+  blurHash: null,
+  srcset: null,
   ...overrides,
 });
 

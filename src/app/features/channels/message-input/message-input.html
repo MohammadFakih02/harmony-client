@@ -60,7 +60,7 @@
       @if (file.status === 'uploading') {
       <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
         <i class="fas fa-yin-yang animate-spin text-white text-sm"></i>
-        <span class="text-2xs text-white">{{ file.progress }}%</span>
+        <span class="text-2xs text-white tabular-nums">{{ file.progress }}%</span>
       </div>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
         <div class="h-full bg-accent transition-[width] duration-150" [style.width.%]="file.progress"></div>
@@ -76,6 +76,7 @@
         type="button"
         class="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-micro"
         title="Remove"
+        aria-label="Remove attachment"
         (click)="removeStaged(file.localId)"
       >
         <i class="fas fa-xmark text-2xs"></i>
@@ -201,6 +202,7 @@
     </ng-template>
   </div>
   <button
+    type="button"
     class="flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-micro text-sm font-medium"
     [class.bg-accent]="canSend()"
     [class.text-white]="canSend()"
@@ -211,6 +213,7 @@
     [disabled]="!canSend() || sending()"
     (click)="send()"
     title="Send message"
+    aria-label="Send message"
   >
     @if (sending()) {
     <i class="fas fa-yin-yang animate-spin"></i>

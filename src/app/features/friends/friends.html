@@ -84,6 +84,7 @@
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-muted hover:text-primary transition-micro"
             title="Message"
+            aria-label="Message"
             (click)="$event.stopPropagation(); message(f.id)"
           >
             <i class="fas fa-comment"></i>
@@ -92,6 +93,7 @@
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-muted hover:text-danger transition-micro"
             title="Remove Friend"
+            aria-label="Remove Friend"
             (click)="$event.stopPropagation(); remove(f.id)"
           >
             <i class="fas fa-user-minus"></i>
@@ -134,6 +136,7 @@
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-success hover:bg-success hover:text-white transition-micro"
             title="Accept"
+            aria-label="Accept"
             (click)="accept(p.id)"
           >
             <i class="fas fa-check"></i>
@@ -142,6 +145,7 @@
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-muted hover:bg-danger hover:text-white transition-micro"
             title="Ignore"
+            aria-label="Ignore"
             (click)="remove(p.id)"
           >
             <i class="fas fa-xmark"></i>
@@ -171,6 +175,7 @@
           type="button"
           class="w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 text-muted hover:bg-danger hover:text-white transition-micro"
           title="Cancel"
+          aria-label="Cancel"
           (click)="remove(p.id)"
         >
           <i class="fas fa-xmark"></i>
@@ -188,7 +193,7 @@
     <h2 class="text-base font-bold text-primary mb-1">Add Friend</h2>
     <p class="text-sm text-muted mb-4">You can add friends with their username.</p>
     <div
-      class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 border transition-micro"
+      class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 border transition-micro focus-within:ring-1 focus-within:ring-accent"
       [class.border-accent]="!addError()"
       [class.border-danger]="addError()"
     >

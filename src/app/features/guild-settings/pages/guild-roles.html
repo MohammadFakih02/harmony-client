@@ -28,10 +28,10 @@
           <span class="flex-1 truncate text-sm text-primary">{{ role.name }}</span>
           @if (!role.isDefault) {
           <span class="flex flex-col opacity-0 transition-micro group-hover:opacity-100">
-            <button type="button" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'up'); $event.stopPropagation()">
+            <button type="button" aria-label="Move role up" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'up'); $event.stopPropagation()">
               <i class="fas fa-caret-up"></i>
             </button>
-            <button type="button" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'down'); $event.stopPropagation()">
+            <button type="button" aria-label="Move role down" class="text-2xs leading-none text-faint hover:text-primary" (click)="move(role, 'down'); $event.stopPropagation()">
               <i class="fas fa-caret-down"></i>
             </button>
           </span>
@@ -75,6 +75,7 @@
                   type="button"
                   class="flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle text-faint"
                   title="No color"
+                  aria-label="No color"
                   (click)="color.set(0)"
                 >
                   @if (color() === 0) { <i class="fas fa-check text-xs"></i> }

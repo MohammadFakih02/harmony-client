@@ -3,7 +3,7 @@
 >
   <!-- Search -->
   <div class="p-2 shrink-0">
-    <div class="flex items-center gap-2 px-3 h-9 rounded-lg bg-surface-3 ring-1 ring-border-subtle">
+    <div class="flex items-center gap-2 px-3 h-9 rounded-lg bg-surface-3 ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro">
       <i class="fas fa-magnifying-glass text-faint text-xs shrink-0"></i>
       <input
         type="text"
@@ -17,6 +17,7 @@
         type="button"
         class="shrink-0 text-faint hover:text-primary transition-micro"
         title="Clear"
+        aria-label="Clear search"
         (click)="search.set('')"
       >
         <i class="fas fa-xmark text-xs"></i>
@@ -36,6 +37,7 @@
       [class.text-faint]="isSearching() || activeCategoryId() !== 'recents'"
       [class.hover:text-primary]="isSearching() || activeCategoryId() !== 'recents'"
       title="Frequently Used"
+      aria-label="Frequently Used"
       (click)="setCategory('recents')"
     >
       <i class="fas fa-clock-rotate-left text-sm"></i>
@@ -50,6 +52,7 @@
       [class.text-faint]="isSearching() || activeCategoryId() !== cat.id"
       [class.hover:text-primary]="isSearching() || activeCategoryId() !== cat.id"
       [title]="cat.name"
+      [attr.aria-label]="cat.name"
       (click)="setCategory(cat.id)"
     >
       <i class="fas {{ cat.icon }} text-sm"></i>
@@ -69,6 +72,7 @@
         type="button"
         class="w-9 h-9 flex items-center justify-center rounded-md text-xl hover:bg-surface-3 transition-micro"
         [title]="emoji.name"
+        [attr.aria-label]="emoji.name"
         (click)="pick(emoji.char)"
       >
         {{ emoji.char }}

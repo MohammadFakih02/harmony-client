@@ -87,7 +87,17 @@ function insertByTimeOrder(list: MessageResponse[], msg: MessageResponse): Messa
 const MESSAGE_WINDOW_CAP = 200;
 
 // A full history page from the API. A short page means we've reached that edge of the channel.
+// Used for the initial/latest load and the jump (around) window, and for full-page detection there.
 const PAGE_SIZE = 50;
+
+// Smaller page for the two infinite-scroll paths (loadOlder / anchored loadNewer). Prepending +
+// rendering a page is a synchronous burst; a smaller page halves the rows created per burst so a
+// fast free-spin scroll produces smaller, more frequent bursts instead of one big frame-dropping
+// one (A5). Deliberately NOT applied to the initial load — a small first page sits under the
+// load-ahead threshold at the bottom and would fire an immediate loadOlder cascade on channel open.
+// Must be passed as the request `limit` AND used for that path's full-page detection so the two stay
+// in sync (the service defaults an unspecified limit to 50).
+const SCROLL_PAGE_SIZE = 25;
 
 /**
  * Merges a locally-cached window (`base`, ascending oldest→newest — from the in-session L1 cache or
@@ -369,7 +379,32 @@ export const MessageStore = signalStore(
       void cache.putMessages(channelId, latest);
     };
 
+    // A4 (instant navigation): channels warmed by a hover this session. Warming writes the latest page
+    // to L2 (IndexedDB) so the first open paints from the worker instead of a REST spinner. Once per
+    // channel is enough — loadMessages always reconciles via fetchLatestInto on open, so staleness is fine.
+    const prefetched = new Set<string>();
+
     return {
+    /**
+     * A4 hover-prefetch: warms a not-yet-opened channel's latest page into the L2 (IndexedDB) cache so
+     * a later open paints instantly instead of waiting on the REST round-trip. Best-effort and purely
+     * additive — never touches the live view. No-op without a cache, for the active channel, or once
+     * already warmed this session (a failed warm is un-marked so a later hover can retry).
+     */
+    async prefetchChannel(guildId: string | null, channelId: string): Promise<void> {
+      if (!cache.enabled) return;
+      if (channelId === store.activeChannelId()) return;
+      if (prefetched.has(channelId)) return;
+      prefetched.add(channelId);
+      try {
+        const response = await service.getMessages(guildId, channelId);
+        const latest = [...response.messages].reverse();
+        if (latest.length) void cache.putMessages(channelId, latest);
+      } catch {
+        prefetched.delete(channelId);
+      }
+    },
+
     async loadMessages(guildId: string | null, channelId: string): Promise<void> {
       if (store.activeChannelId() !== channelId) stashActive();
       // Paint the cached list instantly (or clear, so the previous channel's content never
@@ -452,12 +487,15 @@ export const MessageStore = signalStore(
 
       patchState(store, { isLoading: true });
       try {
-        const response = await service.getMessages(guildId, channelId, { after: newest.messageId });
+        const response = await service.getMessages(guildId, channelId, {
+          after: newest.messageId,
+          limit: SCROLL_PAGE_SIZE,
+        });
         if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
         await prewarmAttachments(guildId, channelId, response.messages);
         if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         const newer = [...response.messages].reverse();
-        const reachedTail = response.messages.length < PAGE_SIZE;
+        const reachedTail = response.messages.length < SCROLL_PAGE_SIZE;
         patchState(store, {
           messages: [...store.messages(), ...newer],
           degraded: response.degraded,
@@ -510,14 +548,17 @@ export const MessageStore = signalStore(
 
       patchState(store, { isLoading: true });
       try {
-        const response = await service.getMessages(guildId, channelId, { before: oldest.messageId });
+        const response = await service.getMessages(guildId, channelId, {
+          before: oldest.messageId,
+          limit: SCROLL_PAGE_SIZE,
+        });
         if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
         await prewarmAttachments(guildId, channelId, response.messages);
         if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         const older = [...response.messages].reverse();
         patchState(store, {
           messages: [...older, ...store.messages()],
-          hasMore: response.messages.length === PAGE_SIZE,
+          hasMore: response.messages.length === SCROLL_PAGE_SIZE,
           degraded: response.degraded,
           isLoading: false,
         });

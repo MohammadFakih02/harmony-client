@@ -64,7 +64,7 @@
         @for (invite of list(); track invite.code) {
         <div class="flex items-center gap-2 p-2 rounded-lg bg-surface-2 border border-border-subtle">
           <div class="flex flex-col min-w-0 flex-1">
-            <code class="text-sm text-primary font-mono truncate">{{ invite.code }}</code>
+            <code translate="no" class="text-sm text-primary font-mono truncate">{{ invite.code }}</code>
             <span class="text-xs text-muted">{{ usesLabel(invite) }} · {{ expiryLabel(invite) }}</span>
           </div>
           <button
@@ -78,6 +78,7 @@
             type="button"
             class="w-7 h-7 rounded flex items-center justify-center text-muted hover:text-danger hover:bg-surface-3 transition-micro"
             title="Revoke invite"
+            aria-label="Revoke invite"
             (click)="revoke(invite.code)"
           >
             <i class="fas fa-xmark"></i>

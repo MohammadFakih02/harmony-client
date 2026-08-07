@@ -52,7 +52,7 @@
       </p>
       <div class="pt-2">
         <ui-button type="submit" variant="primary" [block]="true" [loading]="loading()">
-          {{ loading() ? 'Signing in...' : 'Sign in' }}
+          {{ loading() ? 'Signing in…' : 'Sign in' }}
         </ui-button>
       </div>
     </form>
@@ -87,6 +87,7 @@
       type="text"
       inputmode="numeric"
       autocomplete="one-time-code"
+      aria-label="6-digit verification code"
       maxlength="6"
       placeholder="000000"
       class="w-full text-center text-2xl font-mono tracking-[0.5em] px-4 py-3 rounded-lg bg-bg border border-border text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
@@ -114,7 +115,7 @@
         [disabled]="code().length !== 6"
         (click)="onVerifyCode()"
       >
-        {{ verifying() ? 'Verifying...' : 'Verify' }}
+        {{ verifying() ? 'Verifying…' : 'Verify' }}
       </ui-button>
     </div>
 
@@ -132,7 +133,7 @@
         [disabled]="resending() || resendCooldown() > 0"
         (click)="onResendCode()"
       >
-        @if (resendCooldown() > 0) { Resend code ({{ resendCooldown() }}s) }
+        @if (resendCooldown() > 0) { Resend code (<span class="tabular-nums">{{ resendCooldown() }}</span>s) }
         @else if (resending()) { Sending… }
         @else { Resend code }
       </button>
