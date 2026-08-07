@@ -172,7 +172,7 @@
           (contextmenu)="openAuthorMenu($event, group)"
           >{{ group.authorName }}</span
         >
-        <span class="text-xs text-faint" [title]="fullTime(group.items[0].msg.sentAt)">{{ group.timestamp }}</span>
+        <span class="text-xs text-faint" [title]="group.items[0].fullTime">{{ group.timestamp }}</span>
         @if (group.blocked) {
         <button
           type="button"
@@ -338,14 +338,14 @@
             [ngClass]="r.meReacted
               ? 'bg-accent/15 border-accent text-accent'
               : 'bg-surface-2 border-border-subtle text-muted hover:text-primary hover:border-border'"
-            [disabled]="!canReact(msg)"
+            [disabled]="!item.canReact"
             (click)="toggleReaction(msg, r.emoji)"
           >
             <span class="text-sm leading-none">{{ r.emoji }}</span>
             <span class="font-semibold tabular-nums">{{ r.count }}</span>
           </button>
           }
-          @if (canReact(msg)) {
+          @if (item.canReact) {
           <button
             type="button"
             cdkOverlayOrigin
@@ -363,13 +363,13 @@
 
         <!-- Hover actions (reply/copy for any message; edit for own; delete for own or ManageMessages).
              Never rendered on a coarse pointer — touch users get the same actions via long-press. -->
-        @if (hasActions(msg) && !viewport.coarsePointer()) {
+        @if (item.hasActions && !viewport.coarsePointer()) {
         <div
           class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
           [class.!flex]="reactionTarget()?.messageId === msg.messageId"
         >
-          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="fullTime(msg.sentAt)">{{ shortTime(msg.sentAt) }}</span>
-          @if (canReact(msg)) {
+          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="item.fullTime">{{ item.shortTime }}</span>
+          @if (item.canReact) {
           @for (emoji of quickReactions(); track emoji) {
           <button
             type="button"
@@ -391,7 +391,7 @@
             <i class="fas fa-face-smile text-xs"></i>
           </button>
           }
-          @if (canReply(msg)) {
+          @if (item.settled) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Reply"
@@ -400,7 +400,7 @@
             <i class="fas fa-reply text-xs"></i>
           </button>
           }
-          @if (canCopy(msg)) {
+          @if (item.canCopy) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Copy text"
@@ -409,7 +409,7 @@
             <i class="fas fa-copy text-xs"></i>
           </button>
           }
-          @if (canForward(msg)) {
+          @if (item.canForward) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Forward"
@@ -418,7 +418,7 @@
             <i class="fas fa-share text-xs"></i>
           </button>
           }
-          @if (canPin(msg)) {
+          @if (item.canPin) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-surface-2 transition-micro"
             [class.text-accent]="isPinned(msg)"
@@ -430,7 +430,7 @@
             <i class="fas fa-thumbtack text-xs"></i>
           </button>
           }
-          @if (canEdit(msg)) {
+          @if (item.canEdit) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-primary hover:bg-surface-2 transition-micro"
             title="Edit"
@@ -439,7 +439,7 @@
             <i class="fas fa-pen text-xs"></i>
           </button>
           }
-          @if (canDelete(msg)) {
+          @if (item.canDelete) {
           <button
             class="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-danger hover:bg-surface-2 transition-micro"
             title="Delete"

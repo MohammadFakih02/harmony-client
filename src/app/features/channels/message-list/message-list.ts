@@ -64,6 +64,27 @@ export interface RenderedMessage {
   preview: ReplyPreview | null;
   inviteCodes: string[];
   messageLinks: MessageLinkRef[];
+  // Per-message flags precomputed ONCE per messageGroups rebuild (perf): these depend only on the
+  // message itself, so baking them here keeps the template reading fields instead of calling methods
+  // on every change-detection pass (200 rows × ~13 methods/row was a dominant CD cost). Channel-level
+  // capabilities (canReactInChannel/canPinMessages/canManageMessages) stay component computeds and are
+  // combined with `settled` in the template — they're the same for every row and memoized once per CD.
+  /** A confirmed, non-deleted message — the base for reply and the exact value of `hasActions`
+   *  (canReply alone makes the hover toolbar appear when settled). */
+  settled: boolean;
+  canCopy: boolean;
+  canForward: boolean;
+  canReact: boolean;
+  canPin: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  /** Whether the hover toolbar shows anything — equals `settled` (canReply dominates the OR). */
+  hasActions: boolean;
+  isMine: boolean;
+  /** "14:32" — hover gutter + toolbar timestamp. */
+  shortTime: string;
+  /** "Monday, … at 3:04 PM" — the timestamp hover tooltip. */
+  fullTime: string;
 }
 
 export interface MessageGroup {
@@ -495,6 +516,12 @@ export class MessageList {
     }
     const roles = guildId ? this.roleStore.rolesOf(guildId) : [];
     const blockedIds = this.blockStore.blockedIds();
+    const myId = this.auth.currentUser()?.id;
+    // Channel-level capabilities captured ONCE per rebuild (same for every row); folded into each
+    // message's action flags below so the template reads a field instead of re-resolving per CD.
+    const canReactCh = this.canReactInChannel();
+    const canPinCh = this.canPinMessages();
+    const canManageCh = this.canManageMessages();
 
     const displayName = (userId: string, fallback: string): string =>
       guildId
@@ -522,11 +549,25 @@ export class MessageList {
                 content: ref.content,
               };
       }
+      const settled = !msg.isDeleted && !msg.pending && !msg.failed;
+      const contentLen = msg.content.trim().length;
+      const isMine = msg.userId === myId;
       return {
         msg,
         preview,
         inviteCodes: this.inviteCodesOf(msg),
         messageLinks: this.messageLinksOf(msg),
+        settled,
+        canCopy: settled && contentLen > 0,
+        canForward: settled && (contentLen > 0 || msg.attachmentIds.length > 0),
+        canReact: settled && canReactCh,
+        canPin: settled && canPinCh,
+        canEdit: isMine && settled,
+        canDelete: (isMine || canManageCh) && settled,
+        hasActions: settled,
+        isMine,
+        shortTime: this.shortTime(msg.sentAt),
+        fullTime: this.fullTime(msg.sentAt),
       };
     };
 

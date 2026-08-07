@@ -15,6 +15,7 @@ import { SignalRService } from '../services/signalr.service';
 import { ReactionService } from '../services/reaction.service';
 import { ToastService } from '../services/toast.service';
 import { FileStore } from './file.store';
+import { MessageCacheDb } from '../services/message-cache.db';
 import { extractApiError } from '../../shared/util/api-error';
 import { compareSnowflakes } from '../../shared/util/snowflake';
 
@@ -85,6 +86,48 @@ function insertByTimeOrder(list: MessageResponse[], msg: MessageResponse): Messa
 // this many are trimmed (re-fetchable on scroll-up). Sized well above a screen's worth of history.
 const MESSAGE_WINDOW_CAP = 200;
 
+// A full history page from the API. A short page means we've reached that edge of the channel.
+const PAGE_SIZE = 50;
+
+/**
+ * Merges a locally-cached window (`base`, ascending oldest→newest — from the in-session L1 cache or
+ * the IndexedDB L2 cache) with a freshly-fetched latest page (`latest`, ascending) so a local-first
+ * open reconciles without flicker. The server page is authoritative for the region it covers (it
+ * picks up edits/reactions that happened while we were away); the cache only contributes messages
+ * strictly OUTSIDE that window — an older prefix (below the page) and a newer suffix (a live message
+ * that beat the fetch).
+ *
+ * "Keep latest on a gap": if the cached tail doesn't reach the latest page (a gap bigger than one
+ * page — we were away a long while), the stale cache is dropped and only the authoritative latest
+ * window is kept; `hasMore` re-opens scroll-up so the gap is re-fetched on demand.
+ */
+export function mergeLatest(
+  base: readonly MessageResponse[],
+  latest: readonly MessageResponse[],
+): { messages: MessageResponse[]; hasMore: boolean } {
+  const fullPage = latest.length === PAGE_SIZE;
+  if (base.length === 0) return { messages: [...latest], hasMore: fullPage };
+  // An empty latest page means the server has no messages here — trust it, drop stale cache.
+  if (latest.length === 0) return { messages: [], hasMore: false };
+
+  const latestMinId = latest[0].messageId;
+  const latestMaxId = latest[latest.length - 1].messageId;
+  const baseMaxId = base[base.length - 1].messageId;
+
+  // Gap: the whole cached tail is older than the entire latest page → not contiguous.
+  if (compareSnowflakes(baseMaxId, latestMinId) < 0) {
+    return { messages: [...latest], hasMore: fullPage };
+  }
+
+  const prefix = base.filter((m) => compareSnowflakes(m.messageId, latestMinId) < 0);
+  const suffix = base.filter((m) => compareSnowflakes(m.messageId, latestMaxId) > 0);
+  const merged = [...prefix, ...latest, ...suffix];
+  const capped =
+    merged.length > MESSAGE_WINDOW_CAP ? merged.slice(merged.length - MESSAGE_WINDOW_CAP) : merged;
+  const hasMore = prefix.length > 0 || fullPage || capped.length < merged.length;
+  return { messages: capped, hasMore };
+}
+
 interface MessageState {
   messages: MessageResponse[];
   isLoading: boolean;
@@ -148,7 +191,34 @@ export const MessageStore = signalStore(
     reactions = inject(ReactionService),
     toast = inject(ToastService),
     fileStore = inject(FileStore),
+    cache = inject(MessageCacheDb),
   ) => {
+    // Batched IndexedDB persistence (Track A1). Live mutations (append/edit/delete/react) and loaded
+    // pages queue here; a debounce coalesces a burst of gateway events into one bulkPut per channel,
+    // off the render path. Gated on cache.enabled so no timers are ever scheduled under vitest (jsdom
+    // has no IndexedDB) — the persistence layer must never touch the existing store specs.
+    const PERSIST_DEBOUNCE_MS = 250;
+    const dirty = new Map<string, Map<string, MessageResponse>>(); // channelId → messageId → msg
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushPersist = (): void => {
+      flushTimer = null;
+      const entries = [...dirty.entries()];
+      dirty.clear();
+      for (const [channelId, byId] of entries) {
+        void cache.putMessages(channelId, [...byId.values()]);
+      }
+    };
+    const queuePersist = (msg: MessageResponse): void => {
+      if (!cache.enabled) return;
+      if (msg.pending || msg.failed || msg.tempId !== undefined) return;
+      let byId = dirty.get(msg.channelId);
+      if (!byId) {
+        byId = new Map();
+        dirty.set(msg.channelId, byId);
+      }
+      byId.set(msg.messageId, msg);
+      if (!flushTimer) flushTimer = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
+    };
     /**
      * Primes the FileStore's URL cache for every attachment on a fetched page BEFORE the page
      * renders — one batch round trip instead of a presign request per attachment, which is what
@@ -199,6 +269,8 @@ export const MessageStore = signalStore(
             : m,
         ),
       });
+      const updated = store.messages().find((m) => m.messageId === messageId);
+      if (updated) queuePersist(updated);
     };
     // Instant re-open: settled messages stashed per channel when the view switches away, painted
     // synchronously on return while the fresh fetch (still authoritative) is in flight.
@@ -265,20 +337,36 @@ export const MessageStore = signalStore(
     /**
      * Loads the latest page into the active channel and drops any anchored (history) state — the
      * shared core of a fresh channel open and "Jump to Present". Assumes activeChannel/Guild are set.
+     *
+     * When `merge` is true (the local-first open path), the fetched page is reconciled with the
+     * already-painted cache window via `mergeLatest` instead of replacing it wholesale — so an
+     * instant cached paint doesn't flicker back to a spinner-then-repaint. `merge` is false for
+     * "Jump to Present" and the post-anchored send snap, which deliberately reset to a clean tail.
+     * Either way the fetched page is persisted to IndexedDB for the next cold open.
      */
-    const fetchLatestInto = async (guildId: string | null, channelId: string): Promise<void> => {
+    const fetchLatestInto = async (
+      guildId: string | null,
+      channelId: string,
+      merge = false,
+    ): Promise<void> => {
       const response = await service.getMessages(guildId, channelId);
       if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
       await prewarmAttachments(guildId, channelId, response.messages);
       if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
+      const latest = [...response.messages].reverse();
+      const base = merge
+        ? store.messages().filter((m) => !m.pending && !m.failed && m.tempId === undefined)
+        : [];
+      const { messages, hasMore } = mergeLatest(base, latest);
       patchState(store, {
-        messages: [...response.messages].reverse(),
-        hasMore: response.messages.length === 50,
+        messages,
+        hasMore,
         degraded: response.degraded,
         anchored: false,
         realIdToTempId: {},
         slowmodeRemainingSeconds: response.slowmodeRemainingSeconds ?? 0,
       });
+      void cache.putMessages(channelId, latest);
     };
 
     return {
@@ -298,7 +386,17 @@ export const MessageStore = signalStore(
         slowmodeRemainingSeconds: 0, // cleared until the fresh load reports this channel's cooldown
       });
       try {
-        await fetchLatestInto(guildId, channelId);
+        // L2 (IndexedDB): when the in-session L1 cache missed, paint the persisted tail so a fresh
+        // page load / restart opens instantly instead of on a spinner. Skipped if a live message
+        // already landed in the gap (don't clobber it) — mergeLatest folds everything together next.
+        if (cache.enabled && cached.length === 0) {
+          const persisted = await cache.loadChannel(channelId);
+          if (!isCurrent(channelId)) return; // stale — the user switched channels mid-flight
+          if (persisted.length && store.messages().length === 0) {
+            patchState(store, { messages: persisted });
+          }
+        }
+        await fetchLatestInto(guildId, channelId, /* merge */ true);
         if (!isCurrent(channelId)) return; // stale — a newer load owns the state now
         patchState(store, {
           isLoading: false,
@@ -359,13 +457,14 @@ export const MessageStore = signalStore(
         await prewarmAttachments(guildId, channelId, response.messages);
         if (!isCurrent(channelId)) return; // re-check — the prewarm awaited too
         const newer = [...response.messages].reverse();
-        const reachedTail = response.messages.length < 50;
+        const reachedTail = response.messages.length < PAGE_SIZE;
         patchState(store, {
           messages: [...store.messages(), ...newer],
           degraded: response.degraded,
           isLoading: false,
           anchored: !reachedTail,
         });
+        void cache.putMessages(channelId, newer);
       } catch {
         if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
@@ -418,10 +517,11 @@ export const MessageStore = signalStore(
         const older = [...response.messages].reverse();
         patchState(store, {
           messages: [...older, ...store.messages()],
-          hasMore: response.messages.length === 50,
+          hasMore: response.messages.length === PAGE_SIZE,
           degraded: response.degraded,
           isLoading: false,
         });
+        void cache.putMessages(channelId, older);
       } catch {
         if (isCurrent(channelId)) patchState(store, { isLoading: false });
       }
@@ -504,6 +604,7 @@ export const MessageStore = signalStore(
             messages: store.messages().map((m) => (m.nonce === msg.nonce ? { ...msg } : m)),
             realIdToTempId: map,
           });
+          queuePersist(msg);
           return;
         }
       }
@@ -520,6 +621,7 @@ export const MessageStore = signalStore(
           ),
           realIdToTempId: updated,
         });
+        queuePersist(msg);
       } else {
         const exists = store.messages().some((m) => m.messageId === msg.messageId);
         if (!exists) {
@@ -532,6 +634,7 @@ export const MessageStore = signalStore(
               ? { mentionHighlights: { ...store.mentionHighlights(), [msg.messageId]: true as const } }
               : {}),
           });
+          queuePersist(msg);
         }
       }
     },
@@ -591,6 +694,8 @@ export const MessageStore = signalStore(
           m.messageId === messageId ? { ...m, content, isEdited: true, editedAt } : m,
         ),
       });
+      const updated = store.messages().find((m) => m.messageId === messageId);
+      if (updated) queuePersist(updated);
     },
 
     deleteMessage(messageId: string): void {
@@ -599,6 +704,8 @@ export const MessageStore = signalStore(
           m.messageId === messageId ? { ...m, isDeleted: true, content: '' } : m,
         ),
       });
+      const updated = store.messages().find((m) => m.messageId === messageId);
+      if (updated) queuePersist(updated);
     },
 
     clearMessages(): void {

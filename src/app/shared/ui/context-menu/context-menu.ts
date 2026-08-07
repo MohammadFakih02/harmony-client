@@ -2,7 +2,6 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  HostListener,
   effect,
   inject,
   signal,
@@ -87,14 +86,44 @@ export class ContextMenu {
     };
     document.addEventListener('contextmenu', onContextCapture, { capture: true });
     document.addEventListener('click', onClickCapture, { capture: true });
+
+    // These document/window listeners are registered NATIVELY (not via @HostListener) on purpose.
+    // In a zoneless app every @HostListener invocation schedules a change-detection pass — even when
+    // the handler is a no-op — so a `document:pointermove` / `window:wheel` host binding would run a
+    // full CD on EVERY mouse move and scroll wheel tick, pinning the main thread while the (large)
+    // message list re-checks all its per-message bindings. Native listeners don't schedule CD; the
+    // only state these mutate is plain fields, and the paths that must actually render — a synthetic
+    // long-press `contextmenu` → ContextMenuService.open(), or close() on wheel/resize/escape — are
+    // signal writes that notify the zoneless scheduler on their own.
+    const pointerDown = (e: PointerEvent): void => this.onPointerDown(e);
+    const pointerMove = (e: PointerEvent): void => this.onPointerMove(e);
+    const pointerEnd = (): void => this.cancelPress();
+    const keyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') this.onEscape();
+    };
+    const viewportChange = (): void => this.onViewportChange();
+    document.addEventListener('pointerdown', pointerDown);
+    document.addEventListener('pointermove', pointerMove, { passive: true });
+    document.addEventListener('pointerup', pointerEnd);
+    document.addEventListener('pointercancel', pointerEnd);
+    document.addEventListener('keydown', keyDown);
+    window.addEventListener('resize', viewportChange);
+    window.addEventListener('wheel', viewportChange, { passive: true });
+
     inject(DestroyRef).onDestroy(() => {
       document.removeEventListener('contextmenu', onContextCapture, { capture: true });
       document.removeEventListener('click', onClickCapture, { capture: true });
+      document.removeEventListener('pointerdown', pointerDown);
+      document.removeEventListener('pointermove', pointerMove);
+      document.removeEventListener('pointerup', pointerEnd);
+      document.removeEventListener('pointercancel', pointerEnd);
+      document.removeEventListener('keydown', keyDown);
+      window.removeEventListener('resize', viewportChange);
+      window.removeEventListener('wheel', viewportChange);
       this.cancelPress();
     });
   }
 
-  @HostListener('document:pointerdown', ['$event'])
   protected onPointerDown(e: PointerEvent): void {
     if (!this.viewport.coarsePointer() || e.pointerType !== 'touch') return;
     if (!e.isPrimary) {
@@ -114,13 +143,10 @@ export class ContextMenu {
     this.pressTimer = setTimeout(() => this.firePress(), LONG_PRESS_DEFAULTS.delayMs);
   }
 
-  @HostListener('document:pointermove', ['$event'])
   protected onPointerMove(e: PointerEvent): void {
     if (e.pointerType === 'touch') this.press.move(e.pointerId, e.clientX, e.clientY);
   }
 
-  @HostListener('document:pointerup')
-  @HostListener('document:pointercancel')
   protected cancelPress(): void {
     this.press.cancel();
     this.clearPressTimer();
@@ -185,13 +211,10 @@ export class ContextMenu {
     this.contextMenu.close();
   }
 
-  @HostListener('document:keydown.escape')
   protected onEscape(): void {
     if (this.contextMenu.state()) this.contextMenu.close();
   }
 
-  @HostListener('window:resize')
-  @HostListener('window:wheel')
   protected onViewportChange(): void {
     // Mobile: the keyboard opening / URL bar collapsing fires resize — must not dismiss the sheet.
     if (this.viewport.isMobile()) return;
