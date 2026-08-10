@@ -55,10 +55,28 @@
 </div>
 }
 
-<!-- Loading spinner for initial load (delayed so fast loads don't flash it) -->
-@if (showInitialLoading()) {
+<!-- Slow load (>2.5s) → spinner. Fast load (~200ms–2.5s) → shimmer skeleton. Instant (<200ms) → nothing. -->
+@if (showSlowLoading()) {
 <div class="flex items-center justify-center flex-1">
-  <i class="fas fa-yin-yang animate-spin text-2xl text-faint"></i>
+  <i class="spinner-brand text-2xl text-faint"></i>
+</div>
+} @else if (showInitialLoading()) {
+<div class="flex-1 min-h-0 overflow-hidden px-4 pt-4 flex flex-col gap-5" aria-hidden="true">
+  @for (row of skeletonRows; track $index) {
+  <div class="flex items-start gap-3">
+    <div class="skeleton rounded-full w-10 h-10 shrink-0"></div>
+    <div class="flex flex-col gap-2 min-w-0 flex-1 pt-1">
+      <div class="flex items-center gap-2">
+        <div class="skeleton h-3 rounded" [style.width.px]="row.name"></div>
+        <div class="skeleton h-2 w-8 rounded opacity-60"></div>
+      </div>
+      <div class="skeleton h-3 rounded" [style.width.%]="row.line1"></div>
+      @if (row.line2) {
+      <div class="skeleton h-3 rounded" [style.width.%]="row.line2"></div>
+      }
+    </div>
+  </div>
+  }
 </div>
 } @else if (messageStore.isLoading() && messageStore.messages().length === 0) {
 <!-- Loading but under the delay threshold → render nothing (avoids the flash) -->
@@ -66,22 +84,24 @@
 } @else if (messageStore.messages().length === 0) {
 <!-- Welcome block — anchored at the bottom, where the conversation will start -->
 <div class="flex flex-col justify-end flex-1 min-h-0 px-4 pb-4 select-none">
-  <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-3">
+  <div
+    class="w-16 h-16 rounded-2xl bg-accent-muted ring-1 ring-accent/25 flex items-center justify-center mb-4 shadow-[0_10px_30px_-14px_var(--color-accent-glow)]"
+  >
     <i
-      class="fas text-2xl text-muted"
+      class="fas text-2xl text-accent"
       [class.fa-hashtag]="messageStore.activeGuildId()"
       [class.fa-comments]="!messageStore.activeGuildId()"
     ></i>
   </div>
-  <h3 class="text-2xl font-bold text-primary">{{ emptyTitle() }}</h3>
-  <p class="text-sm text-muted mt-1">{{ emptySubtitle() }} Say hello!</p>
+  <h3 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">{{ emptyTitle() }}</h3>
+  <p class="text-sm text-muted mt-1.5 max-w-md leading-relaxed">{{ emptySubtitle() }} This is the very beginning — say hello!</p>
 </div>
 } @else {
 
 <!-- Subtle indicator while older history loads (auto-triggered on scroll-up) -->
 @if (messageStore.isLoading() && messageStore.messages().length > 0) {
 <div class="flex justify-center py-1.5 shrink-0">
-  <i class="fas fa-yin-yang animate-spin text-faint text-sm"></i>
+  <i class="spinner-brand text-faint text-sm"></i>
 </div>
 }
 
@@ -281,7 +301,7 @@
         </div>
         }
         <div
-          class="text-sm leading-relaxed wrap-break-words"
+          class="text-base leading-relaxed wrap-break-words"
           [class.text-primary]="!msg.pending && !msg.failed"
           [class.opacity-60]="msg.pending"
           [class.text-danger]="msg.failed"
@@ -366,7 +386,7 @@
              Never rendered on a coarse pointer — touch users get the same actions via long-press. -->
         @if (item.hasActions && !viewport.coarsePointer()) {
         <div
-          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle shadow-sm"
+          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle elevated"
           [class.!flex]="reactionTarget()?.messageId === msg.messageId"
         >
           <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="item.fullTime">{{ item.shortTime }}</span>

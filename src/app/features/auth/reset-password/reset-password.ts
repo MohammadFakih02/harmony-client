@@ -11,6 +11,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -28,7 +29,7 @@ type ResetState = 'form' | 'invalidLink' | 'success';
 @Component({
   selector: 'app-reset-password',
   standalone: true,
-  imports: [ReactiveFormsModule, UiButton, UiInput],
+  imports: [ReactiveFormsModule, UiButton, UiInput, AuthShell],
   templateUrl: './reset-password.html',
 })
 export class ResetPassword implements OnInit {

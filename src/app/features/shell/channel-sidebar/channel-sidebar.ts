@@ -41,7 +41,7 @@ import {
   dmLabel,
   dmPeer,
 } from '../../../core/models/direct-message.models';
-import { UiAvatar, UiIconButton, ConfirmService } from '../../../shared/ui';
+import { UiAvatar, UiIconButton, UiModal, ConfirmService } from '../../../shared/ui';
 import { GroupDmModal } from '../../channels/group-dm-modal/group-dm-modal';
 import { ChannelSettingsModal } from '../../channels/channel-settings-modal/channel-settings-modal';
 import { InvitePeopleModal } from '../../guilds/invite-people-modal/invite-people-modal';
@@ -95,6 +95,7 @@ interface ExpiryOption {
     ChannelSettingsModal,
     InvitePeopleModal,
     VoiceBar,
+    UiModal,
   ],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './channel-sidebar.html',
@@ -862,8 +863,10 @@ export class ChannelSidebar {
     this.channelNotifTarget.set(null);
   }
 
-  // Delayed so a fast (cached/quick) channel fetch doesn't flash the spinner.
+  // Delayed so a fast (cached/quick) channel fetch doesn't flash a loader. showLoading (~200ms)
+  // drives the shimmer skeleton; showSlowLoading (>2.5s) escalates to a spinner.
   protected readonly showLoading = delayedSignal(this.channelStore.loading);
+  protected readonly showSlowLoading = delayedSignal(this.channelStore.loading, 2500);
 
   // The home column (Friends + DM list) shows whenever we're not inside a guild.
   private readonly url = toSignal(

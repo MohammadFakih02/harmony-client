@@ -5,14 +5,14 @@
     class="flex h-full shrink-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:bg-surface max-md:shadow-modal max-md:transition-transform max-md:duration-300"
     [class.max-md:-translate-x-full]="!nav.leftDrawerOpen()"
   >
-    <!-- Guild Navigation Bar -->
-    <div class="flex flex-col h-full w-18 min-w-18 bg-surface overflow-hidden">
+    <!-- Guild Navigation Bar — the deepest structural layer (rail < sidebar < chat). -->
+    <div class="flex flex-col h-full w-18 min-w-18 bg-bg overflow-hidden">
       <app-guild-sidebar />
     </div>
 
     <!-- Channel Navigation Panel (drag-resizable via the strip on its right edge; fills the drawer on mobile) -->
     <div
-      class="flex flex-col h-full bg-surface-2 overflow-hidden border-r border-border-subtle shrink-0 max-md:flex-1 max-md:min-w-0"
+      class="flex flex-col h-full bg-[var(--layer-sidebar)] overflow-hidden border-r border-border-subtle shrink-0 max-md:flex-1 max-md:min-w-0"
       [style.width.px]="viewport.isMobile() ? null : settings.channelSidebarWidth()"
     >
       <app-channel-sidebar />
@@ -38,7 +38,7 @@
       <!-- Header bar: channel / DM context on the left, controls on the right. Only shown in
            a guild channel or a DM — the Friends/home screen renders its own header. -->
       @if (inGuild() || inDm()) {
-      <header class="flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0">
+      <header class="relative z-10 flex items-center gap-2 h-12 min-h-12 px-3.5 border-b border-border-subtle shrink-0 shadow-[0_6px_16px_-14px_rgba(0,0,0,0.55)]">
         <!-- Mobile: hamburger opens the navigation drawer -->
         <button
           type="button"
@@ -159,6 +159,9 @@
           <app-pins-panel (close)="showPins.set(false)" />
         </ng-template>
 
+        <!-- Divider: content-scoped actions (search, pins) from app/context actions (bell, members, call). -->
+        <span class="w-px h-5 bg-border-subtle mx-0.5 shrink-0"></span>
+
         <app-notification-bell />
         @if (inGuild()) {
         <ui-icon-button
@@ -213,7 +216,7 @@
       (widthChange)="settings.setRightSidebarWidth($event)"
     ></div>
     <div
-      class="h-full bg-surface-2 border-l border-border-subtle overflow-hidden shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      class="h-full bg-[var(--layer-sidebar)] border-l border-border-subtle overflow-hidden shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
       [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
     >
       <app-member-sidebar />
@@ -231,7 +234,7 @@
       (widthChange)="settings.setRightSidebarWidth($event)"
     ></div>
     <div
-      class="h-full bg-surface-2 border-l border-border-subtle overflow-y-auto shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
+      class="h-full bg-[var(--layer-sidebar)] border-l border-border-subtle overflow-y-auto shrink-0 max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[min(85vw,360px)] max-md:shadow-modal"
       [style.width.px]="viewport.isMobile() ? null : settings.rightSidebarWidth()"
     >
       <!-- Banner: the peer's real banner (image > colour > accent gradient); groups keep the gradient -->
@@ -403,7 +406,7 @@
         <div class="mt-3 rounded-xl bg-surface border border-border-subtle p-3.5">
           <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
           <div class="flex items-center gap-2 text-sm text-muted">
-            <i class="fas fa-yin-yang text-faint text-xs shrink-0" title="Joined Harmony"></i>
+            <harmony-mark [size]="14" [mono]="true" class="text-faint shrink-0" title="Joined Harmony" />
             <span>{{ memberSince(peer.userId) }}</span>
           </div>
         </div>

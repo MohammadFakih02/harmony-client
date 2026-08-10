@@ -12,11 +12,14 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiAvatar, UiButton],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">Privacy &amp; Safety</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Privacy &amp; Safety</h2>
+      <p class="text-sm text-muted mt-1.5">Control who can reach you, and manage the people you've blocked or muted.</p>
+    </header>
 
     <!-- DM privacy — a checklist, not a radio: any combination of audiences may DM you.
          "Everyone" subsumes the other two, so picking it visually checks + locks them. -->
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">Who Can Send You a DM</p>
+    <p class="set-section-label mb-1">Who Can Send You a DM</p>
     <p class="text-xs text-muted mb-2">
       Existing conversations always stay open, regardless of this setting.
     </p>
@@ -26,21 +29,25 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
       @let locked = opt.value !== 'everyone' && audiences().has('everyone');
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors"
+        class="flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-micro"
         [class.border-accent]="checked"
+        [class.bg-accent-muted]="checked"
         [class.border-border-subtle]="!checked"
+        [class.hover:border-border]="!checked && !locked"
+        [class.hover:bg-surface-2]="!checked && !locked"
         [class.opacity-60]="locked"
+        [class.cursor-not-allowed]="locked"
         [disabled]="locked"
         (click)="toggle(opt.value)"
       >
         <span
-          class="mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center"
+          class="h-5 w-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-micro"
           [class.border-accent]="checked"
           [class.bg-accent]="checked"
           [class.border-faint]="!checked"
         >
           @if (checked) {
-          <i class="fas fa-check text-3xs text-white"></i>
+          <i class="fas fa-check text-2xs text-white"></i>
           }
         </span>
         <span class="min-w-0">
@@ -52,45 +59,45 @@ import { UiAvatar, UiButton } from '../../../shared/ui';
     </div>
 
     <!-- Blocked users -->
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">
-      Blocked Users — {{ blocks.blocked().length }}
-    </p>
-    @if (blocks.blocked().length === 0) {
-    <p class="text-sm text-muted mb-8">You haven't blocked anyone.</p>
-    } @else {
-    <div class="divide-y divide-border-subtle mb-8">
-      @for (u of blocks.blocked(); track u.id) {
-      <div class="flex items-center gap-3 py-2.5">
-        <ui-avatar [src]="u.avatarKey" [alt]="u.username" size="sm" />
-        <span class="flex-1 min-w-0 text-sm font-semibold text-primary truncate">{{ u.username }}</span>
-        <ui-button variant="ghost" size="sm" (click)="blocks.unblock(u.id)">Unblock</ui-button>
+    <p class="set-section-label mb-2">Blocked Users — {{ blocks.blocked().length }}</p>
+    <div class="set-card mb-8">
+      @if (blocks.blocked().length === 0) {
+      <p class="px-4 py-3.5 text-sm text-muted">You haven't blocked anyone.</p>
+      } @else {
+      <div class="divide-y divide-border-subtle">
+        @for (u of blocks.blocked(); track u.id) {
+        <div class="flex items-center gap-3 px-4 py-2.5">
+          <ui-avatar [src]="u.avatarKey" [alt]="u.username" size="sm" />
+          <span class="flex-1 min-w-0 text-sm font-semibold text-primary truncate">{{ u.username }}</span>
+          <ui-button variant="ghost" size="sm" (click)="blocks.unblock(u.id)">Unblock</ui-button>
+        </div>
+        }
       </div>
       }
     </div>
-    }
 
     <!-- Muted -->
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-2">
-      Muted — {{ mutes.mutes().length }}
-    </p>
-    @if (mutes.mutes().length === 0) {
-    <p class="text-sm text-muted">Nothing is muted.</p>
-    } @else {
-    <div class="divide-y divide-border-subtle">
-      @for (m of mutes.mutes(); track m.targetType + m.targetId) {
-      <div class="flex items-center gap-3 py-2.5">
-        <i class="fas {{ muteIcon(m) }} text-muted w-5 text-center"></i>
-        <span class="flex-1 min-w-0">
-          <span class="block text-sm font-semibold text-primary">{{ muteLabel(m) }}</span>
-          <span class="block text-xs text-muted">{{ muteUntil(m) }}</span>
-        </span>
-        <ui-button variant="ghost" size="sm" (click)="mutes.remove(m.targetType, m.targetId)">
-          Unmute
-        </ui-button>
+    <p class="set-section-label mb-2">Muted — {{ mutes.mutes().length }}</p>
+    <div class="set-card">
+      @if (mutes.mutes().length === 0) {
+      <p class="px-4 py-3.5 text-sm text-muted">Nothing is muted.</p>
+      } @else {
+      <div class="divide-y divide-border-subtle">
+        @for (m of mutes.mutes(); track m.targetType + m.targetId) {
+        <div class="flex items-center gap-3 px-4 py-2.5">
+          <i class="fas {{ muteIcon(m) }} text-muted w-5 text-center"></i>
+          <span class="flex-1 min-w-0">
+            <span class="block text-sm font-semibold text-primary">{{ muteLabel(m) }}</span>
+            <span class="block text-xs text-muted">{{ muteUntil(m) }}</span>
+          </span>
+          <ui-button variant="ghost" size="sm" (click)="mutes.remove(m.targetType, m.targetId)">
+            Unmute
+          </ui-button>
+        </div>
+        }
       </div>
       }
     </div>
-    }
   `,
 })
 export class PrivacySettings implements OnInit {

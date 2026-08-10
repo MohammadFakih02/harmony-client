@@ -111,7 +111,9 @@ export const routes: Routes = [
     pathMatch: 'full',
   },
   {
+    // Unknown route → branded 404 (was a silent redirect to login).
     path: '**',
-    redirectTo: 'login',
+    loadComponent: () =>
+      import('./features/not-found/not-found').then((m) => m.NotFound),
   },
 ];

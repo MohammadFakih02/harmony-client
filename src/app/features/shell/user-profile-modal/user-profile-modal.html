@@ -1,15 +1,15 @@
 @if (profileModal.target()) {
 <div
-  class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  class="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in"
   (click)="close()"
 >
   <div
-    class="bg-surface rounded-xl shadow-modal border border-border w-full max-w-sm mx-4 overflow-hidden flex flex-col max-h-[85vh] animate-slide-up"
+    class="bg-surface rounded-xl panel border border-border w-full max-w-sm mx-4 overflow-hidden flex flex-col max-h-[85vh] animate-modal-in"
     (click)="$event.stopPropagation()"
   >
     @if (loading() && !view()) {
     <div class="flex justify-center py-16">
-      <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
+      <i class="spinner-brand text-faint text-xl"></i>
     </div>
     } @else if (error() && !view()) {
     <div class="flex flex-col items-center gap-2 py-12 px-6 text-center">
@@ -60,7 +60,7 @@
 
         <!-- ===== Identity ===== -->
         <div class="mt-2.5 min-w-0">
-          <p class="text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
+          <p class="font-display text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
           @if (hasNickname() || v.age != null) {
           <p class="text-xs text-muted truncate mt-0.5">
             @if (hasNickname()) {
@@ -118,7 +118,7 @@
         <div class="mb-3">
           <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Member Since</p>
           <div class="flex items-center gap-2 text-xs text-muted min-w-0">
-            <i class="fas fa-yin-yang text-faint shrink-0" title="Joined Harmony"></i>
+            <harmony-mark [size]="13" [mono]="true" class="text-faint shrink-0" title="Joined Harmony" />
             <span class="shrink-0">{{ accountSince() }}</span>
             @if (serverSince(); as since) {
             <span class="w-1 h-1 rounded-full bg-border shrink-0"></span>
@@ -250,7 +250,7 @@
           } @else if (canMessage()) {
           <button
             type="button"
-            class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro flex items-center justify-center gap-2"
+            class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow transition-all flex items-center justify-center gap-2"
             (click)="message()"
           >
             <i class="fas fa-message text-xs"></i> Message

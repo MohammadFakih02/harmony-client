@@ -39,7 +39,7 @@ import { UserProfileModal } from './user-profile-modal/user-profile-modal';
 import { ConnectionBanner } from './connection-banner';
 import { GroupDmModal } from '../channels/group-dm-modal/group-dm-modal';
 import { IncomingCall } from '../voice/incoming-call/incoming-call';
-import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu, ConfirmDialog } from '../../shared/ui';
+import { UiAvatar, UiIconButton, UiProfileBanner, Lightbox, ContextMenu, ConfirmDialog, HarmonyMark } from '../../shared/ui';
 import { toAvatarStatus } from '../../core/models/presence.models';
 import {
   DirectMessageChannel,
@@ -90,6 +90,7 @@ import {
     PinsPanel,
     SearchPanel,
     ResizeHandle,
+    HarmonyMark,
   ],
   templateUrl: './shell.html',
 })

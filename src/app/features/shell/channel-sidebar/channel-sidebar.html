@@ -140,9 +140,24 @@
     (scroll)="onSidebarScrolled()"
     (contextmenu)="openChannelListMenu($event)"
   >
-    @if (showLoading()) {
+    @if (showSlowLoading()) {
     <div class="flex justify-center pt-8">
-      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+      <i class="spinner-brand text-faint"></i>
+    </div>
+    } @else if (showLoading()) {
+    <!-- Fast load → channel-list shimmer skeleton (two grouped clusters) -->
+    <div class="px-2 pt-3 flex flex-col gap-5" aria-hidden="true">
+      @for (grp of [0, 1]; track $index) {
+      <div class="flex flex-col gap-1.5">
+        <div class="skeleton h-2.5 w-24 rounded mx-1"></div>
+        @for (w of [96, 72, 110, 64]; track $index) {
+        <div class="flex items-center gap-2 px-2 py-1">
+          <div class="skeleton w-4 h-4 rounded shrink-0"></div>
+          <div class="skeleton h-3 rounded" [style.width.px]="w"></div>
+        </div>
+        }
+      </div>
+      }
     </div>
     } @else if (channelStore.loading() && channelStore.sidebarEntries().length === 0) {
     <!-- Loading under the delay threshold with nothing cached → render nothing
@@ -448,9 +463,10 @@
         </div>
         } @else {
         <!-- The channel you're viewing never shows an unread badge (you're reading it). -->
+        @let active = channelStore.selectedChannelId() === channel.id;
         @let muted = muteStore.isMuted('channel', channel.id);
         <!-- A muted channel shows no unread emphasis (dimmed, no pill/badge), Discord-style. -->
-        @let unread = channelStore.selectedChannelId() === channel.id || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
+        @let unread = active || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
         <a
           [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
           routerLinkActive="bg-surface-3 text-primary"
@@ -467,8 +483,17 @@
           @if (unread > 0) {
           <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary"></span>
           }
+          <!-- Active-channel accent marker (the channel you're viewing) — taller than the unread pill.
+               Mutually exclusive with it, since the active channel's unread count is forced to 0. -->
+          @if (active) {
+          <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-accent"></span>
+          }
           <!-- Voice channels render in their own branch above; this row is always a text/announcement channel. -->
-          <i class="fas fa-hashtag w-4 text-center shrink-0 text-faint text-base"></i>
+          <i
+            class="fas fa-hashtag w-4 text-center shrink-0 text-base"
+            [class.text-accent]="active"
+            [class.text-faint]="!active"
+          ></i>
           <span class="flex-1 truncate-text">{{ channel.name }}</span>
 
           <!-- Unread badge -->
@@ -545,7 +570,7 @@
   } @else {
   <!-- Home column: Friends nav + DM list -->
   <div class="flex items-center px-4 h-12 min-h-12 border-b border-border-subtle shrink-0">
-    <span class="font-semibold text-primary">Direct Messages</span>
+    <span class="font-display font-semibold text-primary">Direct Messages</span>
   </div>
   <div
     class="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2"
@@ -586,18 +611,23 @@
     } @else {
     <div class="flex flex-col gap-0.5">
       @for (dm of dmStore.dms(); track dm.channelId) {
-      @let unread = activeDmChannelId() === dm.channelId ? 0 : (unreadStore.counts()[dm.channelId] || 0);
+      @let activeDm = activeDmChannelId() === dm.channelId;
+      @let unread = activeDm ? 0 : (unreadStore.counts()[dm.channelId] || 0);
       @let peer = dmOneToOnePeer(dm);
       <a
         [routerLink]="['/app/dm', dm.channelId]"
         routerLinkActive="bg-surface-3 text-primary"
-        class="dm-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
+        class="dm-item group relative flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
         [class.font-semibold]="unread > 0"
         [class.text-primary]="unread > 0"
         (contextmenu)="openDmMenu($event, dm)"
         (pointerenter)="prefetchDm(dm.channelId)"
         (click)="closeDrawer()"
       >
+        <!-- Active-DM accent marker (the conversation you're viewing) — mirrors the text-channel bar. -->
+        @if (activeDm) {
+        <span class="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-accent"></span>
+        }
         @if (dm.isGroup) {
         <span
           class="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-3 flex items-center justify-center text-muted"
@@ -646,7 +676,7 @@
 
   <!-- User deck -->
   <div
-    class="relative flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border h-13 min-h-13 shadow-sm animate-slide-up shrink-0"
+    class="relative flex items-center gap-2 m-2 p-2 bg-surface-2 rounded-xl border border-border h-13 min-h-13 elevated animate-slide-up shrink-0"
   >
     <!-- Status-select menu — its own CDK overlay (escapes the sidebar's overflow-hidden) -->
     <ng-template
@@ -866,21 +896,13 @@
 
 <!-- Create Channel Modal -->
 @if (showCreateModal()) {
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-  (click)="closeCreateModal()"
+<ui-modal
+  [heading]="channelType() === 'category' ? 'Create a Category' : 'Create a Channel'"
+  [subtitle]="'in ' + (guildStore.selectedGuild()?.name ?? '')"
+  size="sm"
+  (close)="closeCreateModal()"
 >
-  <div
-    class="bg-surface rounded-2xl shadow-modal w-full max-w-sm mx-4 p-6 flex flex-col gap-5"
-    (click)="$event.stopPropagation()"
-  >
-    <div class="flex flex-col gap-1">
-      <h2 class="text-lg font-bold text-primary text-center">
-        {{ channelType() === 'category' ? 'Create a Category' : 'Create a Channel' }}
-      </h2>
-      <p class="text-sm text-muted text-center">in {{ guildStore.selectedGuild()?.name }}</p>
-    </div>
-
+  <div class="flex flex-col gap-5 px-6 pb-6 pt-1">
     <!-- Channel type toggle -->
     <div class="flex gap-2">
       <button
@@ -955,11 +977,11 @@
         (click)="submitCreateChannel()"
       >
         @if (submitting()) {
-          <i class="fas fa-yin-yang animate-spin mr-1.5"></i>
+          <i class="spinner-brand mr-1.5"></i>
         }
         {{ channelType() === 'category' ? 'Create Category' : 'Create Channel' }}
       </button>
     </div>
   </div>
-</div>
+</ui-modal>
 }

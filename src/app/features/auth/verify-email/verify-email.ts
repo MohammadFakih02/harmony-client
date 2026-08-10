@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { extractApiError } from '../../../shared/util/api-error';
+import { UiButton } from '../../../shared/ui';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 type VerifyState = 'verifying' | 'success' | 'error';
 
@@ -14,6 +16,7 @@ type VerifyState = 'verifying' | 'success' | 'error';
 @Component({
   selector: 'app-verify-email',
   standalone: true,
+  imports: [UiButton, AuthShell],
   templateUrl: './verify-email.html',
 })
 export class VerifyEmail implements OnInit {

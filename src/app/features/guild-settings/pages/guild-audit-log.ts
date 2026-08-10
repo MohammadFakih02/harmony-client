@@ -14,8 +14,10 @@ import { AuditLogEntry, auditActionMeta } from '../../../core/models/audit-log.m
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiAvatar],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-1">Audit Log</h2>
-    <p class="text-sm text-muted mb-5">A record of moderation and management actions in this server.</p>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Audit Log</h2>
+      <p class="text-sm text-muted mt-1.5">A record of moderation and management actions in this server.</p>
+    </header>
 
     @if (error()) {
     <p class="text-sm text-danger mb-3">{{ error() }}</p>
@@ -23,14 +25,14 @@ import { AuditLogEntry, auditActionMeta } from '../../../core/models/audit-log.m
 
     @if (loading() && entries().length === 0) {
     <div class="flex justify-center py-10">
-      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+      <i class="spinner-brand text-faint"></i>
     </div>
     } @else if (entries().length === 0) {
-    <p class="text-sm text-faint text-center py-10">No audit-log entries yet.</p>
+    <div class="set-card"><p class="text-sm text-faint text-center py-10">No audit-log entries yet.</p></div>
     } @else {
-    <div class="flex flex-col gap-1">
+    <div class="set-card divide-y divide-border-subtle">
       @for (entry of entries(); track entry.id) {
-      <div class="flex items-start gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2 transition-micro">
+      <div class="flex items-start gap-3 px-4 py-2.5 hover:bg-surface-3 transition-micro">
         <ui-avatar [src]="entry.actorAvatarKey" [alt]="entry.actorUsername ?? 'Unknown'" size="sm" />
         <div class="flex min-w-0 flex-1 flex-col">
           <p class="text-sm text-primary">

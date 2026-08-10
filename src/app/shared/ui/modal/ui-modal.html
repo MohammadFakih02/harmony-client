@@ -1,5 +1,5 @@
 <div
-  class="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
+  class="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in"
   [class]="layer() === 'top' ? 'z-60' : 'z-50'"
   (click)="close.emit()"
 >
@@ -9,7 +9,7 @@
     [attr.aria-labelledby]="heading() ? headingId : null"
     cdkTrapFocus
     [cdkTrapFocusAutoCapture]="true"
-    class="relative w-full mx-4 flex flex-col max-h-[85vh] overscroll-contain rounded-2xl bg-surface border border-border-subtle shadow-modal overflow-hidden animate-modal-in"
+    class="relative w-full mx-4 flex flex-col max-h-[85vh] overscroll-contain rounded-2xl bg-surface border border-border-subtle panel overflow-hidden animate-modal-in"
     [class]="sizeClass()"
     (click)="$event.stopPropagation()"
   >
@@ -25,7 +25,7 @@
     @if (heading()) {
     <!-- px-10 keeps a long centered heading clear of the absolute ✕ button. -->
     <div class="flex flex-col gap-1 px-10 pt-6 pb-3 shrink-0 text-center">
-      <h2 [id]="headingId" class="text-lg font-bold text-primary">{{ heading() }}</h2>
+      <h2 [id]="headingId" class="font-display text-lg font-bold text-primary tracking-[-0.01em]">{{ heading() }}</h2>
       @if (subtitle()) {
       <p class="text-sm text-muted">{{ subtitle() }}</p>
       }

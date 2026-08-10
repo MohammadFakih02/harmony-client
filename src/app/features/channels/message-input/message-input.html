@@ -59,7 +59,7 @@
       <!-- Uploading overlay + determinate progress bar along the bottom edge -->
       @if (file.status === 'uploading') {
       <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
-        <i class="fas fa-yin-yang animate-spin text-white text-sm"></i>
+        <i class="spinner-brand text-white text-sm"></i>
         <span class="text-2xs text-white tabular-nums">{{ file.progress }}%</span>
       </div>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
@@ -106,7 +106,7 @@
     <div
       #composerOrigin
       cdkOverlayOrigin
-      class="flex-1 flex items-end bg-surface-3 rounded-xl min-h-[3.25rem] ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-micro"
+      class="flex-1 flex items-end bg-surface-3 rounded-xl min-h-[3.25rem] ring-1 ring-border-subtle focus-within:ring-2 focus-within:ring-accent transition-all shadow-[var(--highlight-top)]"
     >
       @if (canAttach()) {
       <input
@@ -216,7 +216,7 @@
     aria-label="Send message"
   >
     @if (sending()) {
-    <i class="fas fa-yin-yang animate-spin"></i>
+    <i class="spinner-brand"></i>
     } @else {
     <i class="fas fa-paper-plane"></i>
     }

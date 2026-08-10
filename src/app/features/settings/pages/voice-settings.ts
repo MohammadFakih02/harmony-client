@@ -20,16 +20,27 @@ import { SettingsToggle } from '../ui/settings-toggle';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [SettingsToggle],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">Voice & Video</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Voice &amp; Video</h2>
+      <p class="text-sm text-muted mt-1.5">Pick your devices and tune how your mic and screen share sound and look.</p>
+    </header>
 
-    <div class="flex flex-col gap-4 mb-6">
-      <div class="flex flex-col gap-1.5">
-        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-mic">
-          Input Device
-        </label>
+    <div class="flex items-center justify-between mb-2">
+      <p class="set-section-label">Devices</p>
+      <button
+        type="button"
+        class="text-xs font-medium text-muted hover:text-primary transition-micro"
+        (click)="loadDevices()"
+      >
+        <i class="fas fa-rotate mr-1"></i>Refresh
+      </button>
+    </div>
+    <div class="set-card mb-6">
+      <div class="set-row">
+        <label class="set-row-title shrink-0" for="voice-mic">Input Device</label>
         <select
           id="voice-mic"
-          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          class="max-w-[58%] min-w-0 px-3 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
           [value]="prefs.prefs().micDeviceId ?? ''"
           (change)="onDevice('audioinput', $event)"
         >
@@ -39,14 +50,11 @@ import { SettingsToggle } from '../ui/settings-toggle';
           }
         </select>
       </div>
-
-      <div class="flex flex-col gap-1.5">
-        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-speaker">
-          Output Device
-        </label>
+      <div class="set-row">
+        <label class="set-row-title shrink-0" for="voice-speaker">Output Device</label>
         <select
           id="voice-speaker"
-          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          class="max-w-[58%] min-w-0 px-3 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
           [value]="prefs.prefs().speakerDeviceId ?? ''"
           (change)="onDevice('audiooutput', $event)"
         >
@@ -56,14 +64,11 @@ import { SettingsToggle } from '../ui/settings-toggle';
           }
         </select>
       </div>
-
-      <div class="flex flex-col gap-1.5">
-        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-camera">
-          Camera
-        </label>
+      <div class="set-row">
+        <label class="set-row-title shrink-0" for="voice-camera">Camera</label>
         <select
           id="voice-camera"
-          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          class="max-w-[58%] min-w-0 px-3 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
           [value]="prefs.prefs().cameraDeviceId ?? ''"
           (change)="onDevice('videoinput', $event)"
         >
@@ -73,19 +78,11 @@ import { SettingsToggle } from '../ui/settings-toggle';
           }
         </select>
       </div>
-
-      <button
-        type="button"
-        class="self-start text-xs font-medium text-muted hover:text-primary transition-micro"
-        (click)="loadDevices()"
-      >
-        <i class="fas fa-rotate mr-1"></i>Refresh devices
-      </button>
     </div>
 
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1">Audio Processing</p>
+    <p class="set-section-label mb-1">Audio Processing</p>
     <p class="text-2xs text-faint mb-2">Changes apply the next time you join a call.</p>
-    <div class="divide-y divide-border-subtle">
+    <div class="set-card divide-y divide-border-subtle mb-6">
       <app-settings-toggle
         label="Noise Suppression"
         description="Filter out background noise from your microphone."
@@ -106,16 +103,14 @@ import { SettingsToggle } from '../ui/settings-toggle';
       />
     </div>
 
-    <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1 mt-6">Screen Share</p>
+    <p class="set-section-label mb-1">Screen Share</p>
     <p class="text-2xs text-faint mb-2">Applies the next time you start sharing. Lower settings use less bandwidth.</p>
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-1.5">
-        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-ss-res">
-          Resolution
-        </label>
+    <div class="set-card">
+      <div class="set-row">
+        <label class="set-row-title shrink-0" for="voice-ss-res">Resolution</label>
         <select
           id="voice-ss-res"
-          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          class="max-w-[58%] min-w-0 px-3 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
           [value]="prefs.prefs().screenShareResolution"
           (change)="onScreenRes($event)"
         >
@@ -123,14 +118,11 @@ import { SettingsToggle } from '../ui/settings-toggle';
           <option value="480p">480p — saves bandwidth</option>
         </select>
       </div>
-
-      <div class="flex flex-col gap-1.5">
-        <label class="text-2xs font-bold uppercase tracking-wider text-faint" for="voice-ss-fps">
-          Frame Rate
-        </label>
+      <div class="set-row">
+        <label class="set-row-title shrink-0" for="voice-ss-fps">Frame Rate</label>
         <select
           id="voice-ss-fps"
-          class="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+          class="max-w-[58%] min-w-0 px-3 py-1.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
           [value]="prefs.prefs().screenShareFps"
           (change)="onScreenFps($event)"
         >

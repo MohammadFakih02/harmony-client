@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GoogleSignInButton, UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -14,7 +15,7 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton],
+  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton, AuthShell],
   templateUrl: './register.html',
 })
 export class RegisterComponent {

@@ -60,11 +60,11 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
   imports: [FormsModule],
   template: `
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in"
       (click)="close.emit()"
     >
       <div
-        class="bg-surface rounded-xl shadow-modal border border-border w-full mx-4 p-6 flex flex-col gap-5 max-h-[85vh] overflow-y-auto"
+        class="bg-surface rounded-2xl panel border border-border w-full mx-4 p-6 flex flex-col gap-5 max-h-[85vh] overflow-y-auto animate-modal-in"
         [class.max-w-md]="tab() === 'overview'"
         [class.max-w-3xl]="tab() === 'permissions'"
         (click)="$event.stopPropagation()"

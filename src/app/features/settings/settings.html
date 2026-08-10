@@ -1,24 +1,43 @@
-<div class="fixed inset-0 z-50 flex bg-bg select-none">
+<!-- Full-page Settings takeover (route `/app/settings`). Fills the viewport as its own page —
+     a neutral surface with a second-layer rail — rather than a floating window. Mobile keeps the
+     stacked nav→pane flow. -->
+<div class="fixed inset-0 z-50 flex bg-surface select-none animate-fade-in">
   <!-- Nav rail. Mobile: a full-width first screen, hidden once a pane is open. -->
   <nav
-    class="flex w-60 min-w-60 flex-col overflow-y-auto bg-surface-2 py-12 pl-6 pr-2 max-md:w-full max-md:min-w-full max-md:bg-bg max-md:py-6 max-md:px-4"
+    class="flex w-64 min-w-64 flex-col overflow-y-auto bg-surface-2 border-r border-border-subtle py-8 px-4 max-md:w-full max-md:min-w-full max-md:border-r-0 max-md:py-6 max-md:px-4"
     [class.max-md:hidden]="showPane()"
   >
+    <div class="px-2.5 pb-5 shrink-0">
+      <h1 class="font-display text-2xl font-bold text-primary tracking-[-0.015em]">Settings</h1>
+    </div>
+
     @for (group of groups; track group.title) {
-    <p class="px-2 mb-1 text-2xs font-bold uppercase tracking-wider text-faint">{{ group.title }}</p>
-    <div class="mb-5 space-y-0.5">
+    <p class="px-2.5 mt-2 mb-1.5 text-2xs font-bold uppercase tracking-wider text-faint">
+      {{ group.title }}
+    </p>
+    <div class="mb-4 space-y-0.5">
       @for (item of group.items; track item.id) {
+      @let active = activeTab() === item.id;
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded px-2 py-1.5 max-md:py-2.5 text-left text-sm font-medium transition-colors"
-        [class.bg-accent-muted]="activeTab() === item.id"
-        [class.text-primary]="activeTab() === item.id"
-        [class.text-muted]="activeTab() !== item.id"
-        [class.hover:bg-surface-3]="activeTab() !== item.id"
-        [class.hover:text-primary]="activeTab() !== item.id"
+        class="group relative flex w-full items-center gap-3 rounded-lg pl-3.5 pr-2.5 py-2 max-md:py-2.5 text-left text-sm font-medium transition-micro"
+        [class.bg-accent-muted]="active"
+        [class.text-primary]="active"
+        [class.text-muted]="!active"
+        [class.hover:bg-surface-3]="!active"
+        [class.hover:text-primary]="!active"
         (click)="selectTab(item.id)"
       >
-        <i class="fas {{ item.icon }} w-4 text-center"></i>
+        <!-- Active marker: a slim accent bar at the rail edge (calm selection, no glow). -->
+        @if (active) {
+        <span class="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-accent"></span>
+        }
+        <i
+          class="fas {{ item.icon }} w-5 text-center text-sm shrink-0 transition-micro"
+          [class.text-accent]="active"
+          [class.text-faint]="!active"
+          [class.group-hover:text-muted]="!active"
+        ></i>
         <span class="truncate">{{ item.label }}</span>
       </button>
       }
@@ -27,7 +46,7 @@
   </nav>
 
   <!-- Content pane. Mobile: the second screen, with a back button to the nav list. -->
-  <div class="relative flex-1 overflow-y-auto" [class.max-md:hidden]="!showPane()">
+  <div class="relative flex-1 overflow-y-auto bg-surface" [class.max-md:hidden]="!showPane()">
     <button
       type="button"
       class="hidden max-md:flex items-center gap-2 px-4 pt-4 text-sm font-semibold text-muted hover:text-primary"
@@ -35,8 +54,10 @@
     >
       <i class="fas fa-chevron-left"></i> Settings
     </button>
-    <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6">
-      @switch (activeTab()) {
+    <!-- Keyed by tab so the pane cross-fades on switch instead of hard-swapping. -->
+    @for (tab of [activeTab()]; track tab) {
+    <div class="mx-auto max-w-2xl px-10 py-12 max-md:px-4 max-md:py-6 animate-fade-in">
+      @switch (tab) {
         @case ('account') { <app-account-settings /> }
         @case ('privacy') { <app-privacy-settings /> }
         @case ('notifications') { <app-notification-settings /> }
@@ -46,13 +67,15 @@
         @case ('trash') { <app-trash-settings /> }
       }
     </div>
+    }
 
     <!-- Close -->
     <button
       type="button"
-      class="absolute top-12 right-10 max-md:top-4 max-md:right-4 flex flex-col items-center text-muted hover:text-primary transition-colors"
+      class="absolute top-6 right-8 max-md:top-4 max-md:right-4 flex flex-col items-center text-faint hover:text-primary transition-micro"
       (click)="close()"
-      aria-label="Close settings (ESC)"
+      title="Close (Esc)"
+      aria-label="Close settings (Esc)"
     >
       <span class="flex h-9 w-9 items-center justify-center rounded-full border-2 border-current">
         <i class="fas fa-xmark"></i>
@@ -65,7 +88,7 @@
   @if (!showPane()) {
   <button
     type="button"
-    class="hidden max-md:flex absolute top-4 right-4 h-9 w-9 items-center justify-center rounded-full border-2 border-current text-muted hover:text-primary transition-colors"
+    class="hidden max-md:flex absolute top-4 right-4 h-9 w-9 items-center justify-center rounded-full border-2 border-current text-faint hover:text-primary transition-micro"
     (click)="close()"
     aria-label="Close settings"
   >

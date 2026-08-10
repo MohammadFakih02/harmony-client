@@ -44,7 +44,10 @@ import { extractApiError } from '../../../shared/util/api-error';
     ChangeUsernameModal,
   ],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">My Account</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">My Account</h2>
+      <p class="text-sm text-muted mt-1.5">Your identity, credentials, and account security.</p>
+    </header>
 
     @if (me(); as me) {
     <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden">
@@ -62,7 +65,7 @@ import { extractApiError } from '../../../shared/util/api-error';
             [disabled]="uploading() !== null"
             (click)="bannerInput.click()"
           >
-            @if (uploading() === 'banner') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+            @if (uploading() === 'banner') {<i class="spinner-brand mr-1"></i>}
             @else {<i class="fas fa-image mr-1"></i>}
             Change Banner
           </button>
@@ -91,7 +94,7 @@ import { extractApiError } from '../../../shared/util/api-error';
             (click)="avatarInput.click()"
           >
             @if (uploading() === 'avatar') {
-            <i class="fas fa-yin-yang animate-spin"></i>
+            <i class="spinner-brand"></i>
             } @else {
             <i class="fas fa-camera"></i>
             }
@@ -109,7 +112,7 @@ import { extractApiError } from '../../../shared/util/api-error';
           }
         </div>
 
-        <p class="mt-2.5 text-lg font-bold text-primary leading-tight truncate">{{ me.username }}</p>
+        <p class="font-display mt-2.5 text-lg font-bold text-primary leading-tight truncate">{{ me.username }}</p>
 
         <div class="mt-4 flex flex-col gap-4">
           <div>
@@ -195,7 +198,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     </div>
 
     <!-- Account credentials -->
-    <div class="mt-6 rounded-lg bg-surface border border-border-subtle divide-y divide-border-subtle">
+    <div class="mt-6 rounded-xl bg-surface-2 border border-border-subtle divide-y divide-border-subtle">
       @if (!hasPassword()) {
       <div class="px-3.5 py-3 flex items-center justify-between gap-3">
         <div class="min-w-0">
@@ -271,7 +274,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     </div>
 
     <!-- Two-factor authentication -->
-    <div class="mt-6 rounded-lg bg-surface border border-border-subtle px-3.5 py-3">
+    <div class="mt-6 rounded-xl bg-surface-2 border border-border-subtle px-3.5 py-3">
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
           <p class="text-sm font-semibold text-primary">Two-Factor Authentication</p>
@@ -399,7 +402,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     />
     } @else {
     <div class="flex justify-center py-16">
-      <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
+      <i class="spinner-brand text-faint text-xl"></i>
     </div>
     }
   `,

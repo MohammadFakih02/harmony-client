@@ -10,10 +10,13 @@ import { SettingsToggle } from '../ui/settings-toggle';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [SettingsToggle],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">Notifications</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Notifications</h2>
+      <p class="text-sm text-muted mt-1.5">Choose what Harmony pings you about, and where.</p>
+    </header>
 
     @if (store.preferences(); as prefs) {
-    <div class="divide-y divide-border-subtle">
+    <div class="set-card divide-y divide-border-subtle">
       @for (field of fields; track field.key) {
       <app-settings-toggle
         [label]="field.label"
@@ -34,9 +37,9 @@ import { SettingsToggle } from '../ui/settings-toggle';
           (toggled)="onPushToggle($event)"
         />
         @if (pushHint(); as hint) {
-        <p class="text-xs text-warning pb-3">{{ hint }}</p>
+        <p class="text-xs text-warning px-4 pb-3">{{ hint }}</p>
         } @else if (!push.isSupported) {
-        <p class="text-xs text-muted pb-3">
+        <p class="text-xs text-muted px-4 pb-3">
           Push notifications aren't supported in this browser.
         </p>
         }

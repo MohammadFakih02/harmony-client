@@ -18,7 +18,7 @@ import { SignalRService } from '../../core/services/signalr.service';
       class="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-warning text-bg text-sm font-medium shadow-modal animate-slide-down"
       role="status"
     >
-      <i class="fas fa-yin-yang animate-spin text-xs"></i>
+      <i class="spinner-brand text-xs"></i>
       <span>Connection lost — reconnecting…</span>
     </div>
     } @else if (state === 'disconnected') {
@@ -35,7 +35,7 @@ import { SignalRService } from '../../core/services/signalr.service';
         (click)="retry()"
       >
         @if (retrying()) {
-        <i class="fas fa-yin-yang animate-spin"></i>
+        <i class="spinner-brand"></i>
         } @else {
         Retry now
         }

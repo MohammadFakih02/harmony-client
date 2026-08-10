@@ -8,7 +8,7 @@
   >
     <i class="fas fa-bars"></i>
   </button>
-  <span class="flex items-center gap-2 font-semibold text-primary shrink-0">
+  <span class="flex items-center gap-2 font-display font-semibold text-primary shrink-0">
     <i class="fas fa-user-group text-muted"></i> Friends
   </span>
   <div class="w-px h-6 bg-border-subtle shrink-0"></div>
@@ -41,18 +41,18 @@
   @if (tab() === 'online' || tab() === 'all') {
     @if (visibleFriends().length === 0) {
     <div class="flex flex-col items-center justify-center h-full gap-1 text-center pt-16 select-none">
-      <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-2">
-        <i class="fas text-2xl text-muted" [class.fa-moon]="tab() === 'online'" [class.fa-user-group]="tab() === 'all'"></i>
+      <div class="w-16 h-16 rounded-2xl bg-accent-muted ring-1 ring-accent/25 flex items-center justify-center mb-2 shadow-[0_10px_30px_-14px_var(--color-accent-glow)]">
+        <i class="fas text-2xl text-accent" [class.fa-moon]="tab() === 'online'" [class.fa-user-group]="tab() === 'all'"></i>
       </div>
       @if (tab() === 'online') {
-      <p class="text-base font-semibold text-primary">No one's around right now</p>
+      <p class="font-display text-base font-semibold text-primary">No one's around right now</p>
       <p class="text-sm text-muted">Friends show up here when they come online.</p>
       } @else {
-      <p class="text-base font-semibold text-primary">No friends yet</p>
+      <p class="font-display text-base font-semibold text-primary">No friends yet</p>
       <p class="text-sm text-muted">Find people by their username to get started.</p>
       <button
         type="button"
-        class="mt-3 px-4 py-1.5 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro"
+        class="mt-3 px-4 py-1.5 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow transition-all"
         (click)="tab.set('add')"
       >
         Add Friend
@@ -109,10 +109,10 @@
   @if (tab() === 'pending') {
     @if (friendStore.pending().length === 0) {
     <div class="flex flex-col items-center justify-center h-full gap-1 text-center pt-16 select-none">
-      <div class="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-2">
-        <i class="fas fa-envelope-open text-2xl text-muted"></i>
+      <div class="w-16 h-16 rounded-2xl bg-accent-muted ring-1 ring-accent/25 flex items-center justify-center mb-2 shadow-[0_10px_30px_-14px_var(--color-accent-glow)]">
+        <i class="fas fa-envelope-open text-2xl text-accent"></i>
       </div>
-      <p class="text-base font-semibold text-primary">No pending requests</p>
+      <p class="font-display text-base font-semibold text-primary">No pending requests</p>
       <p class="text-sm text-muted">Incoming and outgoing friend requests show up here.</p>
     </div>
     } @else {
@@ -208,11 +208,11 @@
       />
       <button
         type="button"
-        class="px-4 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-1.5 rounded-md text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
         [disabled]="addBusy() || !addInput().trim()"
         (click)="submitAdd()"
       >
-        @if (addBusy()) { <i class="fas fa-yin-yang animate-spin mr-1"></i> }
+        @if (addBusy()) { <i class="spinner-brand mr-1"></i> }
         Send Request
       </button>
     </div>

@@ -13,8 +13,10 @@ import { GuildBan } from '../../../core/models/member.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiAvatar],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-1">Bans</h2>
-    <p class="text-sm text-muted mb-5">Revoke a ban to let the user rejoin via an invite.</p>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Bans</h2>
+      <p class="text-sm text-muted mt-1.5">Revoke a ban to let the user rejoin via an invite.</p>
+    </header>
 
     @if (error()) {
     <p class="text-sm text-danger mb-3">{{ error() }}</p>
@@ -22,14 +24,14 @@ import { GuildBan } from '../../../core/models/member.models';
 
     @if (loading()) {
     <div class="flex justify-center py-10">
-      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+      <i class="spinner-brand text-faint"></i>
     </div>
     } @else if (list().length === 0) {
-    <p class="text-sm text-faint text-center py-10">No banned users.</p>
+    <div class="set-card"><p class="text-sm text-faint text-center py-10">No banned users.</p></div>
     } @else {
-    <div class="flex flex-col gap-1">
+    <div class="set-card divide-y divide-border-subtle">
       @for (ban of list(); track ban.userId) {
-      <div class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-2 transition-micro">
+      <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-3 transition-micro">
         <ui-avatar [src]="ban.avatarKey" [alt]="ban.username ?? 'Unknown'" size="sm" />
         <div class="flex min-w-0 flex-1 flex-col">
           <span class="text-sm font-medium text-primary truncate">{{ ban.username ?? 'Unknown user' }}</span>

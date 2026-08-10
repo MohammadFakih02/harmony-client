@@ -1,0 +1,50 @@
+<div class="min-h-dvh flex bg-bg text-primary">
+  <!-- Brand panel (lg+) — the living visual world -->
+  <aside class="auth-brand-bg auth-seam relative hidden lg:flex lg:w-[45%] xl:w-[42%] overflow-hidden">
+    <div aria-hidden="true">
+      <span class="auth-orb auth-orb-1"></span>
+      <span class="auth-orb auth-orb-2"></span>
+    </div>
+
+    <div class="relative z-10 flex flex-col justify-between w-full px-12 xl:px-16 py-14">
+      <!-- Wordmark + equalizer -->
+      <div class="flex items-center gap-3">
+        <span
+          class="flex items-center justify-center w-11 h-11 rounded-2xl bg-surface/70 ring-1 ring-border backdrop-blur-sm shadow-panel"
+        >
+          <harmony-mark [size]="26" />
+        </span>
+        <span class="font-display text-lg font-semibold tracking-[-0.02em]">Harmony</span>
+        <span class="auth-eq ml-0.5"><i></i><i></i><i></i><i></i></span>
+      </div>
+
+      <!-- Statement -->
+      <div class="max-w-md">
+        <h2 class="font-display text-[2.6rem] leading-[1.05] font-bold tracking-[-0.03em]">
+          Find your people.<br />
+          <span class="text-accent-light">Stay in tune.</span>
+        </h2>
+        <p class="mt-5 text-[0.975rem] leading-relaxed text-muted max-w-sm">
+          Real-time servers, direct messages, and voice, all in one place.
+        </p>
+      </div>
+
+      <p class="text-xs text-faint">© {{ year }} Harmony</p>
+    </div>
+  </aside>
+
+  <!-- Form panel -->
+  <main class="relative flex-1 flex items-center justify-center px-6 py-10 bg-surface">
+    <div class="w-full max-w-[400px] animate-slide-up">
+      <!-- Compact brand for < lg (brand panel hidden) -->
+      <div class="lg:hidden flex items-center justify-center gap-2.5 mb-8">
+        <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-muted">
+          <harmony-mark [size]="24" />
+        </span>
+        <span class="font-display text-lg font-semibold tracking-[-0.02em]">Harmony</span>
+      </div>
+
+      <ng-content />
+    </div>
+  </main>
+</div>

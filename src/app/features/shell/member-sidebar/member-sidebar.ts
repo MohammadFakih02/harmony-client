@@ -22,6 +22,7 @@ import { GuildMember } from '../../../core/models/member.models';
 import { memberColor, memberHoistRole } from '../../../core/models/role.models';
 import { toAvatarStatus } from '../../../core/models/presence.models';
 import { UserProfilePopout } from '../user-profile-popout/user-profile-popout';
+import { delayedSignal } from '../../../shared/util/delayed-signal';
 
 interface MemberRow {
   member: GuildMember;
@@ -80,6 +81,10 @@ export class MemberSidebar implements OnDestroy {
       this.now.set(Date.now());
     }
   }, 15000);
+
+  // Fast load (~200ms) → shimmer skeleton; slow (>2.5s) → spinner; instant (<200ms) → nothing.
+  protected readonly showSkeleton = delayedSignal(this.memberStore.loading);
+  protected readonly showSlowLoading = delayedSignal(this.memberStore.loading, 2500);
 
   protected readonly members = computed<GuildMember[]>(() => {
     const guildId = this.guildStore.selectedGuildId();

@@ -31,11 +31,17 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
         <i class="fas fa-bars"></i>
       </button>
       <i class="fas fa-compass text-lg text-accent"></i>
-      <h1 class="text-lg font-bold text-primary">Discover</h1>
+      <h1 class="font-display text-lg font-bold text-primary">Discover</h1>
     </header>
 
     <div class="flex-1 overflow-y-auto px-6 py-6">
       <div class="max-w-4xl mx-auto">
+        <!-- Hero -->
+        <div class="mb-6">
+          <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Find your community</h2>
+          <p class="text-sm text-muted mt-1.5">Browse public servers and jump straight in — no invite needed.</p>
+        </div>
+
         <div class="relative mb-6">
           <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm"></i>
           <input
@@ -49,7 +55,7 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
 
         @if (loading()) {
         <div class="flex justify-center py-16">
-          <i class="fas fa-yin-yang animate-spin text-faint text-xl"></i>
+          <i class="spinner-brand text-faint text-xl"></i>
         </div>
         } @else if (results().length === 0) {
         <div class="flex flex-col items-center gap-2 py-16 text-center">
@@ -61,7 +67,9 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
         } @else {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           @for (guild of results(); track guild.id) {
-          <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden flex flex-col">
+          <div
+            class="group rounded-xl bg-surface-2 border border-border-subtle overflow-hidden flex flex-col transition-element hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-[0_18px_44px_-26px_rgba(0,0,0,0.65)]"
+          >
             <ui-profile-banner class="h-20" [bannerKey]="guild.bannerKey" [alt]="guild.name" />
             <div class="px-4 pb-4 flex flex-col flex-1">
               <div class="relative z-10 -mt-8 mb-2">
@@ -96,11 +104,11 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
               } @else {
               <button
                 type="button"
-                class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+                class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow active:scale-[0.98] disabled:opacity-50 transition-micro"
                 [disabled]="joiningId() === guild.id"
                 (click)="join(guild)"
               >
-                @if (joiningId() === guild.id) {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+                @if (joiningId() === guild.id) {<i class="spinner-brand mr-1"></i>}
                 Join
               </button>
               }

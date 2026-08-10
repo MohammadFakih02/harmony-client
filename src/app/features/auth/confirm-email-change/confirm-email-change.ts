@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { extractApiError } from '../../../shared/util/api-error';
+import { UiButton } from '../../../shared/ui';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 type ConfirmState = 'verifying' | 'success' | 'error';
 
@@ -15,6 +17,7 @@ type ConfirmState = 'verifying' | 'success' | 'error';
 @Component({
   selector: 'app-confirm-email-change',
   standalone: true,
+  imports: [UiButton, AuthShell],
   templateUrl: './confirm-email-change.html',
 })
 export class ConfirmEmailChange implements OnInit {

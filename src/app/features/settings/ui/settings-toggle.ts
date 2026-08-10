@@ -8,7 +8,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   template: `
     <button
       type="button"
-      class="flex w-full items-center gap-4 py-3 text-left"
+      class="flex w-full items-center gap-4 px-4 py-3 text-left transition-micro hover:bg-surface-3/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
       [disabled]="disabled()"
       [class.opacity-50]="disabled()"
       [class.cursor-not-allowed]="disabled()"

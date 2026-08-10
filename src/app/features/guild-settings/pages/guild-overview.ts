@@ -15,7 +15,10 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule, SettingsToggle, UiProfileBanner],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">Overview</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Overview</h2>
+      <p class="text-sm text-muted mt-1.5">Your server's identity and who's allowed to find and join it.</p>
+    </header>
 
     <!-- Icon + banner -->
     <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden mb-5">
@@ -27,7 +30,7 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
             [disabled]="uploading() !== null"
             (click)="bannerInput.click()"
           >
-            @if (uploading() === 'banner') {<i class="fas fa-yin-yang animate-spin mr-1"></i>}
+            @if (uploading() === 'banner') {<i class="spinner-brand mr-1"></i>}
             @else {<i class="fas fa-image mr-1"></i>}
             Change Banner
           </button>
@@ -62,7 +65,7 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
             aria-label="Change icon"
             (click)="iconInput.click()"
           >
-            @if (uploading() === 'icon') {<i class="fas fa-yin-yang animate-spin"></i>}
+            @if (uploading() === 'icon') {<i class="spinner-brand"></i>}
             @else {<i class="fas fa-camera"></i>}
           </button>
           @if (iconKey()) {
@@ -95,22 +98,30 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
       (change)="onAssetSelected('banner', $event)"
     />
 
-    <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Server Name</label>
-    <input
-      class="mb-4 w-full rounded bg-surface-3 px-3 py-2 text-sm text-primary outline-none"
-      [(ngModel)]="name"
-      maxlength="100"
-      (keydown.enter)="save()"
-    />
+    <div class="set-card p-4 mb-5 flex flex-col gap-4">
+      <div>
+        <label class="set-section-label" for="guild-name">Server Name</label>
+        <input
+          id="guild-name"
+          class="mt-1.5 w-full rounded-lg bg-surface border border-border-subtle px-3 py-2 text-sm text-primary outline-none focus:border-accent transition-micro"
+          [(ngModel)]="name"
+          maxlength="100"
+          (keydown.enter)="save()"
+        />
+      </div>
+      <div>
+        <label class="set-section-label" for="guild-desc">Description</label>
+        <textarea
+          id="guild-desc"
+          class="mt-1.5 w-full resize-none rounded-lg bg-surface border border-border-subtle px-3 py-2 text-sm text-primary outline-none focus:border-accent transition-micro"
+          rows="3"
+          [(ngModel)]="description"
+        ></textarea>
+      </div>
+    </div>
 
-    <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Description</label>
-    <textarea
-      class="mb-2 w-full resize-none rounded bg-surface-3 px-3 py-2 text-sm text-primary outline-none"
-      rows="3"
-      [(ngModel)]="description"
-    ></textarea>
-
-    <div class="border-t border-border-subtle mt-2">
+    <p class="set-section-label mb-2">Discovery &amp; Access</p>
+    <div class="set-card divide-y divide-border-subtle">
       <app-settings-toggle
         label="Public Server"
         description="List this server in Discover so anyone can find and join it."
@@ -128,14 +139,14 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
     <div class="mt-6 flex items-center gap-3">
       <button
         type="button"
-        class="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
         [disabled]="!dirty() || saving()"
         (click)="save()"
       >
         {{ saving() ? 'Saving…' : 'Save Changes' }}
       </button>
       @if (dirty()) {
-      <button type="button" class="text-sm text-muted hover:text-primary" (click)="reset()">
+      <button type="button" class="text-sm text-muted hover:text-primary transition-micro" (click)="reset()">
         Reset
       </button>
       }

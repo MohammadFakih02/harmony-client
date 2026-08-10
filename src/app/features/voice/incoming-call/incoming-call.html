@@ -1,8 +1,8 @@
 <!-- Incoming ring — always-dark centered card above everything but the expanded call view. -->
 @if (callStore.incoming(); as ring) {
-<div class="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center animate-fade-in">
+<div class="fixed inset-0 z-[90] bg-black/60 backdrop-blur-md flex items-center justify-center animate-fade-in">
   <div
-    class="relative w-80 max-w-[90vw] rounded-2xl bg-[#0b0a0e] border border-white/10 shadow-modal px-6 py-8 flex flex-col items-center gap-4 text-center"
+    class="relative w-80 max-w-[90vw] rounded-2xl bg-[#0b0a0e] border border-white/10 shadow-modal px-6 py-8 flex flex-col items-center gap-4 text-center animate-modal-in"
   >
     <!-- Ignore (local dismiss — the caller's side times out on its own) -->
     <button
@@ -39,7 +39,7 @@
     <div class="flex items-center gap-4 mt-2">
       <button
         type="button"
-        class="w-14 h-14 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+        class="w-14 h-14 rounded-full flex items-center justify-center bg-danger hover:opacity-85 hover:shadow-[0_0_26px_-4px_#f04747] active:scale-95 text-white transition-all"
         title="Decline"
         aria-label="Decline the call"
         (click)="decline()"
@@ -48,7 +48,7 @@
       </button>
       <button
         type="button"
-        class="w-14 h-14 rounded-full flex items-center justify-center bg-success hover:opacity-85 text-white transition-micro"
+        class="w-14 h-14 rounded-full flex items-center justify-center bg-success hover:opacity-85 shadow-[0_0_16px_-8px_#10b981] hover:shadow-[0_0_22px_-6px_#10b981] active:scale-95 text-white transition-all"
         title="Accept"
         aria-label="Accept the call"
         (click)="accept()"

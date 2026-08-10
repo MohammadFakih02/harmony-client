@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiInput } from '../../../shared/ui';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 /**
  * Forgot-password request page. Always shows the same "check your email" success state on
@@ -12,7 +13,7 @@ import { UiButton, UiInput } from '../../../shared/ui';
 @Component({
   selector: 'app-forgot-password',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput],
+  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput, AuthShell],
   templateUrl: './forgot-password.html',
 })
 export class ForgotPassword {

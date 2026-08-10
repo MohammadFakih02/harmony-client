@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { UiAvatar, UiProfileBanner, bannerGradient } from '../../../shared/ui';
+import { UiAvatar, UiProfileBanner, HarmonyMark, bannerGradient } from '../../../shared/ui';
 import { ProfileModalService } from '../../../core/services/profile-modal.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MemberStore } from '../../../core/stores/member.store';
@@ -30,7 +30,7 @@ const fmtDate = (d: Date | null): string | null =>
 @Component({
   selector: 'app-user-profile-modal',
   standalone: true,
-  imports: [UiAvatar, UiProfileBanner, FormsModule],
+  imports: [UiAvatar, UiProfileBanner, HarmonyMark, FormsModule],
   templateUrl: './user-profile-modal.html',
 })
 export class UserProfileModal {

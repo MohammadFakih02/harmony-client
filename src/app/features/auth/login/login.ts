@@ -4,11 +4,12 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GoogleSignInButton, UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton],
+  imports: [FormsModule, ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton, AuthShell],
   templateUrl: './login.html',
 })
 export class LoginComponent implements OnDestroy {

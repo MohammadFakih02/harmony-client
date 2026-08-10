@@ -15,9 +15,12 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule, SettingsToggle],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-5">Welcome</h2>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Welcome</h2>
+      <p class="text-sm text-muted mt-1.5">Greet new members the moment they join your server.</p>
+    </header>
 
-    <div class="border-t border-border-subtle">
+    <div class="set-card">
       <app-settings-toggle
         label="Member join messages"
         description="Post a notice when someone joins this server."
@@ -27,45 +30,46 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
     </div>
 
     @if (systemMessagesEnabled()) {
-    <div class="mt-4">
-      <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">
-        Welcome Channel
-      </label>
-      <select
-        class="mb-4 w-full rounded bg-surface-3 px-3 py-2 text-sm text-primary outline-none"
-        [value]="welcomeChannelId() ?? 'default'"
-        (change)="onChannelChange($any($event.target).value)"
-      >
-        <option value="default">Default (first text channel)</option>
-        @for (ch of textChannels(); track ch.id) {
-        <option [value]="ch.id">#{{ ch.name }}</option>
-        }
-      </select>
-
-      <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">
-        Welcome Message
-      </label>
-      <textarea
-        class="w-full resize-none rounded bg-surface-3 px-3 py-2 text-sm text-primary outline-none"
-        rows="3"
-        maxlength="2000"
-        placeholder="Leave blank for a default join notice."
-        [(ngModel)]="welcomeMessage"
-      ></textarea>
+    <div class="set-card p-4 mt-4 flex flex-col gap-4">
+      <div>
+        <label class="set-section-label" for="welcome-channel">Welcome Channel</label>
+        <select
+          id="welcome-channel"
+          class="mt-1.5 w-full rounded-lg bg-surface border border-border-subtle px-3 py-2 text-sm text-primary outline-none focus:border-accent transition-micro"
+          [value]="welcomeChannelId() ?? 'default'"
+          (change)="onChannelChange($any($event.target).value)"
+        >
+          <option value="default">Default (first text channel)</option>
+          @for (ch of textChannels(); track ch.id) {
+          <option [value]="ch.id">#{{ ch.name }}</option>
+          }
+        </select>
+      </div>
+      <div>
+        <label class="set-section-label" for="welcome-message">Welcome Message</label>
+        <textarea
+          id="welcome-message"
+          class="mt-1.5 w-full resize-none rounded-lg bg-surface border border-border-subtle px-3 py-2 text-sm text-primary outline-none focus:border-accent transition-micro"
+          rows="3"
+          maxlength="2000"
+          placeholder="Leave blank for a default join notice."
+          [(ngModel)]="welcomeMessage"
+        ></textarea>
+      </div>
     </div>
     }
 
     <div class="mt-6 flex items-center gap-3">
       <button
         type="button"
-        class="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
         [disabled]="!dirty() || saving()"
         (click)="save()"
       >
         {{ saving() ? 'Saving…' : 'Save Changes' }}
       </button>
       @if (dirty()) {
-      <button type="button" class="text-sm text-muted hover:text-primary" (click)="reset()">
+      <button type="button" class="text-sm text-muted hover:text-primary transition-micro" (click)="reset()">
         Reset
       </button>
       }

@@ -3,7 +3,7 @@ import { Component, computed, input } from '@angular/core';
 @Component({
   selector: 'ui-spinner',
   standalone: true,
-  template: `<i class="fas fa-yin-yang animate-spin" [class]="sizeClass()"></i>`,
+  template: `<i class="spinner-brand" [class]="sizeClass()"></i>`,
 })
 export class UiSpinner {
   size = input<'sm' | 'base' | 'lg'>('base');

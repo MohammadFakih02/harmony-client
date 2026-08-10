@@ -2,7 +2,7 @@
 <!-- Backdrop: swallows the next click / right-click / aux-click to dismiss. Transparent on desktop,
      dimmed behind the mobile bottom sheet. -->
 <div
-  class="fixed inset-0 z-1100 max-md:bg-black/50"
+  class="fixed inset-0 z-1100 max-md:bg-black/50 max-md:backdrop-blur-sm"
   (click)="close()"
   (contextmenu)="close($event)"
   (auxclick)="close()"

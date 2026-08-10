@@ -73,6 +73,20 @@ export class GuildSettings implements OnInit {
     () => !!this.memberStore.capabilitiesOf(this.guildId)?.canManageChannels,
   );
 
+  /** The permission-gated nav, resolved once — drives the icon-chip rail (mirrors user Settings). */
+  protected readonly navItems = computed<{ id: Tab; label: string; icon: string }[]>(() => {
+    const items: { id: Tab; label: string; icon: string }[] = [];
+    if (this.canManageGuild()) {
+      items.push({ id: 'overview', label: 'Overview', icon: 'fa-sliders' });
+      items.push({ id: 'welcome', label: 'Welcome', icon: 'fa-door-open' });
+    }
+    if (this.canManageRoles()) items.push({ id: 'roles', label: 'Roles', icon: 'fa-user-shield' });
+    if (this.canBan()) items.push({ id: 'bans', label: 'Bans', icon: 'fa-gavel' });
+    if (this.canViewAuditLog()) items.push({ id: 'audit', label: 'Audit Log', icon: 'fa-scroll' });
+    if (this.canManageChannels()) items.push({ id: 'trash', label: 'Deleted Channels', icon: 'fa-trash-can' });
+    return items;
+  });
+
   async ngOnInit(): Promise<void> {
     if (!this.guildStore.guilds().some((g) => g.id === this.guildId)) {
       await this.guildStore.loadGuilds();

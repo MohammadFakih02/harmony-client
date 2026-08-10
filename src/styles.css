@@ -50,14 +50,21 @@
   /* Spacing */
   --spacing-18: 4.5rem; /* Enables w-18 / h-18 (72px) for your sidebar */
 
-  /* Fonts */
+  /* Fonts. --font-display (Sora) is reserved for brand/hero headings — the wordmark, auth &
+     404 headings, empty-state titles, modal & page-section titles — NOT the dense UI micro-labels,
+     which stay Inter for legibility. Generates the `font-display` utility; degrades to Inter if the
+     webfont hasn't loaded (font-display: swap). */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* Shadows */
+  /* Shadows. --shadow-raised = the layered contact+ambient shadow for "floating islands"
+     (user deck, composer, message toolbar). Pair with --highlight-top (a top-edge inner
+     highlight) via the .elevated utility for the physically-lit look. */
   --shadow-panel: var(--shadow-panel);
   --shadow-modal: var(--shadow-modal);
   --shadow-tooltip: var(--shadow-tooltip);
-  --shadow-accent-glow: 0 0 20px var(--color-accent-glow); /* Enables shadow-accent-glow */
+  --shadow-raised: var(--shadow-raised); /* Enables shadow-raised */
+  --shadow-accent-glow: 0 0 8px var(--color-accent-glow); /* Enables shadow-accent-glow */
 
   /* Animations */
   --animate-fade-in: fadeIn 250ms cubic-bezier(0, 0, 0.2, 1) both;
@@ -288,6 +295,10 @@ html.palette-violet.mode-dark {
   --color-border: #312d40;
   --color-border-subtle: #221f2e;
 
+  /* Structural depth layer: rail(--color-bg) < sidebar < chat(--color-surface).
+     Dark: sidebar sits BELOW surface so the chat reads as the lightest, focal plane. */
+  --layer-sidebar: #100e16;
+
   --color-text: #f4f3f7;
   --color-text-muted: #a29fb1;
   --color-text-faint: #9490a2; /* min 4.5:1 on surface-3 (WCAG AA) */
@@ -296,7 +307,7 @@ html.palette-violet.mode-dark {
   --color-accent-hover: #7c3aed;
   --color-accent-light: #a78bfa;
   --color-accent-muted: rgba(139, 92, 246, 0.15);
-  --color-accent-glow: rgba(139, 92, 246, 0.22);
+  --color-accent-glow: rgba(139, 92, 246, 0.08);
 
   --color-danger: #f04747;
   --color-danger-muted: rgba(240, 71, 71, 0.15);
@@ -308,8 +319,10 @@ html.palette-violet.mode-dark {
   --color-scrollbar: #322f42;
   --color-scrollbar-hover: #524c6b;
 
-  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.6);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -6px rgb(0 0 0 / 0.55);
+  --shadow-panel: 0 2px 6px rgb(0 0 0 / 0.28), 0 14px 40px -10px rgb(0 0 0 / 0.6);
+  --shadow-modal: 0 6px 14px rgb(0 0 0 / 0.4), 0 26px 64px -12px rgb(0 0 0 / 0.72);
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
@@ -321,6 +334,8 @@ html.palette-violet.mode-light {
   --color-surface-2: #f2f0f8;
   --color-surface-3: #e5e2ef;
   --color-border: #c8c4d9;
+  /* Light: sidebar stays a hair darker than the white chat (matches surface-2). */
+  --layer-sidebar: #f2f0f8;
   --color-border-subtle: #e0dcea;
 
   --color-text: #17151f;
@@ -331,7 +346,7 @@ html.palette-violet.mode-light {
   --color-accent-hover: #5b21b6;
   --color-accent-light: #7c3aed;
   --color-accent-muted: rgba(109, 40, 217, 0.1);
-  --color-accent-glow: rgba(109, 40, 217, 0.2);
+  --color-accent-glow: rgba(109, 40, 217, 0.07);
 
   --color-danger: #dc2626;
   --color-danger-muted: rgba(220, 38, 38, 0.1);
@@ -343,8 +358,10 @@ html.palette-violet.mode-light {
   --color-scrollbar: #d3cfe0;
   --color-scrollbar-hover: #6d28d9;
 
-  --shadow-panel: 0 4px 24px rgba(38, 32, 64, 0.1);
-  --shadow-modal: 0 8px 40px rgba(38, 32, 64, 0.18);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+  --shadow-raised: 0 1px 2px rgb(38 32 64 / 0.08), 0 6px 18px -6px rgb(38 32 64 / 0.14);
+  --shadow-panel: 0 2px 6px rgb(38 32 64 / 0.08), 0 14px 40px -10px rgb(38 32 64 / 0.16);
+  --shadow-modal: 0 6px 14px rgb(38 32 64 / 0.12), 0 26px 64px -12px rgb(38 32 64 / 0.22);
   --shadow-tooltip: 0 2px 8px rgba(38, 32, 64, 0.14);
 }
 
@@ -356,6 +373,7 @@ html.palette-midnight.mode-dark {
   --color-surface-2: #131316;
   --color-surface-3: #1d1d22;
   --color-border: #2a2a31;
+  --layer-sidebar: #060608;
   --color-border-subtle: #19191e;
 
   --color-text: #f7f7f8;
@@ -366,7 +384,7 @@ html.palette-midnight.mode-dark {
   --color-accent-hover: #0284c7;
   --color-accent-light: #38bdf8;
   --color-accent-muted: rgba(14, 165, 233, 0.12);
-  --color-accent-glow: rgba(14, 165, 233, 0.25);
+  --color-accent-glow: rgba(14, 165, 233, 0.08);
 
   --color-danger: #f87171;
   --color-danger-muted: rgba(248, 113, 113, 0.12);
@@ -378,8 +396,10 @@ html.palette-midnight.mode-dark {
   --color-scrollbar: #26262c;
   --color-scrollbar-hover: #0ea5e9;
 
-  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.8);
-  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.9);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -6px rgb(0 0 0 / 0.8);
+  --shadow-panel: 0 2px 6px rgb(0 0 0 / 0.5), 0 14px 40px -10px rgb(0 0 0 / 0.85);
+  --shadow-modal: 0 6px 14px rgb(0 0 0 / 0.6), 0 26px 64px -12px rgb(0 0 0 / 0.92);
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
@@ -391,6 +411,7 @@ html.palette-midnight.mode-light {
   --color-surface-2: #f1f3f6;
   --color-surface-3: #e3e6eb;
   --color-border: #c3c8d1;
+  --layer-sidebar: #f1f3f6;
   --color-border-subtle: #dde1e7;
 
   --color-text: #101318;
@@ -401,7 +422,7 @@ html.palette-midnight.mode-light {
   --color-accent-hover: #0369a1;
   --color-accent-light: #0ea5e9;
   --color-accent-muted: rgba(2, 132, 199, 0.1);
-  --color-accent-glow: rgba(2, 132, 199, 0.2);
+  --color-accent-glow: rgba(2, 132, 199, 0.07);
 
   --color-danger: #dc2626;
   --color-danger-muted: rgba(220, 38, 38, 0.1);
@@ -413,8 +434,10 @@ html.palette-midnight.mode-light {
   --color-scrollbar: #ccd1da;
   --color-scrollbar-hover: #0284c7;
 
-  --shadow-panel: 0 4px 24px rgba(23, 30, 41, 0.1);
-  --shadow-modal: 0 8px 40px rgba(23, 30, 41, 0.18);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+  --shadow-raised: 0 1px 2px rgb(23 30 41 / 0.08), 0 6px 18px -6px rgb(23 30 41 / 0.14);
+  --shadow-panel: 0 2px 6px rgb(23 30 41 / 0.08), 0 14px 40px -10px rgb(23 30 41 / 0.16);
+  --shadow-modal: 0 6px 14px rgb(23 30 41 / 0.12), 0 26px 64px -12px rgb(23 30 41 / 0.22);
   --shadow-tooltip: 0 2px 8px rgba(23, 30, 41, 0.14);
 }
 
@@ -426,6 +449,7 @@ html.palette-forest.mode-dark {
   --color-surface-2: #17211a;
   --color-surface-3: #223026;
   --color-border: #2e4234;
+  --layer-sidebar: #0b110d;
   --color-border-subtle: #1d2a21;
 
   --color-text: #edf5ef;
@@ -436,7 +460,7 @@ html.palette-forest.mode-dark {
   --color-accent-hover: #059669;
   --color-accent-light: #34d399;
   --color-accent-muted: rgba(16, 185, 129, 0.15);
-  --color-accent-glow: rgba(16, 185, 129, 0.3);
+  --color-accent-glow: rgba(16, 185, 129, 0.08);
 
   --color-danger: #f87171;
   --color-danger-muted: rgba(248, 113, 113, 0.15);
@@ -448,8 +472,10 @@ html.palette-forest.mode-dark {
   --color-scrollbar: #2b3d30;
   --color-scrollbar-hover: #10b981;
 
-  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.5);
-  --shadow-modal: 0 8px 40px rgba(0, 0, 0, 0.7);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px -6px rgb(0 0 0 / 0.6);
+  --shadow-panel: 0 2px 6px rgb(0 0 0 / 0.32), 0 14px 40px -10px rgb(0 0 0 / 0.65);
+  --shadow-modal: 0 6px 14px rgb(0 0 0 / 0.45), 0 26px 64px -12px rgb(0 0 0 / 0.78);
   --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
@@ -461,6 +487,7 @@ html.palette-forest.mode-light {
   --color-surface-2: #eef4ef;
   --color-surface-3: #dfe9e2;
   --color-border: #b9cdbf;
+  --layer-sidebar: #eef4ef;
   --color-border-subtle: #d7e3da;
 
   --color-text: #131a15;
@@ -471,7 +498,7 @@ html.palette-forest.mode-light {
   --color-accent-hover: #047857;
   --color-accent-light: #10b981;
   --color-accent-muted: rgba(5, 150, 105, 0.1);
-  --color-accent-glow: rgba(5, 150, 105, 0.2);
+  --color-accent-glow: rgba(5, 150, 105, 0.07);
 
   --color-danger: #dc2626;
   --color-danger-muted: rgba(220, 38, 38, 0.1);
@@ -483,8 +510,10 @@ html.palette-forest.mode-light {
   --color-scrollbar: #c6d6cb;
   --color-scrollbar-hover: #059669;
 
-  --shadow-panel: 0 4px 24px rgba(19, 38, 26, 0.1);
-  --shadow-modal: 0 8px 40px rgba(19, 38, 26, 0.18);
+  --highlight-top: inset 0 1px 0 0 rgb(255 255 255 / 0.85);
+  --shadow-raised: 0 1px 2px rgb(19 38 26 / 0.08), 0 6px 18px -6px rgb(19 38 26 / 0.14);
+  --shadow-panel: 0 2px 6px rgb(19 38 26 / 0.08), 0 14px 40px -10px rgb(19 38 26 / 0.16);
+  --shadow-modal: 0 6px 14px rgb(19 38 26 / 0.12), 0 26px 64px -12px rgb(19 38 26 / 0.22);
   --shadow-tooltip: 0 2px 8px rgba(19, 38, 26, 0.14);
 }
 
@@ -719,6 +748,24 @@ button:active:not(:disabled),
     animation-delay: 0.4s;
   }
 
+  /* Physically-lit "floating island" — a top-edge inner highlight (light catching the bevel)
+     layered over the contact+ambient raised shadow. Theme-aware via the per-palette tokens. */
+  .elevated {
+    box-shadow: var(--highlight-top), var(--shadow-raised);
+  }
+  /* Same lit top edge, over the heavier modal shadow — for overlays/popouts/modals that
+     float above everything (a stronger drop than .elevated's in-layout raise). */
+  .panel {
+    box-shadow: var(--highlight-top), var(--shadow-modal);
+  }
+  /* Active-speaker halo on a voice tile — a 2px success ring plus an outward glow, composed in one
+     box-shadow so it animates via the tile's `transition-shadow`. Replaces a flat ring-2/ring-success. */
+  .tile-speaking {
+    box-shadow:
+      0 0 0 2px var(--color-success),
+      0 0 10px -3px color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+
   .truncate-text {
     overflow: hidden;
     white-space: nowrap;
@@ -753,6 +800,59 @@ button:active:not(:disabled),
   .logo-pulse {
     will-change: box-shadow;
     isolation: isolate;
+  }
+
+  /* Skeleton bone + a left-to-right accent glow sweep. Callers set the size and
+     radius (e.g. `class="skeleton rounded-full w-10 h-10"`). Under reduced motion
+     the global neutraliser freezes the sweep, leaving a calm static bone. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-surface-2);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-accent-light) 12%, transparent) 45%,
+      color-mix(in srgb, var(--color-accent-light) 22%, transparent) 50%,
+      color-mix(in srgb, var(--color-accent-light) 12%, transparent) 55%,
+      transparent 100%
+    );
+    animation: skeletonSweep 1.5s var(--ease-standard) infinite;
+  }
+  @keyframes skeletonSweep {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Branded loading spinner — the Resonance mark rendered as a currentColor mask, so it inherits
+     text colour (text-faint / text-white / text-accent-light …) AND font-size (1em) exactly like
+     the Font Awesome glyph it replaced. Swap `fas fa-yin-yang animate-spin` → `spinner-brand` and
+     keep the surrounding size/colour/margin classes. Under reduced motion the global neutraliser
+     freezes it after one turn, same as the old spinner. */
+  .spinner-brand {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='12.5' cy='16' r='7.4' fill='none' stroke='%23000' stroke-width='2.3'/%3E%3Ccircle cx='19.5' cy='16' r='7.4' fill='none' stroke='%23000' stroke-width='2.3'/%3E%3Cpath d='M16 9.48 A7.4 7.4 0 0 1 16 22.52 A7.4 7.4 0 0 1 16 9.48 Z' fill='%23000'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='12.5' cy='16' r='7.4' fill='none' stroke='%23000' stroke-width='2.3'/%3E%3Ccircle cx='19.5' cy='16' r='7.4' fill='none' stroke='%23000' stroke-width='2.3'/%3E%3Cpath d='M16 9.48 A7.4 7.4 0 0 1 16 22.52 A7.4 7.4 0 0 1 16 9.48 Z' fill='%23000'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    animation: harmonySpin 0.9s linear infinite;
+  }
+  @keyframes harmonySpin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   /* Profile banner fallback — accent gradient (the popout/modal use a role-coloured
      variant of the same recipe inline; keep the two in step). */
@@ -823,6 +923,53 @@ button:active:not(:disabled),
   }
   html.mode-light .voice-fade-top {
     background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.75), transparent);
+  }
+}
+
+/* ============================================================
+   Settings surfaces — shared primitives (Operate mode)
+   User settings, guild settings, and the channel-settings modal all compose from these so the three
+   read as one system: a consistent pane header, calm bordered section cards, and label/description →
+   control rows. Elevation is declared once (the border); no drop shadow, no glow. Kept in
+   @layer components so per-instance Tailwind utilities in templates still win.
+   ============================================================ */
+@layer components {
+  .set-card {
+    border-radius: 0.875rem;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-subtle);
+    overflow: hidden;
+  }
+  /* label/description on the left, control on the right; stacked rows self-divide with a hairline. */
+  .set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+  }
+  .set-row + .set-row {
+    border-top: 1px solid var(--color-border-subtle);
+  }
+  .set-row-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-text);
+  }
+  .set-row-desc {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--color-text-muted);
+    margin-top: 0.125rem;
+  }
+  /* Small group label that sits above a card (the section's own heading, not a kicker over a title). */
+  .set-section-label {
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-faint);
   }
 }
 

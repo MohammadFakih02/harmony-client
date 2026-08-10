@@ -66,7 +66,7 @@
   <!-- Round call controls — same order + state colours as the guild voice stage (mic, deafen,
        camera, screen, …): muted/deafened read red, camera/screenshare read white when live.
        Docked in the same black pill as the guild stage so the white chrome reads on a light stage. -->
-  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-2.5 py-2 rounded-2xl bg-black/50 backdrop-blur-md ring-1 ring-white/10 max-md:max-w-[calc(100vw-1rem)] max-md:flex-wrap max-md:justify-center">
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-2.5 py-2 rounded-2xl bg-black/50 backdrop-blur-md ring-1 ring-white/10 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.7)] max-md:max-w-[calc(100vw-1rem)] max-md:flex-wrap max-md:justify-center">
     <button
       type="button"
       class="w-10 h-10 rounded-full flex items-center justify-center transition-micro"
@@ -147,7 +147,7 @@
     </button>
     <button
       type="button"
-      class="w-10 h-10 rounded-full flex items-center justify-center bg-danger hover:opacity-85 text-white transition-micro"
+      class="w-10 h-10 rounded-full flex items-center justify-center bg-danger hover:opacity-85 hover:shadow-[0_0_24px_-4px_#f04747] active:scale-95 text-white transition-all"
       title="Disconnect"
       aria-label="Disconnect"
       (click)="leave()"
@@ -170,7 +170,7 @@
   </span>
   <button
     type="button"
-    class="h-9 px-5 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 transition-micro"
+    class="h-9 px-5 rounded-full bg-success text-white text-sm font-semibold hover:opacity-90 hover:shadow-[0_0_26px_-6px_#10b981] active:scale-95 transition-all"
     (click)="join()"
   >
     Join Call

@@ -6,7 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { UiModal, ConfirmService } from '../../../shared/ui';
+import { UiModal, ConfirmService, HarmonyMark } from '../../../shared/ui';
 import { GuildStore } from '../../../core/stores/guild.store';
 import { FriendStore } from '../../../core/stores/friend.store';
 import { UnreadStore } from '../../../core/stores/unread.store';
@@ -29,7 +29,7 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
 @Component({
   selector: 'app-guild-sidebar',
   standalone: true,
-  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule, DragDropModule, UiModal],
+  imports: [RouterLink, FormsModule, JoinServerModal, OverlayModule, DragDropModule, UiModal, HarmonyMark],
   host: { class: 'flex flex-col h-full w-full overflow-hidden' },
   templateUrl: './guild-sidebar.html',
   styleUrl: './guild-sidebar.scss',

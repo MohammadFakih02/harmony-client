@@ -494,6 +494,24 @@ export class MessageList {
     computed(() => this.messageStore.isLoading() && this.messageStore.messages().length === 0),
   );
 
+  // Escalate to a spinner only if the load is genuinely slow (>2.5s). Until then the shimmer
+  // skeleton (from ~200ms) stands in; instant/cached loads (<200ms) still show nothing.
+  protected readonly showSlowLoading = delayedSignal(
+    computed(() => this.messageStore.isLoading() && this.messageStore.messages().length === 0),
+    2500,
+  );
+
+  // Placeholder row shapes for the message skeleton (name width px, line widths %).
+  protected readonly skeletonRows = [
+    { name: 92, line1: 60, line2: 0 },
+    { name: 70, line1: 82, line2: 46 },
+    { name: 112, line1: 38, line2: 0 },
+    { name: 64, line1: 74, line2: 0 },
+    { name: 96, line1: 88, line2: 52 },
+    { name: 78, line1: 48, line2: 0 },
+    { name: 104, line1: 66, line2: 0 },
+  ];
+
   // Plain scrollable container (no CDK virtual scroll — fixed-size virtualization can't size the
   // variable-height message groups, which caused gaps + jitter). The loaded window is bounded by the
   // MessageStore window cap, so natural-flow rendering stays cheap and scrollHeight is always exact.

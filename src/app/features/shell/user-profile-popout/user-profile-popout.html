@@ -1,4 +1,4 @@
-<div class="w-72 max-w-[calc(100vw-1rem)] rounded-xl bg-surface shadow-modal border border-border overflow-hidden animate-slide-up">
+<div class="w-72 max-w-[calc(100vw-1rem)] rounded-xl bg-surface panel border border-border overflow-hidden animate-scale-in origin-top">
   <!-- Banner: image > picked colour > top-role (or accent) gradient -->
   <ui-profile-banner
     class="h-20"
@@ -32,7 +32,7 @@
 
     <!-- Identity -->
     <div class="mt-2.5 min-w-0">
-      <p class="text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
+      <p class="font-display text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
       @if (hasNickname()) {
       <p class="text-xs text-muted truncate mt-0.5">{{ username() }}</p>
       }
@@ -73,7 +73,7 @@
     @if (!isSelf()) {
     <button
       type="button"
-      class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-micro flex items-center justify-center gap-2"
+      class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow transition-all flex items-center justify-center gap-2"
       (click)="message()"
     >
       <i class="fas fa-message text-xs"></i> Message

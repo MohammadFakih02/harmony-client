@@ -16,11 +16,13 @@ const RETENTION_DAYS = 30; // mirrors the backend TrashPurgeService window
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiAvatar],
   template: `
-    <h2 class="text-xl font-bold text-primary mb-1">Trash</h2>
-    <p class="text-sm text-muted mb-5">
-      Servers you delete are kept here for {{ retentionDays }} days — restore one to bring it and
-      everything in it back, or delete it forever now.
-    </p>
+    <header class="mb-6">
+      <h2 class="font-display text-2xl font-bold text-primary tracking-[-0.01em]">Trash</h2>
+      <p class="text-sm text-muted mt-1.5">
+        Servers you delete are kept here for {{ retentionDays }} days — restore one to bring it and
+        everything in it back, or delete it forever now.
+      </p>
+    </header>
 
     @if (error()) {
     <p class="text-sm text-danger mb-3">{{ error() }}</p>
@@ -28,14 +30,14 @@ const RETENTION_DAYS = 30; // mirrors the backend TrashPurgeService window
 
     @if (loading()) {
     <div class="flex justify-center py-10">
-      <i class="fas fa-yin-yang animate-spin text-faint"></i>
+      <i class="spinner-brand text-faint"></i>
     </div>
     } @else if (list().length === 0) {
-    <p class="text-sm text-faint text-center py-10">No deleted servers.</p>
+    <div class="set-card"><p class="text-sm text-faint text-center py-10">No deleted servers.</p></div>
     } @else {
-    <div class="flex flex-col gap-1">
+    <div class="set-card divide-y divide-border-subtle">
       @for (guild of list(); track guild.id) {
-      <div class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-2 transition-micro">
+      <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-3 transition-micro">
         <ui-avatar [src]="guild.iconKey" [alt]="guild.name" size="sm" />
         <div class="flex min-w-0 flex-1 flex-col">
           <span class="text-sm font-medium text-primary truncate">{{ guild.name }}</span>
