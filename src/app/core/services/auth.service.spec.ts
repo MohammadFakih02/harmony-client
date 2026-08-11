@@ -369,10 +369,14 @@ describe('AuthService', () => {
     await new Promise((r) => setTimeout(r));
     httpMock.expectOne(`${base}/auth/logout`).flush(null);
     await promise;
-
     expect(service.isAuthenticated()).toBe(false);
-    expect(clearMessages).toHaveBeenCalled();
-    expect(clearBootstrap).toHaveBeenCalled();
+
+    // clearSession() dynamically import()s the cache modules (A7: keeps Dexie off the initial bundle),
+    // so the clears fire asynchronously once those chunks resolve — poll until they land.
+    await vi.waitFor(() => {
+      expect(clearMessages).toHaveBeenCalled();
+      expect(clearBootstrap).toHaveBeenCalled();
+    });
   });
 
   it('changeUsername() posts the password and new username and patches it locally', async () => {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnDestroy, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiModal } from '../../../shared/ui';
@@ -130,7 +130,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     </ui-modal>
   `,
 })
-export class ChangeEmailModal {
+export class ChangeEmailModal implements OnDestroy {
   private readonly auth = inject(AuthService);
 
   readonly close = output<void>();
@@ -144,6 +144,12 @@ export class ChangeEmailModal {
   protected readonly error = signal('');
   protected readonly resendCooldown = signal(0);
   private cooldownTimer: ReturnType<typeof setInterval> | undefined;
+
+  ngOnDestroy(): void {
+    // Clear the resend-cooldown ticker if the modal closes mid-countdown — otherwise the interval
+    // keeps firing on a destroyed component until the cooldown elapses (A10 hygiene).
+    clearInterval(this.cooldownTimer);
+  }
 
   async send(): Promise<void> {
     if (this.requiresCode()) {

@@ -4,6 +4,7 @@ import {
   computed,
   inject,
   input,
+  OnDestroy,
   output,
   signal,
 } from '@angular/core';
@@ -132,7 +133,7 @@ import { extractApiError } from '../../../shared/util/api-error';
     </ui-modal>
   `,
 })
-export class ChangePasswordModal {
+export class ChangePasswordModal implements OnDestroy {
   private readonly auth = inject(AuthService);
 
   readonly hasPassword = input.required<boolean>();
@@ -148,6 +149,12 @@ export class ChangePasswordModal {
   protected readonly error = signal('');
   protected readonly resendCooldown = signal(0);
   private cooldownTimer: ReturnType<typeof setInterval> | undefined;
+
+  ngOnDestroy(): void {
+    // Clear the resend-cooldown ticker if the modal closes mid-countdown — otherwise the interval
+    // keeps firing on a destroyed component until the cooldown elapses (A10 hygiene).
+    clearInterval(this.cooldownTimer);
+  }
 
   protected readonly heading = computed(() =>
     this.hasPassword() ? 'Change Password' : 'Set Password',

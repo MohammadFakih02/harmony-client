@@ -4,8 +4,6 @@ import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { environment } from "../../../environments/environment";
 import { PushService } from "./push.service";
-import { MessageCacheDb } from "./message-cache.db";
-import { BootstrapCacheDb } from "./bootstrap-cache.db";
 
 export interface User {
   id: string;
@@ -392,7 +390,13 @@ export class AuthService {
     // behind for the next account on a shared browser. The bootstrap cache's userId guard already
     // prevents cross-user *painting*, but the data still persists (and the message cache is
     // un-stamped) until cleared. Best-effort + fire-and-forget — both no-op when unavailable.
-    void this.injector.get(MessageCacheDb).clearAll();
-    void this.injector.get(BootstrapCacheDb).clear();
+    // Dynamic import so Dexie (~94 kB) rides these lazy chunks instead of the initial bundle — both
+    // caches are only ever needed here at logout, never on the boot path (A7 startup, 2026-08-11).
+    void import("./message-cache.db")
+      .then((m) => this.injector.get(m.MessageCacheDb).clearAll())
+      .catch(() => {}); // best-effort: a destroyed injector (teardown) or failed chunk load is a no-op
+    void import("./bootstrap-cache.db")
+      .then((m) => this.injector.get(m.BootstrapCacheDb).clear())
+      .catch(() => {});
   }
 }
