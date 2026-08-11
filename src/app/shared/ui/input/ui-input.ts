@@ -54,11 +54,11 @@ export class UiInput implements ControlValueAccessor {
   // Tailwind class strings must be literal so the scanner detects them.
   protected inputClass = computed(() => {
     const base =
-      'w-full px-4 py-2.5 rounded-lg bg-bg border text-primary placeholder-faint text-sm ' +
-      'transition-colors duration-150 focus:outline-none focus:ring-1 ' +
+      'w-full px-4 py-3 rounded-xl bg-bg border text-primary placeholder:text-faint text-sm ' +
+      'transition-micro focus:outline-none ' +
       'disabled:opacity-50 disabled:cursor-not-allowed';
     return this.error()
-      ? `${base} border-danger focus:border-danger focus:ring-danger`
-      : `${base} border-border hover:border-surface-3 focus:border-accent focus:ring-accent`;
+      ? `${base} border-danger focus:border-danger`
+      : `${base} border-border-subtle hover:border-border focus:border-accent`;
   });
 }

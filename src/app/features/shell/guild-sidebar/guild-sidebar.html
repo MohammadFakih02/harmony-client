@@ -70,12 +70,10 @@
     <button
       cdkDrag
       cdkDragLockAxis="y"
-      class="guild-icon text-muted hover:text-primary transition-micro relative"
+      class="guild-icon bg-surface-2 text-muted hover:text-primary transition-micro relative"
       [class.active]="activeRailGuildId() === guild.id"
       [class.unread]="guildUnread > 0"
-      [class.bg-accent]="activeRailGuildId() === guild.id"
-      [class.text-white]="activeRailGuildId() === guild.id"
-      [class.bg-surface-2]="activeRailGuildId() !== guild.id"
+      [class.!text-primary]="activeRailGuildId() === guild.id"
       [class.opacity-45]="muted && activeRailGuildId() !== guild.id"
       [title]="guild.name"
       (click)="navigateToGuild(guild.id)"

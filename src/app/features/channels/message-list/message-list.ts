@@ -132,7 +132,7 @@ const TRIM_MARGIN_PX = 1200;
 function formatMessageTime(sentAt: number): string {
   const d = new Date(sentAt);
   const now = new Date();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yestStart = new Date(dayStart.getTime() - 86_400_000);
   if (d >= dayStart) return `Today at ${time}`;

@@ -1,56 +1,68 @@
+/* Guild rail icon — the Resonance language, deliberately NOT Discord's circle→squircle morph.
+   Icons are calm, consistent rounded-squares at rest; the active guild is signalled by an accent
+   ring + soft glow + a refined left indicator bar, keeping the guild's OWN icon/initials visible
+   instead of burying it under a solid-violet fill. */
 .guild-icon {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
   cursor: pointer;
   text-decoration: none;
   flex-shrink: 0;
   transition:
-    border-radius var(--duration-element) var(--ease-bounce),
-    background-color var(--duration-micro) var(--ease-standard),
-    color var(--duration-micro) var(--ease-standard),
-    border-color var(--duration-element) var(--ease-standard),
-    transform var(--duration-element) var(--ease-bounce);
+    transform var(--duration-element) var(--ease-out),
+    background-color var(--duration-micro) var(--ease-out),
+    color var(--duration-micro) var(--ease-out),
+    box-shadow var(--duration-element) var(--ease-out),
+    border-radius var(--duration-element) var(--ease-out);
 
-  // Soft zen expansion hover effect (no glow — the squircle morph + border carry it)
   &:hover {
-    border-radius: 35%;
-    border-color: var(--color-accent);
-    transform: scale(1.05);
+    transform: translateY(-1px) scale(1.04);
+    border-radius: 17px;
+  }
+  &:hover:not(.active) {
+    box-shadow: 0 0 0 2px var(--color-border);
+  }
+  &:active {
+    transform: scale(0.95);
   }
 
-  &:active {
-    transform: scale(0.95) rotate(0deg);
-  }
+  // Left indicator bar: unread (small) → hover (medium) → active (tall). Rounded, accent-tinted.
   &::before {
     content: "";
     position: absolute;
-    left: -12px;
+    left: -10px;
     top: 50%;
-    width: 4px;
+    width: 3px;
     height: 0;
-    border-radius: 0 4px 4px 0;
-    background-color: var(--color-text);
+    border-radius: 999px;
+    background-color: var(--color-accent-light);
     transform: translateY(-50%);
-    transition: height var(--duration-element) var(--ease-bounce);
+    transition:
+      height var(--duration-element) var(--ease-out),
+      background-color var(--duration-micro) var(--ease-out);
   }
-  // Unread pill (small) → hover (medium) → active (full) — Discord's rail language.
   &.unread::before {
     height: 8px;
   }
   &:hover::before {
-    height: 20px;
+    height: 14px;
   }
   &.active::before {
-    height: 40px;
+    height: 20px;
+    width: 3px;
+    background-color: var(--color-accent);
   }
-  // The selected guild keeps the morphed squircle shape, not just on hover.
+
+  // Selected guild: accent ring + soft outward glow, own icon stays visible.
   &.active {
-    border-radius: 35%;
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 6px 18px -6px var(--color-accent-glow);
   }
 }

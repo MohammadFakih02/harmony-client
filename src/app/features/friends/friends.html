@@ -15,17 +15,20 @@
   @for (t of tabs; track t.id) {
   <button
     type="button"
-    class="px-3 py-1 rounded-md text-sm font-medium transition-micro shrink-0"
+    class="px-3 py-1.5 rounded-lg text-sm font-medium transition-micro shrink-0"
     [class.bg-accent]="tab() === t.id && t.id === 'add'"
-    [class.text-white]="tab() === t.id && t.id === 'add'"
-    [class.bg-surface-3]="tab() === t.id && t.id !== 'add'"
-    [class.text-primary]="tab() === t.id"
+    [class.text-accent-contrast]="tab() === t.id && t.id === 'add'"
+    [class.shadow-accent-glow]="tab() === t.id && t.id === 'add'"
+    [class.bg-accent-muted]="tab() === t.id && t.id !== 'add'"
+    [class.text-primary]="tab() === t.id && t.id !== 'add'"
     [class.text-muted]="tab() !== t.id"
+    [class.hover:text-primary]="tab() !== t.id"
+    [class.hover:bg-surface-2]="tab() !== t.id"
     (click)="tab.set(t.id)"
   >
     {{ t.label }}
     @if (t.id === 'pending' && friendStore.incomingCount() > 0) {
-    <span class="ml-1 inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full bg-danger text-white text-3xs font-bold">
+    <span class="ml-1 inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full bg-danger text-white text-3xs font-bold tabular-nums">
       {{ friendStore.incomingCount() }}
     </span>
     }

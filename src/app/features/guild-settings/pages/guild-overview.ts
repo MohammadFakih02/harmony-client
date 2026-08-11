@@ -23,25 +23,27 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
     <!-- Icon + banner -->
     <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden mb-5">
       <ui-profile-banner class="h-24" [bannerKey]="bannerKey()" [alt]="name()">
-        <div class="absolute bottom-2 right-2 flex gap-1.5">
+        <div class="absolute bottom-2.5 right-2.5 flex gap-1.5">
           <button
             type="button"
-            class="px-2.5 py-1 rounded-md text-xs font-semibold bg-black/50 text-white hover:bg-black/70 disabled:opacity-50 transition-micro"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-black/50 text-white hover:bg-black/70 disabled:opacity-50 transition-micro backdrop-blur-sm"
             [disabled]="uploading() !== null"
             (click)="bannerInput.click()"
           >
-            @if (uploading() === 'banner') {<i class="spinner-brand mr-1"></i>}
-            @else {<i class="fas fa-image mr-1"></i>}
+            @if (uploading() === 'banner') {<i class="spinner-brand"></i>}
+            @else {<i class="fas fa-image"></i>}
             Change Banner
           </button>
           @if (bannerKey()) {
           <button
             type="button"
-            class="px-2.5 py-1 rounded-md text-xs font-semibold bg-black/50 text-white/80 hover:bg-black/70 hover:text-white disabled:opacity-50 transition-micro"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-black/50 text-white/80 hover:bg-black/70 hover:text-white disabled:opacity-50 transition-micro backdrop-blur-sm"
             [disabled]="uploading() !== null"
+            aria-label="Remove banner"
+            title="Remove banner"
             (click)="removeAsset('banner')"
           >
-            <i class="fas fa-trash-can mr-1"></i>Remove
+            <i class="fas fa-trash-can"></i>
           </button>
           }
         </div>
@@ -79,6 +81,13 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
             <i class="fas fa-xmark"></i>
           </button>
           }
+        </div>
+
+        <div class="mt-3">
+          <p class="font-display text-xl font-bold text-primary leading-tight truncate tracking-[-0.01em]">
+            {{ name() || 'Your Server' }}
+          </p>
+          <p class="text-xs text-faint mt-0.5">This is how members see your server.</p>
         </div>
       </div>
     </div>
@@ -139,7 +148,7 @@ import { publicFileUrl } from '../../../shared/util/public-file-url';
     <div class="mt-6 flex items-center gap-3">
       <button
         type="button"
-        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="!dirty() || saving()"
         (click)="save()"
       >

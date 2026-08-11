@@ -53,7 +53,7 @@
             [class.ring-border-subtle]="!isSelected(row.channelId)"
           >
             @if (isSelected(row.channelId)) {
-            <i class="fas fa-check text-2xs text-white"></i>
+            <i class="fas fa-check text-2xs text-accent-contrast"></i>
             }
           </span>
         </button>
@@ -91,7 +91,7 @@
           type="button"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-micro"
           [class.bg-accent]="canSend()"
-          [class.text-white]="canSend()"
+          [class.text-accent-contrast]="canSend()"
           [class.hover:bg-accent-hover]="canSend()"
           [class.bg-surface-3]="!canSend()"
           [class.text-faint]="!canSend()"

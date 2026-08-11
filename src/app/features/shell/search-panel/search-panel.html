@@ -82,7 +82,7 @@
       <span class="flex-1"></span>
       <span class="text-faint shrink-0">{{ formatTime(r.createdAt) }}</span>
     </div>
-    <p class="text-sm text-secondary line-clamp-2 wrap-break-word">
+    <p class="text-sm text-muted line-clamp-2 wrap-break-word">
       @for (seg of highlight(r.content); track $index) {
       @if (seg.match) { <span class="font-semibold text-primary">{{ seg.text }}</span> }
       @else { <span>{{ seg.text }}</span> }
@@ -113,10 +113,10 @@
     <i class="fas fa-magnifying-glass text-3xl text-faint"></i>
     <p class="text-sm text-muted">Search for messages{{ dmChannelId() ? '' : ' in this server' }}.</p>
     <div class="text-xs text-faint flex flex-col gap-1">
-      <span><span class="text-secondary font-medium">from:</span> a user &nbsp;
-        @if (!dmChannelId()) {<span class="text-secondary font-medium">in:</span> a channel &nbsp;}
-        <span class="text-secondary font-medium">has:link</span></span>
-      <span><span class="text-secondary font-medium">after:</span> · <span class="text-secondary font-medium">before:</span> · <span class="text-secondary font-medium">during:</span> a date</span>
+      <span><span class="text-muted font-medium">from:</span> a user &nbsp;
+        @if (!dmChannelId()) {<span class="text-muted font-medium">in:</span> a channel &nbsp;}
+        <span class="text-muted font-medium">has:link</span></span>
+      <span><span class="text-muted font-medium">after:</span> · <span class="text-muted font-medium">before:</span> · <span class="text-muted font-medium">during:</span> a date</span>
     </div>
   </div>
   }

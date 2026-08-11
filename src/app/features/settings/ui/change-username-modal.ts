@@ -28,7 +28,7 @@ import { extractApiError } from '../../../shared/util/api-error';
           type="password"
           autocomplete="current-password"
           placeholder="••••••••"
-          class="w-full px-3 py-2 rounded-lg bg-bg border border-border text-sm text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+          class="w-full px-3 py-2.5 rounded-lg bg-bg border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
           [ngModel]="password()"
           (ngModelChange)="password.set($event)"
         />
@@ -44,7 +44,7 @@ import { extractApiError } from '../../../shared/util/api-error';
           minlength="2"
           maxlength="32"
           placeholder="new-username"
-          class="w-full px-3 py-2 rounded-lg bg-bg border border-border text-sm text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+          class="w-full px-3 py-2.5 rounded-lg bg-bg border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
           [ngModel]="newUsername()"
           (ngModelChange)="newUsername.set($event)"
           (keydown.enter)="submit()"

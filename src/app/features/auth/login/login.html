@@ -81,7 +81,7 @@
       aria-label="6-digit verification code"
       maxlength="6"
       placeholder="000000"
-      class="w-full text-center text-2xl font-mono tracking-[0.5em] px-4 py-3 rounded-lg bg-bg border border-border text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+      class="w-full text-center text-2xl font-mono tracking-[0.4em] px-4 py-3 rounded-xl bg-bg border border-border-subtle text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
       [ngModel]="code()"
       (ngModelChange)="code.set($event)"
       (keydown.enter)="onVerifyCode()"
@@ -90,7 +90,7 @@
     <label class="flex items-center gap-2 mt-4 text-sm text-muted cursor-pointer select-none">
       <input
         type="checkbox"
-        class="rounded border-border accent-accent"
+        class="ck"
         [ngModel]="rememberDevice()"
         (ngModelChange)="rememberDevice.set($event)"
       />

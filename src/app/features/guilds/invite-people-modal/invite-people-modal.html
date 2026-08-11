@@ -41,7 +41,7 @@
       </div>
       <button
         type="button"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="creating()"
         (click)="generate()"
       >
@@ -114,7 +114,7 @@
           } @else {
           <button
             type="button"
-            class="px-3 py-1 rounded-md text-xs font-semibold bg-accent text-white hover:opacity-90 transition-micro"
+            class="px-3 py-1 rounded-md text-xs font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow transition-all"
             (click)="openFriendInvite(friend)"
           >
             Invite
@@ -188,7 +188,7 @@
       </button>
       <button
         type="button"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="sending()"
         (click)="sendFriendInvite()"
       >

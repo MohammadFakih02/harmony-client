@@ -127,37 +127,36 @@
   <!-- Cozy gives bursts breathing room; compact packs them (Appearance > Message Display) -->
   <div
     class="animate-message-in"
-    [ngClass]="isCompact() ? 'mt-0.5' : 'mt-3'"
+    [ngClass]="isCompact() || group.isSystem ? 'mt-0.5' : 'mt-3'"
     [attr.data-group]="group.firstMessageId"
   >
     @if (group.isSystem) {
-    <div class="gap-1 px-4 py-2 text-xs text-muted flex">
-      @if (systemMessageType(group) === 'pin') {
-      <i class="fas fa-thumbtack text-faint shrink-0"></i>
-      <span class="min-w-0 flex items-center">
-        <span class="font-semibold text-primary mr-1">{{ group.authorName }}</span> pinned a message to this channel.
+    <!-- System notices recede: packed, faint, author de-emphasised so real messages own the space. -->
+    <div class="flex items-center gap-2 pl-5 pr-4 py-0.5 text-xs text-faint select-none">
+      <span class="grid place-items-center w-3.5 shrink-0 text-2xs opacity-80">
+        @if (systemMessageType(group) === 'pin') {
+        <i class="fas fa-thumbtack"></i>
+        } @else if (systemMessageType(group) === 'group_leave') {
+        <i class="fas fa-arrow-right-from-bracket"></i>
+        } @else if (systemMessageType(group) === 'missed_call') {
+        <i class="fas fa-phone-slash"></i>
+        } @else {
+        <i class="fas fa-arrow-right-to-bracket"></i>
+        }
       </span>
-      } @else if (systemMessageType(group) === 'group_join') {
-      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
-      <span class="min-w-0">
-        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the group.
+      <span class="min-w-0 truncate">
+        @if (systemMessageType(group) === 'pin') {
+        <span class="font-medium text-muted">{{ group.authorName }}</span> pinned a message to this channel.
+        } @else if (systemMessageType(group) === 'group_join') {
+        <span class="font-medium text-muted">{{ group.authorName }}</span> joined the group.
+        } @else if (systemMessageType(group) === 'group_leave') {
+        <span class="font-medium text-muted">{{ group.authorName }}</span> left the group.
+        } @else if (systemMessageType(group) === 'missed_call') {
+        <span class="font-medium text-muted">{{ group.authorName }}</span> started a call — no one answered.
+        } @else {
+        <span class="font-medium text-muted">{{ group.authorName }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span> — {{ greeting }}</span>}
+        }
       </span>
-      } @else if (systemMessageType(group) === 'group_leave') {
-      <i class="fas fa-arrow-right-from-bracket text-faint shrink-0"></i>
-      <span class="min-w-0">
-        <span class="font-semibold text-primary">{{ group.authorName }}</span> left the group.
-      </span>
-      } @else if (systemMessageType(group) === 'missed_call') {
-      <i class="fas fa-phone-slash text-faint shrink-0"></i>
-      <span class="min-w-0">
-        <span class="font-semibold text-primary">{{ group.authorName }}</span> started a call — no one answered.
-      </span>
-      } @else {
-      <i class="fas fa-arrow-right-to-bracket text-faint shrink-0"></i>
-      <span class="min-w-0">
-        <span class="font-semibold text-primary">{{ group.authorName }}</span> joined the server.@if (systemGreeting(group); as greeting) {<span class="text-faint"> — {{ greeting }}</span>}
-      </span>
-      }
     </div>
     } @else if (group.blocked && !revealedBlocked().has(group.firstMessageId)) {
     <!-- Blocked author — collapsed bar, click to reveal this burst -->
@@ -204,9 +203,12 @@
         </button>
         }
       </div>
-      @for (item of group.items; track item.msg.messageId) {
+      @for (item of group.items; track item.msg.messageId; let first = $first) {
       @let msg = item.msg;
       <div class="relative group/msg" [attr.data-message]="msg.messageId" [ngClass]="highlightClass(msg)" (contextmenu)="openMessageMenu($event, msg)">
+        @if (!first && editingId() !== msg.messageId) {
+        <span class="absolute -left-[3.25rem] top-1 w-12 pr-1.5 text-right text-3xs text-faint tabular-nums leading-relaxed opacity-0 group-hover/msg:opacity-100 transition-micro select-none pointer-events-none" [title]="item.fullTime">{{ item.shortTime }}</span>
+        }
         @if (editingId() === msg.messageId) {
         <!-- Inline edit mode -->
         <div class="relative" cdkOverlayOrigin #editOrigin="cdkOverlayOrigin">
@@ -355,10 +357,10 @@
           @for (r of msg.reactions; track r.emoji) {
           <button
             type="button"
-            class="inline-flex items-center gap-1 px-1.5 h-6 rounded-md border text-xs leading-none transition-micro disabled:cursor-default"
+            class="inline-flex items-center gap-1 px-2 h-6.5 rounded-full border text-xs leading-none transition-micro animate-pop disabled:cursor-default active:scale-95"
             [ngClass]="r.meReacted
-              ? 'bg-accent/15 border-accent text-accent'
-              : 'bg-surface-2 border-border-subtle text-muted hover:text-primary hover:border-border'"
+              ? 'bg-accent-muted border-accent/60 text-accent shadow-[0_0_0_2px_var(--color-accent-muted)]'
+              : 'bg-surface-2 border-border-subtle text-muted hover:text-primary hover:border-border hover:bg-surface-3'"
             [disabled]="!item.canReact"
             (click)="toggleReaction(msg, r.emoji)"
           >
@@ -371,7 +373,7 @@
             type="button"
             cdkOverlayOrigin
             #addReactionPill="cdkOverlayOrigin"
-            class="inline-flex items-center justify-center w-7 h-6 rounded-md border border-border-subtle bg-surface-2 text-faint hover:text-primary hover:border-border transition-micro"
+            class="inline-flex items-center justify-center w-7 h-6.5 rounded-full border border-border-subtle bg-surface-2 text-faint hover:text-primary hover:border-border hover:bg-surface-3 transition-micro"
             title="Add Reaction"
             aria-label="Add Reaction"
             (click)="openReactionPicker(msg, addReactionPill)"
@@ -386,10 +388,9 @@
              Never rendered on a coarse pointer — touch users get the same actions via long-press. -->
         @if (item.hasActions && !viewport.coarsePointer()) {
         <div
-          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-surface rounded-lg ring-1 ring-border-subtle elevated"
+          class="absolute -top-3.5 right-2 hidden group-hover/msg:flex items-center gap-0.5 p-0.5 bg-surface rounded-xl ring-1 ring-border-subtle shadow-modal"
           [class.!flex]="reactionTarget()?.messageId === msg.messageId"
         >
-          <span class="pl-2 pr-1 text-2xs text-faint font-medium select-none" [title]="item.fullTime">{{ item.shortTime }}</span>
           @if (item.canReact) {
           @for (emoji of quickReactions(); track emoji) {
           <button

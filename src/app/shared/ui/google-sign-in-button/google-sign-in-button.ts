@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, output, viewChild } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, OnDestroy, output, signal, viewChild } from "@angular/core";
 import { environment } from "../../../../environments/environment";
 
 // Google Identity Services has no official npm typings — this ambient `any` is confined to
@@ -37,6 +37,10 @@ declare global {
 export class GoogleSignInButton implements AfterViewInit, OnDestroy {
   private readonly container = viewChild.required<ElementRef<HTMLElement>>("container");
   readonly credential = output<string>();
+
+  /** Flips true once the real GIS button has rendered, fading our matched visual in. If GIS
+   *  never loads (script blocked / offline) the visual stays hidden — same as the old behaviour. */
+  protected readonly ready = signal(false);
 
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retriesLeft = 40; // the GIS script is async/defer — poll ~10s for it before giving up
@@ -78,5 +82,7 @@ export class GoogleSignInButton implements AfterViewInit, OnDestroy {
       // Fill the auth card like the ui-button above; GIS rejects widths over 400.
       width: Math.min(400, host.offsetWidth || 328),
     });
+
+    this.ready.set(true);
   }
 }

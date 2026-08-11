@@ -50,71 +50,82 @@ import { extractApiError } from '../../../shared/util/api-error';
     </header>
 
     @if (me(); as me) {
-    <div class="rounded-xl bg-surface-2 border border-border-subtle overflow-hidden">
+    <!-- ============ PROFILE ============ -->
+    <section class="rounded-2xl bg-surface-2 border border-border-subtle overflow-hidden">
       <!-- Banner with inline edit controls (live-previews the colour draft when no image) -->
       <ui-profile-banner
-        class="h-28"
+        class="h-32"
         [bannerKey]="me.bannerKey"
         [bannerColor]="colorDraft() || null"
         [alt]="me.username"
       >
-        <div class="absolute bottom-2 right-2 flex gap-1.5">
+        <div class="absolute bottom-2.5 right-2.5 flex gap-1.5">
           <button
             type="button"
-            class="px-2.5 py-1 rounded-md text-xs font-semibold bg-black/50 text-white hover:bg-black/70 disabled:opacity-50 transition-micro"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-black/50 text-white hover:bg-black/70 disabled:opacity-50 transition-micro backdrop-blur-sm"
             [disabled]="uploading() !== null"
             (click)="bannerInput.click()"
           >
-            @if (uploading() === 'banner') {<i class="spinner-brand mr-1"></i>}
-            @else {<i class="fas fa-image mr-1"></i>}
+            @if (uploading() === 'banner') {<i class="spinner-brand"></i>}
+            @else {<i class="fas fa-image"></i>}
             Change Banner
           </button>
           @if (me.bannerKey) {
           <button
             type="button"
-            class="px-2.5 py-1 rounded-md text-xs font-semibold bg-black/50 text-white/80 hover:bg-black/70 hover:text-white disabled:opacity-50 transition-micro"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-black/50 text-white/80 hover:bg-black/70 hover:text-white disabled:opacity-50 transition-micro backdrop-blur-sm"
             [disabled]="uploading() !== null"
+            aria-label="Remove banner"
+            title="Remove banner"
             (click)="removeAsset('banner')"
           >
-            <i class="fas fa-trash-can mr-1"></i>Remove
+            <i class="fas fa-trash-can"></i>
           </button>
           }
         </div>
       </ui-profile-banner>
 
-      <div class="px-4 pb-4">
-        <!-- Avatar with camera overlay -->
-        <div class="relative z-10 inline-block rounded-full p-1.25 bg-surface-2 -mt-10">
-          <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="2xl" ringClass="border-surface-2" />
-          <button
-            type="button"
-            class="absolute inset-0 rounded-full bg-black/45 text-white opacity-0 hover:opacity-100 focus-visible:opacity-100 flex items-center justify-center transition-micro"
-            [disabled]="uploading() !== null"
-            aria-label="Change avatar"
-            (click)="avatarInput.click()"
-          >
-            @if (uploading() === 'avatar') {
-            <i class="spinner-brand"></i>
-            } @else {
-            <i class="fas fa-camera"></i>
+      <div class="px-5 pb-5">
+        <!-- Identity row: avatar overlaps the banner, name beside it -->
+        <div class="flex items-end gap-4 -mt-12">
+          <div class="relative rounded-full p-1.5 bg-surface-2 shrink-0">
+            <ui-avatar [src]="me.avatarKey" [alt]="me.username" size="2xl" ringClass="border-surface-2" />
+            <button
+              type="button"
+              class="absolute inset-1.5 rounded-full bg-black/45 text-white opacity-0 hover:opacity-100 focus-visible:opacity-100 flex items-center justify-center transition-micro"
+              [disabled]="uploading() !== null"
+              aria-label="Change avatar"
+              (click)="avatarInput.click()"
+            >
+              @if (uploading() === 'avatar') {
+              <i class="spinner-brand"></i>
+              } @else {
+              <i class="fas fa-camera"></i>
+              }
+            </button>
+            @if (me.avatarKey) {
+            <button
+              type="button"
+              class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-danger text-white text-2xs flex items-center justify-center shadow-sm hover:brightness-110 transition-micro"
+              [disabled]="uploading() !== null"
+              aria-label="Remove avatar"
+              (click)="removeAsset('avatar')"
+            >
+              <i class="fas fa-xmark"></i>
+            </button>
             }
-          </button>
-          @if (me.avatarKey) {
-          <button
-            type="button"
-            class="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-danger text-white text-2xs flex items-center justify-center shadow-sm hover:brightness-110 transition-micro"
-            [disabled]="uploading() !== null"
-            aria-label="Remove avatar"
-            (click)="removeAsset('avatar')"
-          >
-            <i class="fas fa-xmark"></i>
-          </button>
-          }
+          </div>
+
+          <div class="flex-1 min-w-0 pb-1">
+            <p class="font-display text-xl font-bold text-primary leading-tight truncate tracking-[-0.01em]">
+              {{ me.username }}
+            </p>
+            <p class="text-xs text-faint mt-0.5">This is how others see you.</p>
+          </div>
         </div>
 
-        <p class="font-display mt-2.5 text-lg font-bold text-primary leading-tight truncate">{{ me.username }}</p>
-
-        <div class="mt-4 flex flex-col gap-4">
+        <!-- Editable fields -->
+        <div class="mt-5 pt-5 border-t border-border-subtle flex flex-col gap-5">
           <div>
             <div class="flex items-baseline justify-between">
               <label class="text-2xs font-bold uppercase tracking-wider text-faint">About Me</label>
@@ -124,104 +135,95 @@ import { extractApiError } from '../../../shared/util/api-error';
               rows="4"
               maxlength="500"
               placeholder="Tell people about yourself…"
-              class="mt-1.5 w-full px-3 py-2 rounded-lg bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro resize-none"
+              class="mt-1.5 w-full px-3 py-2.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro resize-none"
               [ngModel]="bioDraft()"
               (ngModelChange)="bioDraft.set($event)"
             ></textarea>
           </div>
 
-          <div>
-            <label class="text-2xs font-bold uppercase tracking-wider text-faint">Date of Birth</label>
-            <input
-              type="date"
-              [max]="today"
-              class="mt-1.5 w-full px-3 py-2 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
-              [ngModel]="dobDraft()"
-              (ngModelChange)="dobDraft.set($event)"
-            />
-            <p class="text-2xs text-faint mt-1">Others see your age, never your birthday.</p>
-          </div>
-
-          @if (!me.bannerKey) {
-          <div>
-            <label class="text-2xs font-bold uppercase tracking-wider text-faint">Banner Colour</label>
-            <div class="mt-1.5 flex items-center gap-2">
+          <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+            <div>
+              <label class="text-2xs font-bold uppercase tracking-wider text-faint">Date of Birth</label>
               <input
-                type="color"
-                class="w-9 h-7 rounded-md bg-surface border border-border-subtle cursor-pointer"
-                [value]="colorDraft() || '#5865f2'"
-                (input)="colorDraft.set($any($event.target).value)"
+                type="date"
+                [max]="today"
+                class="mt-1.5 w-full px-3 py-2.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary focus:outline-none focus:border-accent transition-micro"
+                [ngModel]="dobDraft()"
+                (ngModelChange)="dobDraft.set($event)"
               />
-              @if (colorDraft()) {
-              <span class="text-xs text-muted tabular-nums">{{ colorDraft() }}</span>
-              <button
-                type="button"
-                class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface transition-micro"
-                (click)="colorDraft.set('')"
-              >
-                Clear
-              </button>
-              } @else {
-              <span class="text-xs text-faint">Default</span>
-              }
+              <p class="text-2xs text-faint mt-1.5">Others see your age, never your birthday.</p>
             </div>
-            <p class="text-2xs text-faint mt-1">Previewed on the banner above; a banner image covers it.</p>
+
+            @if (!me.bannerKey) {
+            <div>
+              <label class="text-2xs font-bold uppercase tracking-wider text-faint">Banner Colour</label>
+              <div class="mt-1.5 flex items-center gap-2 h-[42px]">
+                <label class="relative w-10 h-10 rounded-lg overflow-hidden border border-border-subtle cursor-pointer shrink-0">
+                  <span class="absolute inset-0" [style.background]="colorDraft() || 'var(--color-accent)'"></span>
+                  <input
+                    type="color"
+                    class="absolute inset-0 opacity-0 cursor-pointer"
+                    [value]="colorDraft() || '#5865f2'"
+                    (input)="colorDraft.set($any($event.target).value)"
+                  />
+                </label>
+                @if (colorDraft()) {
+                <span class="text-xs text-muted tabular-nums flex-1 truncate">{{ colorDraft() }}</span>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded-md text-xs text-muted hover:text-primary hover:bg-surface transition-micro shrink-0"
+                  (click)="colorDraft.set('')"
+                >
+                  Clear
+                </button>
+                } @else {
+                <span class="text-xs text-faint flex-1">Accent default</span>
+                }
+              </div>
+              <p class="text-2xs text-faint mt-1.5">Shown behind your avatar until you add a banner image.</p>
+            </div>
+            }
           </div>
-          }
 
           @if (error()) {
           <p class="text-xs text-danger">{{ error() }}</p>
           }
-
-          @if (dirty()) {
-          <div class="flex items-center gap-2 rounded-lg bg-surface border border-border-subtle px-3 py-2">
-            <span class="text-xs text-muted flex-1">You have unsaved changes.</span>
-            <button
-              type="button"
-              class="px-3 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
-              (click)="reset()"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              class="px-3 h-8 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
-              [disabled]="saving()"
-              (click)="save()"
-            >
-              {{ saving() ? 'Saving…' : 'Save Changes' }}
-            </button>
-          </div>
-          }
         </div>
       </div>
-    </div>
 
-    <!-- Account credentials -->
-    <div class="mt-6 rounded-xl bg-surface-2 border border-border-subtle divide-y divide-border-subtle">
-      @if (!hasPassword()) {
-      <div class="px-3.5 py-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm font-semibold text-primary">Password</p>
-          <p class="text-xs text-muted mt-0.5">
-            Signed in with Google — set a password first to change your email or username.
-          </p>
-        </div>
-        <ui-button variant="primary" size="sm" (click)="showPasswordModal.set(true)">
-          Set Password
-        </ui-button>
-      </div>
-      } @else {
-      <div class="px-3.5 py-3 flex items-center justify-between gap-3">
-        <p class="text-sm font-semibold text-primary">Password</p>
-        <ui-button variant="ghost" size="sm" (click)="showPasswordModal.set(true)">
-          Change
-        </ui-button>
+      <!-- Save bar — appears only when there are unsaved changes -->
+      @if (dirty()) {
+      <div class="flex items-center gap-2 border-t border-border-subtle bg-surface/40 px-5 py-3 animate-fade-in">
+        <i class="fas fa-circle-dot text-2xs text-accent"></i>
+        <span class="text-xs text-muted flex-1">You have unsaved changes.</span>
+        <button
+          type="button"
+          class="px-3 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary hover:bg-surface transition-micro"
+          (click)="reset()"
+        >
+          Reset
+        </button>
+        <button
+          type="button"
+          class="px-4 h-8 rounded-lg text-xs font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 transition-all"
+          [disabled]="saving()"
+          (click)="save()"
+        >
+          {{ saving() ? 'Saving…' : 'Save Changes' }}
+        </button>
       </div>
       }
+    </section>
 
-      <div class="px-3.5 py-3 flex items-center justify-between gap-3 min-w-0">
-        <div class="min-w-0">
+    <!-- ============ ACCOUNT & SECURITY ============ -->
+    <p class="mt-8 mb-2.5 px-1 text-2xs font-bold uppercase tracking-wider text-faint">Account &amp; Security</p>
+    <section class="rounded-2xl bg-surface-2 border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+      <!-- Username -->
+      <div class="flex items-center gap-3.5 px-4 py-3.5">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-faint">
+          <i class="fas fa-at"></i>
+        </span>
+        <div class="min-w-0 flex-1">
           <p class="text-2xs font-bold uppercase tracking-wider text-faint">Username</p>
           <p class="text-sm text-primary mt-0.5 truncate">{{ me.username }}</p>
         </div>
@@ -236,9 +238,13 @@ import { extractApiError } from '../../../shared/util/api-error';
         </ui-button>
       </div>
 
-      <div class="px-3.5 py-3 min-w-0">
-        <div class="flex items-center justify-between gap-3 min-w-0">
-          <div class="min-w-0">
+      <!-- Email (+ unverified nag) -->
+      <div class="px-4 py-3.5">
+        <div class="flex items-center gap-3.5">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-faint">
+            <i class="fas fa-envelope"></i>
+          </span>
+          <div class="min-w-0 flex-1">
             <p class="text-2xs font-bold uppercase tracking-wider text-faint">Email</p>
             <p class="text-sm text-primary mt-0.5 truncate">{{ email() }}</p>
           </div>
@@ -253,9 +259,7 @@ import { extractApiError } from '../../../shared/util/api-error';
           </ui-button>
         </div>
         @if (!emailVerified()) {
-        <div
-          class="mt-2 flex items-center gap-2 rounded-lg bg-warning-muted border border-warning/30 px-2.5 py-2"
-        >
+        <div class="mt-3 ml-[3.125rem] flex items-center gap-2 rounded-lg bg-warning-muted border border-warning/30 px-2.5 py-2">
           <i class="fas fa-triangle-exclamation text-warning text-xs"></i>
           <span class="text-xs text-muted flex-1">Your email isn't verified yet.</span>
           <button
@@ -271,83 +275,118 @@ import { extractApiError } from '../../../shared/util/api-error';
         </div>
         }
       </div>
-    </div>
 
-    <!-- Two-factor authentication -->
-    <div class="mt-6 rounded-xl bg-surface-2 border border-border-subtle px-3.5 py-3">
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm font-semibold text-primary">Two-Factor Authentication</p>
+      <!-- Password -->
+      <div class="flex items-center gap-3.5 px-4 py-3.5">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-faint">
+          <i class="fas fa-key"></i>
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-2xs font-bold uppercase tracking-wider text-faint">Password</p>
+          @if (!hasPassword()) {
           <p class="text-xs text-muted mt-0.5">
-            @if (twoFactorEnabled()) { Enabled — we'll email a code at login. }
-            @else { Adds an emailed code to your login, on top of your password. }
+            Signed in with Google — set a password to change your email or username.
           </p>
+          } @else {
+          <p class="text-sm text-primary mt-0.5 tracking-widest">••••••••</p>
+          }
         </div>
-        @if (!twoFactorEnabled()) {
-        <ui-button variant="primary" size="sm" (click)="showEnableModal.set(true)">Enable</ui-button>
-        } @else if (!disabling()) {
-        <ui-button variant="danger" size="sm" (click)="disabling.set(true)">Disable</ui-button>
+        @if (!hasPassword()) {
+        <ui-button variant="primary" size="sm" (click)="showPasswordModal.set(true)">Set Password</ui-button>
+        } @else {
+        <ui-button variant="ghost" size="sm" (click)="showPasswordModal.set(true)">Change</ui-button>
         }
       </div>
 
-      @if (twoFactorEnabled() && !disabling()) {
-      <button
-        type="button"
-        class="mt-3 text-xs text-muted hover:text-primary transition-micro disabled:opacity-50"
-        [disabled]="clearingDevices()"
-        (click)="clearTrustedDevices()"
-      >
-        {{ clearingDevices() ? 'Clearing…' : 'Require 2FA on all devices again' }}
-      </button>
-      }
-
-      @if (disabling()) {
-      <div class="mt-3 pt-3 border-t border-border-subtle">
-        <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">
-          Confirm Password to Disable
-        </label>
-        <input
-          type="password"
-          autocomplete="current-password"
-          placeholder="••••••••"
-          class="w-full px-3 py-2 rounded-lg bg-bg border border-border text-sm text-primary placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
-          [ngModel]="disablePassword()"
-          (ngModelChange)="disablePassword.set($event)"
-          (keydown.enter)="confirmDisable()"
-        />
-        @if (disableError()) {
-        <p class="text-xs text-danger mt-1.5">{{ disableError() }}</p>
-        }
-        <div class="flex items-center gap-2 mt-3">
-          <button
-            type="button"
-            class="px-3 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary hover:bg-surface-2 transition-micro"
-            (click)="cancelDisable()"
+      <!-- Two-factor authentication -->
+      <div class="px-4 py-3.5">
+        <div class="flex items-center gap-3.5">
+          <span
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            [class.bg-surface]="!twoFactorEnabled()"
+            [class.text-faint]="!twoFactorEnabled()"
+            [class.bg-success-muted]="twoFactorEnabled()"
+            [class.text-success]="twoFactorEnabled()"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            class="px-3 h-8 rounded-lg text-xs font-semibold bg-danger text-white hover:brightness-110 disabled:opacity-50 transition-micro"
-            [disabled]="!disablePassword() || disableSubmitting()"
-            (click)="confirmDisable()"
-          >
-            {{ disableSubmitting() ? 'Disabling…' : 'Disable 2FA' }}
-          </button>
+            <i class="fas fa-shield-halved"></i>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-primary">Two-Factor Authentication</p>
+            <p class="text-xs text-muted mt-0.5">
+              @if (twoFactorEnabled()) { Enabled — we'll email a code at login. }
+              @else { Adds an emailed code to your login, on top of your password. }
+            </p>
+          </div>
+          @if (!twoFactorEnabled()) {
+          <ui-button variant="primary" size="sm" (click)="showEnableModal.set(true)">Enable</ui-button>
+          } @else if (!disabling()) {
+          <ui-button variant="danger" size="sm" (click)="disabling.set(true)">Disable</ui-button>
+          }
         </div>
+
+        @if (twoFactorEnabled() && !disabling()) {
+        <button
+          type="button"
+          class="mt-3 ml-[3.125rem] text-xs text-muted hover:text-primary transition-micro disabled:opacity-50"
+          [disabled]="clearingDevices()"
+          (click)="clearTrustedDevices()"
+        >
+          {{ clearingDevices() ? 'Clearing…' : 'Require 2FA on all devices again' }}
+        </button>
+        }
+
+        @if (disabling()) {
+        <div class="mt-3 ml-[3.125rem]">
+          <label class="block text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">
+            Confirm Password to Disable
+          </label>
+          <input
+            type="password"
+            autocomplete="current-password"
+            placeholder="••••••••"
+            class="w-full px-3 py-2.5 rounded-lg bg-surface border border-border-subtle text-sm text-primary placeholder:text-faint focus:outline-none focus:border-accent transition-micro"
+            [ngModel]="disablePassword()"
+            (ngModelChange)="disablePassword.set($event)"
+            (keydown.enter)="confirmDisable()"
+          />
+          @if (disableError()) {
+          <p class="text-xs text-danger mt-1.5">{{ disableError() }}</p>
+          }
+          <div class="flex items-center gap-2 mt-3">
+            <button
+              type="button"
+              class="px-3 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary hover:bg-surface transition-micro"
+              (click)="cancelDisable()"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="px-3 h-8 rounded-lg text-xs font-semibold bg-danger text-white hover:brightness-110 disabled:opacity-50 transition-micro"
+              [disabled]="!disablePassword() || disableSubmitting()"
+              (click)="confirmDisable()"
+            >
+              {{ disableSubmitting() ? 'Disabling…' : 'Disable 2FA' }}
+            </button>
+          </div>
+        </div>
+        }
       </div>
-      }
-    </div>
+    </section>
 
-    <div class="h-px bg-border-subtle my-6"></div>
-
-    <div class="flex items-center justify-between">
-      <div>
+    <!-- ============ SESSION ============ -->
+    <section
+      class="mt-8 flex items-center gap-3.5 rounded-2xl bg-surface-2 border border-border-subtle px-4 py-3.5"
+    >
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-danger-muted text-danger">
+        <i class="fas fa-right-from-bracket"></i>
+      </span>
+      <div class="min-w-0 flex-1">
         <p class="text-sm font-semibold text-primary">Log out</p>
         <p class="text-xs text-muted mt-0.5">End your session on this device.</p>
       </div>
       <ui-button variant="danger" size="sm" (click)="logout()">Log Out</ui-button>
-    </div>
+    </section>
 
     @if (showEnableModal()) {
     <app-enable-2fa-modal

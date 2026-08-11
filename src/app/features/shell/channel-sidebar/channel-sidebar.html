@@ -8,7 +8,7 @@
     #serverMenuOrigin="cdkOverlayOrigin"
     (click)="toggleServerMenu()"
   >
-    <span class="font-semibold text-primary truncate-text flex-1 min-w-0">
+    <span class="font-display font-semibold text-primary tracking-[-0.01em] truncate-text flex-1 min-w-0">
       {{ guildStore.selectedGuild()?.name ?? 'Select a server' }}
     </span>
     <i
@@ -469,8 +469,8 @@
         @let unread = active || muted ? 0 : (unreadStore.counts()[channel.id] || 0);
         <a
           [routerLink]="['/app/guilds', guildStore.selectedGuildId(), 'channels', channel.id]"
-          routerLinkActive="bg-surface-3 text-primary"
-          class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
+          routerLinkActive="!bg-accent-muted !text-primary"
+          class="channel-item group flex items-center gap-2 px-2 py-1.5 rounded-lg font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro relative"
           [class.font-semibold]="unread > 0"
           [class.text-primary]="unread > 0"
           [class.opacity-45]="muted"
@@ -578,8 +578,8 @@
   >
     <a
       routerLink="/app/friends"
-      routerLinkActive="bg-surface-3 text-primary"
-      class="flex items-center gap-3 px-2 py-2 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro mb-2"
+      routerLinkActive="!bg-accent-muted !text-primary"
+      class="flex items-center gap-3 px-2 py-2 rounded-lg font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro mb-2"
       (click)="closeDrawer()"
     >
       <i class="fas fa-user-group w-5 text-center"></i>
@@ -616,7 +616,7 @@
       @let peer = dmOneToOnePeer(dm);
       <a
         [routerLink]="['/app/dm', dm.channelId]"
-        routerLinkActive="bg-surface-3 text-primary"
+        routerLinkActive="!bg-accent-muted !text-primary"
         class="dm-item group relative flex items-center gap-2 px-2 py-1.5 rounded-md font-medium text-muted hover:bg-surface-2 hover:text-primary transition-micro"
         [class.font-semibold]="unread > 0"
         [class.text-primary]="unread > 0"

@@ -1,7 +1,7 @@
-<div class="w-72 max-w-[calc(100vw-1rem)] rounded-xl bg-surface panel border border-border overflow-hidden animate-scale-in origin-top">
+<div class="w-72 max-w-[calc(100vw-1rem)] rounded-2xl bg-surface panel border border-border overflow-hidden animate-scale-in origin-top">
   <!-- Banner: image > picked colour > top-role (or accent) gradient -->
   <ui-profile-banner
-    class="h-20"
+    class="h-24"
     [bannerKey]="profile()?.bannerKey ?? null"
     [bannerColor]="profile()?.bannerColor ?? null"
     [fallback]="bannerStyle()"
@@ -9,9 +9,9 @@
   />
 
   <div class="px-4">
-    <!-- Avatar overlapping the banner + owner badge (relative z-10 keeps it above the banner) -->
-    <div class="relative z-10 flex items-end justify-between -mt-10">
-      <div class="inline-block rounded-full p-1.25 bg-surface">
+    <!-- Avatar overlaps the banner + owner badge (relative z-10 keeps it above the banner) -->
+    <div class="relative z-10 flex items-end justify-between -mt-11">
+      <div class="rounded-full p-1.5 bg-surface shrink-0">
         <ui-avatar
           [src]="avatarKey()"
           [alt]="displayName()"
@@ -32,15 +32,21 @@
 
     <!-- Identity -->
     <div class="mt-2.5 min-w-0">
-      <p class="font-display text-lg font-bold text-primary leading-tight truncate">{{ displayName() }}</p>
-      @if (hasNickname()) {
-      <p class="text-xs text-muted truncate mt-0.5">{{ username() }}</p>
+      <p class="font-display text-lg font-bold text-primary leading-tight truncate tracking-[-0.01em]">
+        {{ displayName() }}
+      </p>
+      @if (hasNickname() || profile()?.age != null) {
+      <p class="text-xs text-muted truncate mt-0.5">
+        @if (hasNickname()) { <span>{{ username() }}</span> }
+        @if (hasNickname() && profile()?.age != null) { <span class="text-faint"> · </span> }
+        @if (profile()?.age; as age) { <span>{{ age }} yrs</span> }
+      </p>
       }
     </div>
 
     <!-- Custom status -->
     @if (statusMessage(); as msg) {
-    <div class="mt-2 rounded-lg bg-surface-2 border border-border-subtle px-2.5 py-1.5 flex items-start gap-1.5">
+    <div class="mt-2.5 rounded-xl bg-surface-2 border border-border-subtle px-3 py-2 flex items-start gap-2">
       <i class="fas fa-quote-left text-2xs text-faint mt-1 shrink-0"></i>
       <span class="text-xs text-muted whitespace-pre-wrap wrap-break-word min-w-0">{{ msg }}</span>
     </div>
@@ -50,11 +56,13 @@
     @if (roleChips().length) {
     <div class="my-3 h-px bg-border-subtle"></div>
     <div class="mb-3">
-      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">Roles</p>
-      <div class="flex flex-wrap gap-1">
+      <p class="text-2xs font-bold uppercase tracking-wider text-faint mb-1.5">
+        Roles <span class="text-border">·</span> {{ roleChips().length }}
+      </p>
+      <div class="flex flex-wrap gap-1.5">
         @for (role of roleChips(); track role.id) {
         <span
-          class="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-md bg-surface-2 border border-border-subtle text-xs font-medium text-primary"
+          class="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full bg-surface-2 border border-border-subtle text-xs font-medium text-primary"
         >
           <span
             class="w-2.5 h-2.5 rounded-full shrink-0"
@@ -73,28 +81,30 @@
     @if (!isSelf()) {
     <button
       type="button"
-      class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow transition-all flex items-center justify-center gap-2"
+      class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow transition-all flex items-center justify-center gap-2"
       (click)="message()"
     >
       <i class="fas fa-message text-xs"></i> Message
     </button>
     }
-    @if (canAddFriend()) {
-    <button
-      type="button"
-      class="w-full h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2 disabled:opacity-60"
-      [disabled]="sendingFriendRequest()"
-      (click)="addFriend()"
-    >
-      <i class="fas fa-user-plus text-2xs"></i> Add Friend
-    </button>
-    }
-    <button
-      type="button"
-      class="w-full h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro"
-      (click)="viewFullProfile()"
-    >
-      View Full Profile
-    </button>
+    <div class="flex items-center gap-1.5">
+      @if (canAddFriend()) {
+      <button
+        type="button"
+        class="flex-1 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2 disabled:opacity-60"
+        [disabled]="sendingFriendRequest()"
+        (click)="addFriend()"
+      >
+        <i class="fas fa-user-plus text-2xs"></i> Add Friend
+      </button>
+      }
+      <button
+        type="button"
+        class="flex-1 h-8 rounded-lg text-xs font-medium text-muted hover:text-primary bg-surface-2 hover:bg-surface-3 transition-micro flex items-center justify-center gap-2"
+        (click)="viewFullProfile()"
+      >
+        <i class="fas fa-id-badge text-2xs"></i> Full Profile
+      </button>
+    </div>
   </div>
 </div>

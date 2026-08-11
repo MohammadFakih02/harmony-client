@@ -62,7 +62,7 @@ import { SettingsToggle } from '../../settings/ui/settings-toggle';
     <div class="mt-6 flex items-center gap-3">
       <button
         type="button"
-        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+        class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="!dirty() || saving()"
         (click)="save()"
       >

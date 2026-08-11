@@ -104,7 +104,7 @@ import { MobileNavService } from '../../../core/services/mobile-nav.service';
               } @else {
               <button
                 type="button"
-                class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover hover:shadow-accent-glow active:scale-[0.98] disabled:opacity-50 transition-micro"
+                class="w-full h-9 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow active:scale-[0.98] disabled:opacity-50 disabled:hover:shadow-none transition-micro"
                 [disabled]="joiningId() === guild.id"
                 (click)="join(guild)"
               >

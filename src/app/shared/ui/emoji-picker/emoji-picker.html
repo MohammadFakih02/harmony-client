@@ -32,7 +32,7 @@
     <button
       type="button"
       class="w-8 h-8 flex items-center justify-center rounded-md transition-micro"
-      [class.text-primary]="!isSearching() && activeCategoryId() === 'recents'"
+      [class.text-accent]="!isSearching() && activeCategoryId() === 'recents'"
       [class.bg-surface-3]="!isSearching() && activeCategoryId() === 'recents'"
       [class.text-faint]="isSearching() || activeCategoryId() !== 'recents'"
       [class.hover:text-primary]="isSearching() || activeCategoryId() !== 'recents'"
@@ -47,7 +47,7 @@
     <button
       type="button"
       class="w-8 h-8 flex items-center justify-center rounded-md transition-micro"
-      [class.text-primary]="!isSearching() && activeCategoryId() === cat.id"
+      [class.text-accent]="!isSearching() && activeCategoryId() === cat.id"
       [class.bg-surface-3]="!isSearching() && activeCategoryId() === cat.id"
       [class.text-faint]="isSearching() || activeCategoryId() !== cat.id"
       [class.hover:text-primary]="isSearching() || activeCategoryId() !== cat.id"

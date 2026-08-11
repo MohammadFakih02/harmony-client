@@ -32,7 +32,7 @@
       </button>
       <button
         type="button"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="joining()"
         (click)="join()"
       >
@@ -69,7 +69,7 @@
       </button>
       <button
         type="button"
-        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:opacity-90 disabled:opacity-50 transition-micro"
+        class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
         [disabled]="loading() || !raw().trim()"
         (click)="lookup()"
       >

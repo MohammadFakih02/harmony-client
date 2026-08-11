@@ -9,7 +9,7 @@
     <div class="flex w-52 min-w-52 flex-col border-r border-border-subtle">
       <button
         type="button"
-        class="m-2 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 transition-micro"
+        class="m-2 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow transition-all"
         (click)="createRole()"
       >
         <i class="fas fa-plus mr-1"></i> Create Role
@@ -94,12 +94,12 @@
             </div>
 
             <div class="flex flex-col gap-2">
-              <label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
-                <input type="checkbox" [ngModel]="hoisted()" (ngModelChange)="hoisted.set($event)" />
+              <label class="flex cursor-pointer items-center gap-2.5 text-sm text-primary">
+                <input type="checkbox" class="ck" [ngModel]="hoisted()" (ngModelChange)="hoisted.set($event)" />
                 Display role members separately from online members
               </label>
-              <label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
-                <input type="checkbox" [ngModel]="mentionable()" (ngModelChange)="mentionable.set($event)" />
+              <label class="flex cursor-pointer items-center gap-2.5 text-sm text-primary">
+                <input type="checkbox" class="ck" [ngModel]="mentionable()" (ngModelChange)="mentionable.set($event)" />
                 Allow anyone to @&#8203;mention this role
               </label>
             </div>
@@ -114,7 +114,7 @@
               <label class="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-micro hover:bg-surface-2">
                 <input
                   type="checkbox"
-                  class="mt-0.5"
+                  class="ck mt-0.5"
                   [checked]="hasBit(bits(), perm.bit)"
                   (change)="togglePerm(perm.bit)"
                 />
@@ -148,7 +148,7 @@
         <div class="flex-1"></div>
         <button
           type="button"
-          class="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition-micro hover:opacity-90 disabled:opacity-40"
+          class="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-contrast transition-all hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-40 disabled:hover:shadow-none"
           [disabled]="!dirty() || saving()"
           (click)="save()"
         >

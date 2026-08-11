@@ -47,8 +47,9 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
  * the cap, MoveMembers holders bypass it). Saves through ChannelStore.saveChannel; the
  * ChannelUpdated broadcast reconciles other clients.
  *
- * Permissions tab (ManageRoles) — the per-channel override editor: @everyone plus any role/member
- * targets, each with a tri-state (allow / neutral / deny) row per channel-scoped permission.
+ * Permissions tab (ManageRoles) — the per-channel override editor: @everyone plus every role
+ * (auto-listed in rank order) and any member overrides added via the picker, each with a
+ * tri-state (allow / neutral / deny) row per channel-scoped permission.
  * Edits are per-target and saved one PUT at a time; the backend re-validates (ManageRoles gate,
  * no allow/deny overlap) and the ChannelOverridesChanged broadcast resyncs everyone's channel
  * list + capabilities live.
@@ -71,7 +72,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
       >
         <div class="flex items-center gap-2">
           <i class="fas text-faint" [class.fa-hashtag]="!isVoice()" [class.fa-volume-up]="isVoice()"></i>
-          <h2 class="text-lg font-bold text-primary">Edit Channel</h2>
+          <h2 class="font-display text-lg font-bold text-primary tracking-[-0.01em]">Edit Channel</h2>
         </div>
 
         @if (canManageRoles()) {
@@ -135,7 +136,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
               type="button"
               class="px-2.5 py-1 rounded-md text-xs font-medium border transition-micro"
               [class.bg-accent]="slowmode() === opt.seconds"
-              [class.text-white]="slowmode() === opt.seconds"
+              [class.text-accent-contrast]="slowmode() === opt.seconds"
               [class.border-accent]="slowmode() === opt.seconds"
               [class.border-border-subtle]="slowmode() !== opt.seconds"
               [class.text-muted]="slowmode() !== opt.seconds"
@@ -182,7 +183,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
               type="button"
               class="px-2.5 py-1 rounded-md text-xs font-medium border transition-micro"
               [class.bg-accent]="bitrateKbps() === kbps"
-              [class.text-white]="bitrateKbps() === kbps"
+              [class.text-accent-contrast]="bitrateKbps() === kbps"
               [class.border-accent]="bitrateKbps() === kbps"
               [class.border-border-subtle]="bitrateKbps() !== kbps"
               [class.text-muted]="bitrateKbps() !== kbps"
@@ -235,7 +236,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
           </button>
           <button
             type="button"
-            class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+            class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
             [disabled]="saving() || !name().trim() || !dirty()"
             (click)="save()"
           >
@@ -252,7 +253,8 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
               <button
                 type="button"
                 class="w-6 h-6 rounded-md text-muted hover:text-primary hover:bg-surface-2 transition-micro"
-                aria-label="Add role or member"
+                aria-label="Add member override"
+                title="Add a member override"
                 (click)="toggleAddTarget()"
               >
                 <i class="fas fa-plus text-xs"></i>
@@ -263,7 +265,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
             <div class="flex flex-col gap-1 rounded-lg bg-surface-2 border border-border-subtle p-2 mb-1">
               <input
                 type="text"
-                placeholder="Search roles or members…"
+                placeholder="Search members…"
                 class="w-full px-2 py-1 rounded-md bg-surface border border-border-subtle text-xs text-primary placeholder:text-faint focus:outline-none focus:border-accent"
                 [ngModel]="targetFilter()"
                 (ngModelChange)="targetFilter.set($event)"
@@ -404,7 +406,7 @@ const keyOf = (targetType: string, targetId: string): string => `${targetType}:$
               </button>
               <button
                 type="button"
-                class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-micro"
+                class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-contrast hover:bg-accent-hover hover:shadow-accent-glow disabled:opacity-50 disabled:hover:shadow-none transition-all"
                 [disabled]="permSaving() || !isDirty(selectedKey())"
                 (click)="saveOverride()"
               >
@@ -461,7 +463,7 @@ export class ChannelSettingsModal {
 
   protected readonly permGroups = computed(() => overridePermGroups(this.channel().type));
 
-  /** @everyone first (always shown), then role overrides in rank order, then members by name. */
+  /** @everyone first, then EVERY role in rank order (auto-listed), then member overrides by name. */
   protected readonly targets = computed<OverrideTarget[]>(() => {
     const c = this.channel();
     const roles = this.roleStore.rolesOf(c.guildId);
@@ -484,18 +486,19 @@ export class ChannelSettingsModal {
         isEveryone: true,
       });
     }
-    // rolesOf is rank-sorted, so role targets come out in rank order.
+    // Every non-default role is shown automatically (rolesOf is rank-sorted → rank order),
+    // whether or not it has a saved override — no need to add roles one at a time.
     for (const r of roles) {
-      if (keys.delete(keyOf('role', r.id))) {
-        out.push({
-          key: keyOf('role', r.id),
-          targetType: 'role',
-          targetId: r.id,
-          name: r.name,
-          color: roleColorHex(r.color),
-          isEveryone: false,
-        });
-      }
+      if (r.isDefault) continue;
+      keys.delete(keyOf('role', r.id));
+      out.push({
+        key: keyOf('role', r.id),
+        targetType: 'role',
+        targetId: r.id,
+        name: r.name,
+        color: roleColorHex(r.color),
+        isEveryone: false,
+      });
     }
     const userTargets = [...keys]
       .filter((k) => k.startsWith('user:'))
@@ -516,25 +519,13 @@ export class ChannelSettingsModal {
     return out;
   });
 
-  /** Picker candidates: roles (sans @everyone) then members, minus existing targets, filtered. */
+  /** Picker candidates: members only (every role is auto-listed), minus existing, filtered. */
   protected readonly addCandidates = computed<OverrideTarget[]>(() => {
     const c = this.channel();
     const existing = new Set(this.targets().map((t) => t.key));
     const q = this.targetFilter().trim().toLowerCase();
 
-    const roles = this.roleStore
-      .rolesOf(c.guildId)
-      .filter((r) => !r.isDefault && !existing.has(keyOf('role', r.id)))
-      .filter((r) => !q || r.name.toLowerCase().includes(q))
-      .map((r) => ({
-        key: keyOf('role', r.id),
-        targetType: 'role' as const,
-        targetId: r.id,
-        name: r.name,
-        color: roleColorHex(r.color),
-        isEveryone: false,
-      }));
-    const members = this.memberStore
+    return this.memberStore
       .membersOf(c.guildId)
       .filter((m) => !existing.has(keyOf('user', m.userId)))
       .filter(
@@ -552,7 +543,6 @@ export class ChannelSettingsModal {
         isEveryone: false,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-    return [...roles, ...members];
   });
 
   protected readonly dirty = computed(() => {
