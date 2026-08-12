@@ -204,15 +204,48 @@ describe('AuthService', () => {
     await promise;
   });
 
-  it('loginWithGoogle() posts the idToken and sets the session', async () => {
+  it('loginWithGoogle() posts the idToken and sets the session for an existing account', async () => {
     const promise = service.loginWithGoogle('fake-id-token');
     const req = httpMock.expectOne(`${base}/auth/google`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ idToken: 'fake-id-token' });
-    req.flush({ accessToken: 'tok9', user });
+    expect(req.request.body).toEqual({ idToken: 'fake-id-token', username: null });
+    req.flush({ accessToken: 'tok9', user, needsUsername: false });
 
-    await promise;
+    const result = await promise;
+    expect(result.needsUsername).toBe(false);
     expect(service.getAccessToken()).toBe('tok9');
+  });
+
+  it('loginWithGoogle() returns needsUsername and sets NO session for a brand-new identity', async () => {
+    const promise = service.loginWithGoogle('fake-id-token');
+    const req = httpMock.expectOne(`${base}/auth/google`);
+    req.flush({
+      accessToken: null,
+      user: null,
+      needsUsername: true,
+      suggestedUsername: 'moudi30201',
+      email: 'moudi30201@gmail.com',
+    });
+
+    const result = await promise;
+    expect(result).toEqual({
+      needsUsername: true,
+      suggestedUsername: 'moudi30201',
+      email: 'moudi30201@gmail.com',
+    });
+    // Critical: no account exists yet, so nothing may be treated as a signed-in session.
+    expect(service.getAccessToken()).toBeNull();
+  });
+
+  it('loginWithGoogle() sends the chosen username on the second call and sets the session', async () => {
+    const promise = service.loginWithGoogle('fake-id-token', 'chosenname');
+    const req = httpMock.expectOne(`${base}/auth/google`);
+    expect(req.request.body).toEqual({ idToken: 'fake-id-token', username: 'chosenname' });
+    req.flush({ accessToken: 'tok10', user, needsUsername: false });
+
+    const result = await promise;
+    expect(result.needsUsername).toBe(false);
+    expect(service.getAccessToken()).toBe('tok10');
   });
 
   it('resetPassword() posts uid/token/newPassword', async () => {

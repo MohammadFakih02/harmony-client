@@ -35,6 +35,18 @@ export type LoginResult =
   | { twoFactorRequired: false }
   | { twoFactorRequired: true; challengeToken: string };
 
+// /auth/google reuses LoginResponseDto and adds a third outcome: the token is valid but no account
+// exists yet, so the caller must supply a username before anything is created.
+interface GoogleLoginResponseDto extends LoginResponseDto {
+  needsUsername: boolean;
+  suggestedUsername: string | null;
+  email: string | null;
+}
+
+export type GoogleLoginResult =
+  | { needsUsername: false }
+  | { needsUsername: true; suggestedUsername: string; email: string };
+
 // Change-password's response shape (D20): mirrors LoginResponseDto's discriminated pattern. A
 // 2FA-enabled account's first call (no code yet) comes back requiresCode:true with nothing else
 // populated — the password was verified, but the change itself is on hold until the emailed
@@ -118,18 +130,31 @@ export class AuthService {
     this.setSession(response);
   }
 
-  /** Signs in (or auto-registers / auto-links by verified email) from a Google Identity Services
-   * ID token. Always sets a full session — a federated Google sign-in never returns a 2FA
-   * challenge, even if the linked account has 2FA enabled. */
-  async loginWithGoogle(idToken: string): Promise<void> {
+  /** Signs in (or auto-links by verified email) from a Google Identity Services ID token. Never
+   * returns a 2FA challenge, even if the linked account has 2FA enabled — Google is the trust
+   * anchor on this path.
+   *
+   * Returns a discriminated result rather than throwing, like login(): when the token is valid but
+   * matches no account, needsUsername comes back true and NOTHING has been created server-side —
+   * no user row, no session. The caller shows a username step and calls this again with the SAME
+   * idToken plus the chosen name, which is the call that actually registers the account. */
+  async loginWithGoogle(idToken: string, username?: string): Promise<GoogleLoginResult> {
     const response = await firstValueFrom(
-      this.http.post<AuthResponse>(
+      this.http.post<GoogleLoginResponseDto>(
         `${environment.apiUrl}/auth/google`,
-        { idToken },
+        { idToken, username: username ?? null },
         { withCredentials: true },
       ),
     );
-    this.setSession(response);
+    if (response.needsUsername) {
+      return {
+        needsUsername: true,
+        suggestedUsername: response.suggestedUsername ?? '',
+        email: response.email ?? '',
+      };
+    }
+    this.setSession({ accessToken: response.accessToken!, user: response.user! });
+    return { needsUsername: false };
   }
 
   /** Resends the login-challenge code. Always resolves — a genuine send failure surfaces as a

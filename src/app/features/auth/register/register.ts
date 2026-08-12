@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GoogleSignInButton, UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
+import { GoogleUsernameStep } from '../ui/google-username-step';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -14,13 +15,27 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    UiButton,
+    UiInput,
+    GoogleSignInButton,
+    GoogleUsernameStep,
+  ],
   templateUrl: './register.html',
 })
 export class RegisterComponent {
   form: FormGroup;
   loading = signal(false);
   error = signal<string | null>(null);
+
+  // Non-null once Google returns a verified identity with no account — the template swaps to the
+  // username step. In-memory only; the ID token is never persisted.
+  protected readonly pendingGoogleToken = signal<string | null>(null);
+  protected readonly suggestedUsername = signal('');
+  protected readonly googleEmail = signal('');
+  protected readonly googleUsernameError = signal<string | null>(null);
 
   constructor(
     private fb: FormBuilder,
@@ -50,13 +65,44 @@ export class RegisterComponent {
     this.loading.set(true);
     this.error.set(null);
     try {
-      await this.authService.loginWithGoogle(idToken);
+      const result = await this.authService.loginWithGoogle(idToken);
+      if (result.needsUsername) {
+        // Valid Google identity, no account yet — nothing has been created. Hold the token and
+        // swap to the username step; the second call is what registers.
+        this.pendingGoogleToken.set(idToken);
+        this.suggestedUsername.set(result.suggestedUsername);
+        this.googleEmail.set(result.email);
+        return;
+      }
       this.router.navigate(['/app']);
     } catch (err) {
       this.error.set(extractApiError(err));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Second leg of Google sign-up: same ID token, now with the chosen username. */
+  protected async onGoogleUsername(username: string): Promise<void> {
+    const idToken = this.pendingGoogleToken();
+    if (!idToken || this.loading()) return;
+
+    this.loading.set(true);
+    this.googleUsernameError.set(null);
+    try {
+      await this.authService.loginWithGoogle(idToken, username);
+      this.router.navigate(['/app']);
+    } catch (err) {
+      this.googleUsernameError.set(extractApiError(err));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected cancelGoogleSignup(): void {
+    this.pendingGoogleToken.set(null);
+    this.googleUsernameError.set(null);
+    this.error.set(null);
   }
 
   async onSubmit(): Promise<void> {

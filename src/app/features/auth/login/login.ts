@@ -4,11 +4,20 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { GoogleSignInButton, UiButton, UiInput } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
+import { GoogleUsernameStep } from '../ui/google-username-step';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, RouterLink, UiButton, UiInput, GoogleSignInButton],
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    RouterLink,
+    UiButton,
+    UiInput,
+    GoogleSignInButton,
+    GoogleUsernameStep,
+  ],
   templateUrl: './login.html',
 })
 export class LoginComponent implements OnDestroy {
@@ -18,6 +27,12 @@ export class LoginComponent implements OnDestroy {
 
   // Non-null once the password step returns a 2FA challenge — the template swaps to the code step.
   protected readonly challengeToken = signal<string | null>(null);
+  // Non-null once Google returns a verified identity with no account — the template swaps to the
+  // username step. Holding the ID token in memory only; it is never persisted.
+  protected readonly pendingGoogleToken = signal<string | null>(null);
+  protected readonly suggestedUsername = signal('');
+  protected readonly googleEmail = signal('');
+  protected readonly usernameError = signal<string | null>(null);
   protected readonly code = signal('');
   protected readonly rememberDevice = signal(false);
   protected readonly verifying = signal(false);
@@ -48,13 +63,45 @@ export class LoginComponent implements OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     try {
-      await this.authService.loginWithGoogle(idToken);
+      const result = await this.authService.loginWithGoogle(idToken);
+      if (result.needsUsername) {
+        // Valid Google identity, no account yet — nothing has been created. Hold the token and
+        // swap to the username step; the second call is what registers.
+        this.pendingGoogleToken.set(idToken);
+        this.suggestedUsername.set(result.suggestedUsername);
+        this.googleEmail.set(result.email);
+        return;
+      }
       this.navigateAfterLogin();
     } catch (err) {
       this.error.set(extractApiError(err));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Second leg of Google sign-up: same ID token, now with the chosen username. */
+  protected async onGoogleUsername(username: string): Promise<void> {
+    const idToken = this.pendingGoogleToken();
+    if (!idToken || this.loading()) return;
+
+    this.loading.set(true);
+    this.usernameError.set(null);
+    try {
+      await this.authService.loginWithGoogle(idToken, username);
+      this.navigateAfterLogin();
+    } catch (err) {
+      // Surfaced on the field (a 409 here is almost always "taken"), not the page-level banner.
+      this.usernameError.set(extractApiError(err));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected cancelGoogleSignup(): void {
+    this.pendingGoogleToken.set(null);
+    this.usernameError.set(null);
+    this.error.set(null);
   }
 
   async onSubmit(): Promise<void> {
