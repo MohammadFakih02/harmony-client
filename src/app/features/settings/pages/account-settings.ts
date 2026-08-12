@@ -276,14 +276,33 @@ import { extractApiError } from '../../../shared/util/api-error';
         <div class="min-w-0">
           <p class="text-sm font-semibold text-primary">Two-Factor Authentication</p>
           <p class="text-xs text-muted mt-0.5">
-            @if (twoFactorEnabled()) { Enabled — we'll email a code at login. }
+            @if (!hasPassword()) { Signed in with Google — set a password first. Two-factor codes
+            protect password sign-in, which this account doesn't use yet. }
+            @else if (twoFactorEnabled()) { Enabled — we'll email a code at login. }
             @else { Adds an emailed code to your login, on top of your password. }
           </p>
         </div>
+        <!-- Gated exactly like the username/email rows above: enabling 2FA verifies the current
+             password, which a Google-only account does not have. It would also be inert — Google
+             sign-in bypasses local 2FA by design, so no login path would ever ask for the code. -->
         @if (!twoFactorEnabled()) {
-        <ui-button variant="primary" size="sm" (click)="showEnableModal.set(true)">Enable</ui-button>
+        <ui-button
+          variant="primary"
+          size="sm"
+          [disabled]="!hasPassword()"
+          [title]="!hasPassword() ? 'Set a password first' : ''"
+          (click)="showEnableModal.set(true)"
+          >Enable</ui-button
+        >
         } @else if (!disabling()) {
-        <ui-button variant="danger" size="sm" (click)="disabling.set(true)">Disable</ui-button>
+        <ui-button
+          variant="danger"
+          size="sm"
+          [disabled]="!hasPassword()"
+          [title]="!hasPassword() ? 'Set a password first' : ''"
+          (click)="disabling.set(true)"
+          >Disable</ui-button
+        >
         }
       </div>
 
