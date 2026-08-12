@@ -22,7 +22,17 @@
       </div>
     }
 
-    @if (!challengeToken()) {
+    @if (pendingGoogleToken()) {
+    <!-- Google sign-up: choose a username. No account exists yet — this step creates it. -->
+    <app-google-username-step
+      [email]="googleEmail()"
+      [suggestedUsername]="suggestedUsername()"
+      [loading]="loading()"
+      [serverError]="usernameError()"
+      (submitted)="onGoogleUsername($event)"
+      (cancelled)="cancelGoogleSignup()"
+    />
+    } @else if (!challengeToken()) {
     <!-- Step 1: password -->
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-4">
       <ui-input

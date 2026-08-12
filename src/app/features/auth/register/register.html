@@ -22,6 +22,17 @@
       </div>
     }
 
+    @if (pendingGoogleToken()) {
+    <!-- Google sign-up: choose a username. No account exists yet — this step creates it. -->
+    <app-google-username-step
+      [email]="googleEmail()"
+      [suggestedUsername]="suggestedUsername()"
+      [loading]="loading()"
+      [serverError]="googleUsernameError()"
+      (submitted)="onGoogleUsername($event)"
+      (cancelled)="cancelGoogleSignup()"
+    />
+    } @else {
     <!-- Form -->
     <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-4">
       <ui-input
@@ -73,6 +84,7 @@
     </div>
 
     <app-google-sign-in-button (credential)="onGoogleCredential($event)" />
+    }
 
     <!-- Footer -->
     <p class="text-center text-sm text-muted mt-6">
