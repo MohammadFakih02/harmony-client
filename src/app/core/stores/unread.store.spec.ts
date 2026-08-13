@@ -64,6 +64,22 @@ describe('UnreadStore', () => {
     expect(store.counts()['5']).toBe(0);
   });
 
+  it('applyActivity() increments the channel count by one and records the guild', () => {
+    store.applyActivity('9', 'g1');
+    expect(store.counts()['9']).toBe(1);
+    expect(store.guildUnreadCount('g1')).toBe(1);
+
+    store.applyActivity('9', 'g1');
+    expect(store.counts()['9']).toBe(2);
+    expect(store.guildUnreadCount('g1')).toBe(2);
+  });
+
+  it('applyActivity() builds on an existing loaded count', () => {
+    store.setCount({ channelId: '9', guildId: 'g1', unreadCount: 5 });
+    store.applyActivity('9', 'g1');
+    expect(store.counts()['9']).toBe(6);
+  });
+
   it('guildUnreadCount() sums channel counts per guild, ignoring other guilds', () => {
     store.setCount({ channelId: 'a', guildId: 'g1', unreadCount: 3 });
     store.setCount({ channelId: 'b', guildId: 'g1', unreadCount: 4 });

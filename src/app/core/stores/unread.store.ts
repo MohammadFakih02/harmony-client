@@ -43,6 +43,20 @@ export const UnreadStore = signalStore(
       });
     },
 
+    /**
+     * (D3) Live +1 for a guild channel on a ChannelActivity ping. The server no longer pushes an
+     * absolute per-user count for guild channels — it computes count − mark at read time and sends
+     * one guild-group ping per message. The caller (shell) already skips the active channel and the
+     * user's own messages, so every ping that reaches here is a genuine unread increment. Missed
+     * pings (offline) self-correct on the next loadAll(), which is authoritative.
+     */
+    applyActivity(channelId: string, guildId: string): void {
+      patchState(store, {
+        counts: { ...store.counts(), [channelId]: (store.counts()[channelId] ?? 0) + 1 },
+        channelGuild: { ...store.channelGuild(), [channelId]: guildId },
+      });
+    },
+
     /** Sum of unread across all known channels in a guild — drives the guild-icon badge. */
     guildUnreadCount(guildId: string): number {
       const counts = store.counts();

@@ -1,6 +1,11 @@
 import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { Channel } from '../models/channel.models';
-import { MessageFailedPayload, MessageResponse, UnreadCountPayload } from '../models/message.models';
+import {
+  ChannelActivityPayload,
+  MessageFailedPayload,
+  MessageResponse,
+  UnreadCountPayload,
+} from '../models/message.models';
 import { FriendUserPayload } from '../models/friend.models';
 import { GatewayEvent } from './gateway-events';
 import { GuildMember } from '../models/member.models';
@@ -129,6 +134,9 @@ export class HarmonyHubClient {
 
     this.connection.on('UnreadCountUpdated', (payload: UnreadCountPayload) =>
       this.emit({ type: 'UnreadCountUpdated', payload }));
+
+    this.connection.on('ChannelActivity', (payload: ChannelActivityPayload) =>
+      this.emit({ type: 'ChannelActivity', payload }));
 
     this.connection.on('ChannelCreated', (channel: Channel) =>
       this.emit({ type: 'ChannelCreated', channel }));

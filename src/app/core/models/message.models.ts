@@ -118,6 +118,13 @@ export interface UnreadCountPayload {
   unreadCount: number;
 }
 
+/** (D3) Guild-channel new-message signal — the client +1's the channel's unread locally. Ids only. */
+export interface ChannelActivityPayload {
+  channelId: string;
+  guildId: string;
+  authorId: string;
+}
+
 export interface UnreadCountResponse {
   channelId: string;
   guildId: string | null;

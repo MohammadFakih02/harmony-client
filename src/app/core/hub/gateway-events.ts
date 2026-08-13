@@ -2,6 +2,7 @@ import { Injectable, isDevMode } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Channel } from '../models/channel.models';
 import {
+  ChannelActivityPayload,
   MessageFailedPayload,
   MessageResponse,
   ReactionPayload,
@@ -71,6 +72,7 @@ export type GatewayEvent =
   | { type: 'ReactionRemoved'; payload: ReactionPayload }
   | { type: 'MessageFailed'; payload: MessageFailedPayload }
   | { type: 'UnreadCountUpdated'; payload: UnreadCountPayload }
+  | { type: 'ChannelActivity'; payload: ChannelActivityPayload }
   | { type: 'ChannelCreated'; channel: Channel }
   | { type: 'ChannelUpdated'; channel: Channel }
   | { type: 'ChannelDeleted'; channelId: string }

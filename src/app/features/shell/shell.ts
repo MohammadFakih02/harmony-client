@@ -466,6 +466,15 @@ export class ShellComponent implements OnInit, OnDestroy {
           this.unreadStore.setCount(e.payload);
           break;
 
+        case 'ChannelActivity':
+          // (D3) Guild-channel new-message signal, one per message to the whole guild group. +1 the
+          // badge locally unless it's the channel you're viewing or your own message. The authoritative
+          // count is read-time (loadAll → count − mark); this just keeps the badge live between loads.
+          if (e.payload.channelId === this.messageStore.activeChannelId()) break;
+          if (e.payload.authorId === this.auth.currentUser()?.id) break;
+          this.unreadStore.applyActivity(e.payload.channelId, e.payload.guildId);
+          break;
+
         case 'NotificationReceived':
           // The store already persisted it (its onInit). Here we only decide the mention/reply UX:
           // suppress+mark-read if it's for the channel you're viewing, else raise a jump toast.
