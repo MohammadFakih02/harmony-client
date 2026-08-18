@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
+import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 import { environment } from '../../../environments/environment';
 import { HarmonyHubClient } from '../hub/harmony-hub.client';
 import { GatewayEvents } from '../hub/gateway-events';
@@ -52,6 +53,11 @@ export class SignalRService {
       .withUrl(`${environment.signalRUrl}/chat`, {
         accessTokenFactory: () => this.auth.getAccessToken() ?? '',
       })
+      // D5: binary MessagePack framing instead of JSON. The server offers both protocols; the backend
+      // serializes Snowflake IDs as strings and DTO keys as camelCase (see the API's
+      // MessagePackLongAsStringResolver / MessagePackCamelCaseResolver), so the wire shape is identical
+      // to the JSON path — every existing handler's String()/camelCase field reads are unchanged.
+      .withHubProtocol(new MessagePackHubProtocol())
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Warning)
       .build();
