@@ -68,6 +68,17 @@ export const UnreadStore = signalStore(
       return total;
     },
 
+    /** Sum of unread across all DM channels (DMs have no guild association) — drives the desktop badge. */
+    dmUnreadCount(): number {
+      const counts = store.counts();
+      const channelGuild = store.channelGuild();
+      let total = 0;
+      for (const channelId of Object.keys(counts)) {
+        if (channelGuild[channelId] === undefined) total += counts[channelId];
+      }
+      return total;
+    },
+
     async markRead(
       guildId: string | null,
       channelId: string,

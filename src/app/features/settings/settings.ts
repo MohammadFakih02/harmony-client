@@ -9,6 +9,8 @@ import { NotificationSettings } from './pages/notification-settings';
 import { PrivacySettings } from './pages/privacy-settings';
 import { VoiceSettings } from './pages/voice-settings';
 import { TrashSettings } from './pages/trash-settings';
+import { DesktopSettings } from './pages/desktop-settings';
+import { isTauri } from '../../core/desktop/tauri-env';
 
 type Tab =
   | 'account'
@@ -17,6 +19,7 @@ type Tab =
   | 'appearance'
   | 'accessibility'
   | 'voice'
+  | 'desktop'
   | 'trash';
 
 const TABS: readonly Tab[] = [
@@ -26,6 +29,7 @@ const TABS: readonly Tab[] = [
   'appearance',
   'accessibility',
   'voice',
+  'desktop',
   'trash',
 ];
 
@@ -52,6 +56,7 @@ interface NavGroup {
     PrivacySettings,
     VoiceSettings,
     TrashSettings,
+    DesktopSettings,
   ],
   templateUrl: './settings.html',
 })
@@ -100,6 +105,10 @@ export class Settings {
         { id: 'appearance', label: 'Appearance', icon: 'fa-palette' },
         { id: 'voice', label: 'Voice & Video', icon: 'fa-headset' },
         { id: 'accessibility', label: 'Accessibility', icon: 'fa-universal-access' },
+        // Desktop-app-only pane (Tauri build).
+        ...(isTauri()
+          ? [{ id: 'desktop' as Tab, label: 'Desktop', icon: 'fa-desktop' }]
+          : []),
       ],
     },
   ];

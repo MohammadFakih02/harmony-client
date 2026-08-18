@@ -49,6 +49,7 @@ import {
 } from '../../core/models/direct-message.models';
 import { snowflakeToDate } from '../../shared/util/snowflake';
 import { ToastService } from '../../core/services/toast.service';
+import { DesktopNotificationService } from '../../core/desktop/desktop-notification.service';
 import { NavigationHistoryService } from '../../core/services/navigation-history.service';
 import { ProfileModalService } from '../../core/services/profile-modal.service';
 import { DirectMessageService } from '../../core/services/direct-message.service';
@@ -153,6 +154,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly memberStore = inject(MemberStore);
   private readonly roleStore = inject(RoleStore);
   private readonly toast = inject(ToastService);
+  // Desktop-only native OS notifications (raised beside the in-app toast when the window is unfocused).
+  private readonly desktopNotify = inject(DesktopNotificationService);
   // Injected so the previous-URL recorder starts at boot — Settings/Server-Settings read it to
   // return you to the exact screen you came from. Do not remove.
   private readonly navHistory = inject(NavigationHistoryService);
@@ -450,15 +453,27 @@ export class ShellComponent implements OnInit, OnDestroy {
   private wireResidualEvents(): void {
     this.subs.add(this.gateway.events$.subscribe((e) => {
       switch (e.type) {
-        case 'MessageReceived':
+        case 'MessageReceived': {
+          const m = e.message;
           // A message in the channel you're currently viewing is already "read" — reset its count
           // so no badge appears on the active channel. (Appending it is the MessageStore's job.)
-          if (e.message.channelId === this.messageStore.activeChannelId()) {
-            this.unreadStore
-              .markRead(e.message.guildId, e.message.channelId, e.message.messageId)
-              .catch(() => {});
+          if (m.channelId === this.messageStore.activeChannelId()) {
+            this.unreadStore.markRead(m.guildId, m.channelId, m.messageId).catch(() => {});
+          } else if (
+            // A DM/group-DM message you're not viewing → native OS notification (Discord notifies on
+            // every DM). Guild channels come through the filtered NotificationReceived stream instead.
+            m.guildId === null &&
+            m.userId !== this.auth.currentUser()?.id &&
+            !this.blockStore.isBlocked(m.userId) &&
+            !this.muteStore.isMuted('channel', m.channelId)
+          ) {
+            const dm = this.dmStore.find(m.channelId);
+            const name = this.nicknameStore.nicknameOf(m.userId) ?? m.username;
+            const title = dm?.isGroup ? `${name} • ${dmLabel(dm, (p) => this.dmMemberName(p))}` : name;
+            void this.desktopNotify.notify(title, m.content || 'Sent an attachment');
           }
           break;
+        }
 
         case 'UnreadCountUpdated':
           // Ignore increments for the channel you're viewing — you're reading it, not accruing.
@@ -487,14 +502,26 @@ export class ShellComponent implements OnInit, OnDestroy {
                 : ['/app/dm', e.payload.channelId];
               const channelName = this.resolveChannelName(e.payload.guildId, e.payload.channelId);
               if (e.payload.type === 'reply') {
-                const actor = this.notificationStore.actors()[e.payload.actorId];
-                this.toast.pushReply(actor?.username ?? 'Someone', channelName, route);
+                const who = this.notificationStore.actors()[e.payload.actorId]?.username ?? 'Someone';
+                this.toast.pushReply(who, channelName, route);
+                // Guild replies notify here; DM replies come via MessageReceived (avoids double-notify).
+                if (e.payload.guildId) {
+                  void this.desktopNotify.notify(`${who} replied to you`, channelName ?? '');
+                }
               } else {
                 // 1:1 DM → "mentioned by {person}"; guild channel / group DM → "mentioned in {place}".
                 const direct =
                   !e.payload.guildId &&
                   this.dmStore.find(e.payload.channelId)?.isGroup === false;
                 this.toast.pushMention(channelName, route, direct);
+                // Guild mentions raise the OS notification + taskbar flash; DM mentions arrive via
+                // MessageReceived (every DM notifies), so they're not double-fired here.
+                if (e.payload.guildId) {
+                  void this.desktopNotify.notify(
+                    'You were mentioned',
+                    channelName ? `in ${channelName}` : '',
+                  );
+                }
               }
             }
           }

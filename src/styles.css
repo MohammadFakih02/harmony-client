@@ -1100,3 +1100,42 @@ button:active:not(:disabled),
     -webkit-touch-callout: none;
   }
 }
+
+/* ============================================================
+   Desktop (Tauri) frameless window. Scoped to `html.tauri` (set in main.ts's
+   applyDesktopEnvironment) so the web + mobile builds are completely untouched.
+   - Reserve the 2rem (h-8) custom titlebar strip via BODY PADDING. (A margin on the
+     routed root collapses through app-root to the body and overflows the page — that was
+     the phantom vertical scrollbar.)
+   - Fill the remaining height with an explicit 100% chain; the routed roots' `h-dvh` /
+     `min-h-dvh` are overridden to 100% (parent-relative) and `w-screen` (100vw) to 100%
+     so nothing overflows past the padded body or the scrollbar gutter.
+   - The window shell scrolls internally, so clip the page itself → no phantom page-level
+     scrollbars. These rules are unlayered → they win over the layered Tailwind utilities. */
+html.tauri,
+html.tauri body,
+html.tauri body > app-root,
+html.tauri app-shell,
+html.tauri app-auth-shell {
+  height: 100%;
+}
+html.tauri body > app-root,
+html.tauri app-shell,
+html.tauri app-auth-shell {
+  display: block;
+}
+html.tauri body {
+  overflow: hidden;
+  padding-top: 2rem;
+  box-sizing: border-box;
+}
+html.tauri app-shell > div,
+html.tauri app-auth-shell > div {
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+/* Float the app-wide connection banner (fixed top-center pill) below the titlebar. */
+html.tauri app-connection-banner > div {
+  top: 2.75rem;
+}
