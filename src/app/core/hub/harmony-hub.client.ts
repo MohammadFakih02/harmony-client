@@ -11,9 +11,6 @@ import { GatewayEvent } from './gateway-events';
 import { GuildMember } from '../models/member.models';
 import { Role } from '../models/role.models';
 
-// The small per-event shapes now live with the union in ./gateway-events.
-export type { MessageEditedEvent, MessagePinEvent, TypingEvent } from './gateway-events';
-
 /**
  * Thin wrapper over a SignalR HubConnection. Every server→client handler coerces its raw payload
  * (Snowflake ids → strings, longs → numbers) and forwards it to a single `emit` sink as a typed

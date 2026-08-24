@@ -72,6 +72,12 @@ interface StagedFile {
   fileId?: string; // server id, once confirmed
 }
 
+// Mirrors the server-side message-content cap (RequestValidators: MaximumLength(2000)). The textarea's
+// maxlength enforces the same bound client-side so a user learns the limit while typing, not on send.
+const MESSAGE_MAX_LENGTH = 2000;
+// How close to the cap before the remaining-characters counter appears (Discord-style).
+const CHAR_COUNTER_THRESHOLD = 100;
+
 @Component({
   selector: 'app-message-input',
   standalone: true,
@@ -107,6 +113,13 @@ export class MessageInput implements OnDestroy {
   protected readonly sending = signal(false);
   protected readonly staged = signal<StagedFile[]>([]);
   protected readonly attachError = signal<string | null>(null);
+
+  // --- length cap (mirrors the server's 2000-char limit; the textarea maxlength is the hard stop) ---
+  protected readonly maxLength = MESSAGE_MAX_LENGTH;
+  protected readonly charsRemaining = computed(() => MESSAGE_MAX_LENGTH - this.draft().length);
+  protected readonly showCharCounter = computed(
+    () => this.draft().length >= MESSAGE_MAX_LENGTH - CHAR_COUNTER_THRESHOLD,
+  );
 
   // --- @-mention autocomplete ---
 

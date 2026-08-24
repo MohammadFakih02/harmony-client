@@ -208,6 +208,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly muteStore = inject(MuteStore);
   private readonly profileStore = inject(ProfileStore);
   private readonly bootstrap = inject(BootstrapService);
+
+  // True only on a genuine boot dead-end (audit A12): the aggregate boot failed, every fallback
+  // list-load errored, AND nothing painted from cache — i.e. the app would otherwise show a
+  // false-blank shell. Drives the full-screen retry overlay; cleared on a successful (re)load.
+  protected readonly bootFailed = signal(false);
   private readonly pushService = inject(PushService);
   private readonly idle = inject(IdleService);
 
@@ -409,22 +414,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     const client = this.signalR.getOrCreateClient();
     this.wireResidualEvents();
 
-    // Start the socket (self-retrying inside the service) and fetch the aggregated boot
-    // payload (the 9 individual startup requests collapsed into one) in parallel.
-    const [, booted] = await Promise.all([
-      this.signalR.connect().catch(() => {}),
-      this.bootstrap.load(),
-    ]);
-    if (!booted) {
-      // Fallback (transient failure / older API): the individual per-store loads.
-      await this.guildStore.loadGuilds();
-      this.unreadStore.loadAll();
-      this.presenceStore.initMyStatus();
-      this.friendStore.load();
-      this.dmStore.load();
-      this.nicknameStore.load();
-      this.notificationStore.load();
-    }
+    // Start the socket (self-retrying inside the service) and load the initial data in parallel.
+    await Promise.all([this.signalR.connect().catch(() => {}), this.loadInitialData()]);
 
     // Blocked-user ids feed the chat/typing filters — small list, loaded outside bootstrap.
     void this.blockStore.load().catch(() => {});
@@ -442,6 +433,42 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Silent push re-sync: browser push subscriptions rotate, so refresh the server's copy
     // for users who already granted permission. Never prompts; fire-and-forget.
     void this.pushService.syncIfGranted();
+  }
+
+  /**
+   * The initial data load: one aggregated bootstrap request, falling back to the individual per-store
+   * loads on a transient failure / older API. Sets {@link bootFailed} only on a true dead-end — the
+   * aggregate failed, the three primary list-loads all errored, and nothing painted (no cache) — so a
+   * failed refresh offers a retry instead of a silent false-blank shell (audit A12). Re-runnable: the
+   * retry overlay calls it again.
+   */
+  private async loadInitialData(): Promise<void> {
+    this.bootFailed.set(false);
+
+    if (await this.bootstrap.load()) return;
+
+    // Fallback: the stores that used to each fetch their own boot slice.
+    this.unreadStore.loadAll();
+    this.presenceStore.initMyStatus();
+    this.nicknameStore.load();
+    this.notificationStore.load();
+    // Await the three primary list-loads so a real failure can be told apart from an empty account.
+    await Promise.all([this.guildStore.loadGuilds(), this.friendStore.load(), this.dmStore.load()]);
+
+    const nothingLoaded =
+      this.guildStore.guilds().length === 0 &&
+      this.friendStore.friends().length === 0 &&
+      this.dmStore.dms().length === 0;
+    const allErrored =
+      this.guildStore.status() === 'error' &&
+      this.friendStore.status() === 'error' &&
+      this.dmStore.status() === 'error';
+    this.bootFailed.set(nothingLoaded && allErrored);
+  }
+
+  /** Retry the initial load from the boot-failure overlay. The socket self-retries independently. */
+  protected async retryBoot(): Promise<void> {
+    await this.loadInitialData();
   }
 
   /**

@@ -22,7 +22,7 @@ export interface AuditLogQuery {
 }
 
 /** Presentational metadata (icon + human phrase) for each audit action type. */
-export const AUDIT_ACTION_META: Record<string, { icon: string; verb: string }> = {
+const AUDIT_ACTION_META: Record<string, { icon: string; verb: string }> = {
   member_kick: { icon: 'fa-user-slash', verb: 'kicked a member' },
   member_ban: { icon: 'fa-gavel', verb: 'banned a member' },
   member_unban: { icon: 'fa-user-check', verb: 'unbanned a member' },

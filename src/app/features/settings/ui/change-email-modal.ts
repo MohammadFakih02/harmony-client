@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, OnDestroy, output, signal } from '@angular/core';
+import { runResendCooldown } from '../../../shared/util/resend-cooldown';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiModal } from '../../../shared/ui';
@@ -197,16 +198,6 @@ export class ChangeEmailModal implements OnDestroy {
   }
 
   private startResendCooldown(): void {
-    this.resendCooldown.set(60);
-    clearInterval(this.cooldownTimer);
-    this.cooldownTimer = setInterval(() => {
-      const next = this.resendCooldown() - 1;
-      if (next <= 0) {
-        this.resendCooldown.set(0);
-        clearInterval(this.cooldownTimer);
-      } else {
-        this.resendCooldown.set(next);
-      }
-    }, 1000);
+    this.cooldownTimer = runResendCooldown(this.resendCooldown, this.cooldownTimer);
   }
 }

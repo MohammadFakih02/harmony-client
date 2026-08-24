@@ -105,9 +105,6 @@ export type GatewayEvent =
   | { type: 'CallDeclined'; payload: CallDeclinedPayload }
   | { type: 'VoiceForceMoved'; payload: VoiceForceMovedPayload };
 
-/** The `type` discriminants — handy for filtering. */
-export type GatewayEventType = GatewayEvent['type'];
-
 /**
  * Root-singleton Flux-style dispatcher for the unified gateway stream. Deliberately dependency-free:
  * the hub client pushes into it via {@link emit}, and every store subscribes to {@link events$} from

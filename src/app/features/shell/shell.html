@@ -1,4 +1,23 @@
 <div class="flex h-dvh w-screen bg-bg overflow-hidden select-none">
+  <!-- Boot dead-end (audit A12): the initial load failed with nothing to show. Replaces the
+       false-blank shell with an explicit retry instead of pretending the account is empty. -->
+  @if (bootFailed()) {
+  <div class="fixed inset-0 z-[2000] flex flex-col items-center justify-center gap-4 bg-bg px-6 text-center">
+    <i class="fa-solid fa-plug-circle-exclamation text-4xl text-faint"></i>
+    <div>
+      <p class="font-display text-lg font-semibold text-primary">Couldn't load Harmony</p>
+      <p class="mt-1 text-sm text-muted">Check your connection and try again.</p>
+    </div>
+    <button
+      type="button"
+      (click)="retryBoot()"
+      class="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white transition-all hover:bg-accent-hover hover:shadow-accent-glow"
+    >
+      Retry
+    </button>
+  </div>
+  }
+
   <!-- Guild rail + channel sidebar. Desktop: plain flex-row panes (the max-md classes compile
        away). Mobile: the pair becomes one off-canvas left drawer slid in by the hamburger. -->
   <div

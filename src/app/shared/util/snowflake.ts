@@ -8,7 +8,7 @@ const HARMONY_EPOCH_MS = Date.UTC(2024, 0, 1); // 1704067200000
 const TIMESTAMP_SHIFT = 22n;
 
 /** Creation timestamp (ms) encoded in a snowflake id, or null if it can't be parsed. */
-export function snowflakeToMs(id: string): number | null {
+function snowflakeToMs(id: string): number | null {
   try {
     return Number(BigInt(id) >> TIMESTAMP_SHIFT) + HARMONY_EPOCH_MS;
   } catch {

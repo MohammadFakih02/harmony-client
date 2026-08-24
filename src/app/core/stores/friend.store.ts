@@ -2,6 +2,7 @@ import { computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { Friend, FriendRemovedPayload, FriendUserPayload, PendingFriend } from '../models/friend.models';
+import { LoadStatus } from '../models/load-status';
 import { FriendService } from '../services/friend.service';
 import { GatewayEvents } from '../hub/gateway-events';
 import { NotificationStore } from './notification.store';
@@ -10,11 +11,13 @@ interface FriendState {
   friends: Friend[];
   pending: PendingFriend[];
   loading: boolean;
+  // Read-status of the friend-list load (audit A12) — see LoadStatus / GuildStore.
+  status: LoadStatus;
 }
 
 export const FriendStore = signalStore(
   { providedIn: 'root' },
-  withState<FriendState>({ friends: [], pending: [], loading: false }),
+  withState<FriendState>({ friends: [], pending: [], loading: false, status: 'idle' }),
   withComputed(({ friends, pending }) => ({
     incoming: computed(() => pending().filter((p) => p.direction === 'incoming')),
     outgoing: computed(() => pending().filter((p) => p.direction === 'outgoing')),
@@ -30,13 +33,18 @@ export const FriendStore = signalStore(
     return {
       /** Distributes the bootstrap payload's friend snapshot (no fetch). */
       set(friends: Friend[], pending: PendingFriend[]): void {
-        patchState(store, { friends, pending });
+        patchState(store, { friends, pending, status: 'loaded' });
       },
 
       async load(): Promise<void> {
-        patchState(store, { loading: true });
+        patchState(store, { loading: true, status: 'loading' });
         try {
           await reload();
+          patchState(store, { status: 'loaded' });
+        } catch {
+          // Flag the error (no rethrow — the boot caller fires this fallback unawaited) so the shell
+          // can distinguish "no friends yet" from "couldn't load your friends".
+          patchState(store, { status: 'error' });
         } finally {
           patchState(store, { loading: false });
         }

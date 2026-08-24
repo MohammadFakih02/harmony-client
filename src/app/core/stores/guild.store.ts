@@ -1,6 +1,7 @@
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import { GuildSummary } from '../models/guild.models';
+import { LoadStatus } from '../models/load-status';
 import { GuildService } from '../services/guild.service';
 import { ToastService } from '../services/toast.service';
 
@@ -8,28 +9,33 @@ interface GuildState {
   guilds: GuildSummary[];
   selectedGuildId: string | null;
   loading: boolean;
+  // Read-status of the guild-rail load (audit A12): lets the shell tell a genuinely empty account
+  // apart from a failed boot, so it can offer a retry instead of a false-blank rail.
+  status: LoadStatus;
 }
 
 export const GuildStore = signalStore(
   { providedIn: 'root' },
-  withState<GuildState>({ guilds: [], selectedGuildId: null, loading: false }),
+  withState<GuildState>({ guilds: [], selectedGuildId: null, loading: false, status: 'idle' }),
   withComputed(({ guilds, selectedGuildId }) => ({
     selectedGuild: computed(() => guilds().find((g) => g.id === selectedGuildId()) ?? null),
   })),
   withMethods((store, service = inject(GuildService), toast = inject(ToastService)) => ({
     async loadGuilds(): Promise<void> {
-      patchState(store, { loading: true });
+      patchState(store, { loading: true, status: 'loading' });
       try {
         const guilds = await service.getMyGuilds();
-        patchState(store, { guilds, loading: false });
+        patchState(store, { guilds, loading: false, status: 'loaded' });
       } catch {
-        patchState(store, { loading: false });
+        // Preserve any previously-loaded guilds; flag the error so the shell can offer a retry
+        // rather than rendering an empty rail as if the account genuinely had no servers.
+        patchState(store, { loading: false, status: 'error' });
       }
     },
 
     /** Replaces the guild list (bootstrap payload distribution — no fetch). */
     setGuilds(guilds: GuildSummary[]): void {
-      patchState(store, { guilds, loading: false });
+      patchState(store, { guilds, loading: false, status: 'loaded' });
     },
 
     /** Drag-reorder the rail: optimistic move + persist the full order. Reverts on failure. */

@@ -59,6 +59,28 @@ describe('GuildStore', () => {
     expect(store.loading()).toBe(false);
   });
 
+  it('tracks read-status: idle → loaded on success (audit A12)', async () => {
+    expect(store.status()).toBe('idle');
+    service.getMyGuilds.mockResolvedValue([makeGuild('1', 'A')]);
+
+    await TestBed.runInInjectionContext(() => store.loadGuilds());
+
+    expect(store.status()).toBe('loaded');
+  });
+
+  it('sets status to error on a failed load (not a false-empty)', async () => {
+    service.getMyGuilds.mockRejectedValue(new Error('network'));
+
+    await TestBed.runInInjectionContext(() => store.loadGuilds());
+
+    expect(store.status()).toBe('error');
+  });
+
+  it('setGuilds() (bootstrap distribution) marks the load loaded', () => {
+    store.setGuilds([makeGuild('1', 'A')]);
+    expect(store.status()).toBe('loaded');
+  });
+
   it('selectGuild() updates selectedGuildId and selectedGuild computed', async () => {
     service.getMyGuilds.mockResolvedValue([makeGuild('42', 'My Guild')]);
     await TestBed.runInInjectionContext(() => store.loadGuilds());

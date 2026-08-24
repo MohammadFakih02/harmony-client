@@ -9,6 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { runResendCooldown } from '../../../shared/util/resend-cooldown';
 import { AuthService } from '../../../core/services/auth.service';
 import { UiButton, UiModal } from '../../../shared/ui';
 import { extractApiError } from '../../../shared/util/api-error';
@@ -216,16 +217,6 @@ export class ChangePasswordModal implements OnDestroy {
   }
 
   private startResendCooldown(): void {
-    this.resendCooldown.set(60);
-    clearInterval(this.cooldownTimer);
-    this.cooldownTimer = setInterval(() => {
-      const next = this.resendCooldown() - 1;
-      if (next <= 0) {
-        this.resendCooldown.set(0);
-        clearInterval(this.cooldownTimer);
-      } else {
-        this.resendCooldown.set(next);
-      }
-    }, 1000);
+    this.cooldownTimer = runResendCooldown(this.resendCooldown, this.cooldownTimer);
   }
 }

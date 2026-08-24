@@ -7,7 +7,7 @@ import { Role, roleColorHex } from '../../core/models/role.models';
  * notify on the MentionEveryone permission (the message still sends regardless). Not
  * offered in DMs — there's no guild to address.
  */
-export const EVERYONE_MENTION_CANDIDATES: MentionCandidate[] = [
+const EVERYONE_MENTION_CANDIDATES: MentionCandidate[] = [
   {
     userId: '',
     username: 'everyone',

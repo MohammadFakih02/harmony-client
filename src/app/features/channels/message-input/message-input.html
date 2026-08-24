@@ -141,6 +141,7 @@
         autoGrow
         [maxHeight]="320"
         [autoGrowValue]="draft()"
+        [attr.maxlength]="maxLength"
         class="flex-1 bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none text-sm px-2 py-2 text-primary placeholder:text-faint resize-none leading-normal overflow-y-auto self-center"
         [placeholder]="composerPlaceholder()"
         [ngModel]="draft()"
@@ -149,6 +150,17 @@
         (paste)="onPaste($event)"
         rows="1"
       ></textarea>
+
+      <!-- Remaining-characters counter — appears only near the cap (mirrors the 2000-char server limit) -->
+      @if (showCharCounter()) {
+      <span
+        class="shrink-0 self-center px-1 text-2xs tabular-nums select-none"
+        [class.text-faint]="charsRemaining() > 20"
+        [class.text-danger]="charsRemaining() <= 20"
+        [attr.aria-label]="charsRemaining() + ' characters remaining'"
+        >{{ charsRemaining() }}</span
+      >
+      }
 
       <!-- Emoji picker trigger -->
       <button

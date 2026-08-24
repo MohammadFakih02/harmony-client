@@ -228,7 +228,7 @@ describe('MemberStore', () => {
   });
 
   it('applyAvatar() patches the user across every loaded guild', async () => {
-    service.getMembers.mockImplementation((guildId: string) =>
+    service.getMembers.mockImplementation((_guildId: string) =>
       Promise.resolve([
         makeMember({ userId: '10', username: 'alice', avatarKey: null }),
         makeMember({ userId: '20', username: 'bob', avatarKey: null }),

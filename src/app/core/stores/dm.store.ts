@@ -2,41 +2,47 @@ import { inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { DirectMessageChannel } from '../models/direct-message.models';
+import { LoadStatus } from '../models/load-status';
 import { GatewayEvents } from '../hub/gateway-events';
 import { DirectMessageService } from '../services/direct-message.service';
 
 interface DmState {
   dms: DirectMessageChannel[];
   loading: boolean;
+  // Read-status of the DM-list load (audit A12) — see LoadStatus / GuildStore.
+  status: LoadStatus;
 }
 
 export const DmStore = signalStore(
   { providedIn: 'root' },
-  withState<DmState>({ dms: [], loading: false }),
+  withState<DmState>({ dms: [], loading: false, status: 'idle' }),
   withMethods((store, service = inject(DirectMessageService)) => {
     const upsert = (dm: DirectMessageChannel): void => {
       const without = store.dms().filter((d) => d.channelId !== dm.channelId);
       patchState(store, { dms: [dm, ...without] });
     };
 
-    const refetch = async (): Promise<void> => {
+    // Returns whether the refetch succeeded, so the boot `load()` can record error vs loaded.
+    const refetch = async (): Promise<boolean> => {
       try {
         patchState(store, { dms: await service.getMyDms() });
+        return true;
       } catch {
         // fail open — keep the current list
+        return false;
       }
     };
 
     return {
       /** Distributes the bootstrap payload's DM list (no fetch). */
       set(dms: DirectMessageChannel[]): void {
-        patchState(store, { dms });
+        patchState(store, { dms, status: 'loaded' });
       },
 
       async load(): Promise<void> {
-        patchState(store, { loading: true });
-        await refetch();
-        patchState(store, { loading: false });
+        patchState(store, { loading: true, status: 'loading' });
+        const ok = await refetch();
+        patchState(store, { loading: false, status: ok ? 'loaded' : 'error' });
       },
 
       /** Opens (or reuses) a 1:1 DM and ensures it's in the list. Returns the channel. */

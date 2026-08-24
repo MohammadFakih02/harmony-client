@@ -5,7 +5,7 @@
 export type FileKind = 'image' | 'video' | 'audio' | 'file';
 
 /** The full set of content types the backend accepts (mirror of FileService.AllowedContentTypes). */
-export const ALLOWED_CONTENT_TYPES: readonly string[] = [
+const ALLOWED_CONTENT_TYPES: readonly string[] = [
   'image/png',
   'image/jpeg',
   'image/gif',

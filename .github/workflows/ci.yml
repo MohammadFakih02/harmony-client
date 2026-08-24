@@ -20,8 +20,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Dependency-vulnerability gate (audit T1). Fails on a high/critical advisory in runtime deps;
+      # dev-only advisories don't gate the build. This is the check that would have caught A17's vulns.
+      - name: Audit dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # Lint gate (audit T1) — enforces correctness rules; opinionated/broad rules are warnings only
+      # (see eslint.config.js). Blocks the build on eslint errors, not warnings.
+      - name: Lint
+        run: npm run lint
+
       - name: Build
         run: npm run build -- --configuration production
-        
+
       - name: Test
         run: npm test -- --watch=false

@@ -127,7 +127,11 @@ export class ForwardModal implements OnInit {
 
   protected toggle(channelId: string): void {
     const next = new Set(this.selected());
-    next.has(channelId) ? next.delete(channelId) : next.add(channelId);
+    if (next.has(channelId)) {
+      next.delete(channelId);
+    } else {
+      next.add(channelId);
+    }
     this.selected.set(next);
   }
 

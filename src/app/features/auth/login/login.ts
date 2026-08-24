@@ -1,4 +1,5 @@
 import { Component, OnDestroy, signal } from '@angular/core';
+import { runResendCooldown } from '../../../shared/util/resend-cooldown';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -129,17 +130,7 @@ export class LoginComponent implements OnDestroy {
   }
 
   private startResendCooldown(): void {
-    this.resendCooldown.set(60);
-    clearInterval(this.cooldownTimer);
-    this.cooldownTimer = setInterval(() => {
-      const next = this.resendCooldown() - 1;
-      if (next <= 0) {
-        this.resendCooldown.set(0);
-        clearInterval(this.cooldownTimer);
-      } else {
-        this.resendCooldown.set(next);
-      }
-    }, 1000);
+    this.cooldownTimer = runResendCooldown(this.resendCooldown, this.cooldownTimer);
   }
 
   get identifier() { return this.form.get('identifier')!; }

@@ -140,9 +140,9 @@ export class Channel implements OnInit, OnDestroy {
   /** Declined the age gate — go back to the guild's default channel (or the guild root). */
   protected leaveNsfw(): void {
     if (this.guildId) {
-      const fallback = this.channelStore
-        .channelsByGuild()
-        [this.guildId]?.find((c) => c.id !== this.channelId && c.type === 'text' && !c.isNsfw);
+      const fallback = this.channelStore.channelsByGuild()[this.guildId]?.find(
+        (c) => c.id !== this.channelId && c.type === 'text' && !c.isNsfw,
+      );
       void this.router.navigate(
         fallback
           ? ['/app/guilds', this.guildId, 'channels', fallback.id]

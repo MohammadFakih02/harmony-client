@@ -74,4 +74,30 @@ describe('DmStore (group DMs)', () => {
   it('find() returns undefined for an unknown channel', () => {
     expect(TestBed.inject(DmStore).find('nope')).toBeUndefined();
   });
+
+  it('load() tracks read-status: loaded on success (audit A12)', async () => {
+    service.getMyDms.mockResolvedValue([group]);
+    const store = TestBed.inject(DmStore);
+    expect(store.status()).toBe('idle');
+
+    await store.load();
+
+    expect(store.status()).toBe('loaded');
+  });
+
+  it('load() sets status to error (fail-open, no false data) when the fetch fails', async () => {
+    service.getMyDms.mockRejectedValue(new Error('network'));
+    const store = TestBed.inject(DmStore);
+
+    await store.load();
+
+    expect(store.status()).toBe('error');
+    expect(store.dms()).toEqual([]);
+  });
+
+  it('set() (bootstrap distribution) marks the load loaded', () => {
+    const store = TestBed.inject(DmStore);
+    store.set([group]);
+    expect(store.status()).toBe('loaded');
+  });
 });
