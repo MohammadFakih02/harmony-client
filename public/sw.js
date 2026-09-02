@@ -24,7 +24,10 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       tag: payload.tag,
-      icon: '/favicon.ico',
+      icon: '/icon-192.png',
+      // Android renders the badge as a monochrome silhouette in the status bar;
+      // a colour icon there degrades to a grey blob.
+      badge: '/badge-96.png',
       data: { url: payload.url },
     }),
   );

@@ -4,18 +4,21 @@ import { authGuard, guestGuard } from './core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: 'login',
+    title: 'Sign in',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/login/login').then(m => m.LoginComponent),
   },
   {
     path: 'register',
+    title: 'Create an account',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/register/register').then(m => m.RegisterComponent),
   },
   {
     path: 'forgot-password',
+    title: 'Forgot password',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/forgot-password/forgot-password').then(m => m.ForgotPassword),
@@ -24,6 +27,7 @@ export const routes: Routes = [
     // Public reset-password landing — no guard, anonymous link (works whether or not this
     // browser has a session; the reset endpoint itself doesn't touch this browser's session).
     path: 'reset-password',
+    title: 'Reset password',
     loadComponent: () =>
       import('./features/auth/reset-password/reset-password').then(m => m.ResetPassword),
   },
@@ -40,18 +44,21 @@ export const routes: Routes = [
       },
       {
         path: 'friends',
+        title: 'Friends',
         loadComponent: () =>
           import('./features/friends/friends').then(m => m.Friends),
       },
       {
         // Full-screen settings overlay — covers the window via a fixed-inset panel.
         path: 'settings',
+        title: 'Settings',
         loadComponent: () =>
           import('./features/settings/settings').then(m => m.Settings),
       },
       {
         // Public-server discovery — browse + join discoverable guilds.
         path: 'discover',
+        title: 'Discover servers',
         loadComponent: () =>
           import('./features/guilds/discover/discover').then(m => m.Discover),
       },
@@ -65,6 +72,7 @@ export const routes: Routes = [
         // Full-screen guild settings overlay — must precede `guilds/:guildId` so the more
         // specific path wins.
         path: 'guilds/:guildId/settings',
+        title: 'Server settings',
         loadComponent: () =>
           import('./features/guild-settings/guild-settings').then(m => m.GuildSettings),
       },
@@ -86,6 +94,7 @@ export const routes: Routes = [
     // Public shared-invite landing — handles its own auth (sends guests to login with a
     // returnUrl so the link survives), then previews + joins.
     path: 'invite/:code',
+    title: 'Join a server',
     loadComponent: () =>
       import('./features/guilds/invite-landing/invite-landing').then((m) => m.InviteLanding),
   },
@@ -93,6 +102,7 @@ export const routes: Routes = [
     // Public verification-email landing — no guard, works logged-in or out (the confirm
     // endpoint itself is anonymous; a same-session match patches emailVerified locally).
     path: 'verify-email',
+    title: 'Verify your email',
     loadComponent: () =>
       import('./features/auth/verify-email/verify-email').then((m) => m.VerifyEmail),
   },
@@ -100,6 +110,7 @@ export const routes: Routes = [
     // Public change-email confirmation landing — no guard, same reasoning as verify-email: the
     // link is opened from a mail client that may carry no session.
     path: 'confirm-email-change',
+    title: 'Confirm email change',
     loadComponent: () =>
       import('./features/auth/confirm-email-change/confirm-email-change').then(
         (m) => m.ConfirmEmailChange,
