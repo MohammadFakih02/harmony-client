@@ -2,9 +2,10 @@ import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
 } from "@angular/core";
-import { provideRouter } from "@angular/router";
+import { provideRouter, TitleStrategy } from "@angular/router";
 
 import { routes } from "./app.routes";
+import { HarmonyTitleStrategy } from "./core/title.strategy";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { retryInterceptor } from "./core/interceptors/retry.interceptor";
 import { authInterceptor } from "./core/interceptors/auth.interceptor";
@@ -14,6 +15,9 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
+    // Suffixes the brand onto every route `title` ("Friends • Harmony") and falls back
+    // to the bare brand where a route has none.
+    { provide: TitleStrategy, useClass: HarmonyTitleStrategy },
     // Order matters. retryInterceptor is FIRST (outermost) so it retries the whole chain — including
     // the auth refresh+retry — on a transient failure. bigIntInterceptor must be LAST: interceptors
     // run in order for requests, reverse for responses, so the last registered processes the body first.
