@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Harmony">
-  <!-- Harmony mark. The glyph is Font Awesome Free 7's `yin-yang` (CC BY 4.0) —
-       the same icon the app renders everywhere as `fa-yin-yang` — on the brand
-       violet from styles.css (--color-accent #8b5cf6 → --color-accent-hover #7c3aed). -->
+  <title>Harmony</title>
+  <!-- The glyph is Font Awesome Free 7's `yin-yang` (CC BY 4.0), the same icon the app
+       renders everywhere as `fa-yin-yang`, on the brand violet from styles.css.
+       NOTE: SVG is XML, so a double hyphen is illegal anywhere in this comment. -->
   <defs>
     <linearGradient id="h" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#8b5cf6"/>
