@@ -433,6 +433,41 @@ export const VoiceStore = signalStore(
           broadcastSelfState();
         },
 
+        /**
+         * Re-publishes our own voice-state tuple to the server. updateVoiceState is fire-and-forget
+         * and is SILENTLY DROPPED while the socket is down or reconnecting, so a flag toggled in
+         * that window (stopping a screenshare being the one that shows) stays stuck in Redis and
+         * every client that joins later reads the stale value. Called on each reconnect; a no-op
+         * server-side if we are no longer in a room.
+         */
+        republishSelfState(): void {
+          if (!store.activeChannelId()) return;
+          broadcastSelfState();
+        },
+
+        /**
+         * A remote participant's screenshare publication went away (LiveKit's own signal — see
+         * VoiceService.onRemoteScreenShareEnded). Drops the stale roster flag so their screen tile
+         * disappears instead of hanging on "Loading stream...", and revokes the watch opt-in the
+         * same way applyStateUpdated does when the server-side flag clears. Local-only: the
+         * VoiceStateUpdated broadcast, when it arrives, sets exactly the same state.
+         */
+        applyStreamEnded(userId: string): void {
+          const channelId = store.activeChannelId();
+          if (!channelId || userId === myId()) return;
+          const theirs = (store.participantsByChannel()[channelId] ?? []).find(
+            (p) => p.userId === userId,
+          );
+          if (!theirs?.isStreaming) return;
+          patchState(store, {
+            participantsByChannel: upsert(store.participantsByChannel(), {
+              ...theirs,
+              isStreaming: false,
+            }),
+            watchedStreamUserIds: store.watchedStreamUserIds().filter((id) => id !== userId),
+          });
+        },
+
         // --- click-to-watch streams + hide-video-for-me (local viewer preferences) ---
         isWatchingStream(userId: string): boolean {
           return store.watchedStreamUserIds().includes(userId);
@@ -543,7 +578,29 @@ export const VoiceStore = signalStore(
     },
   ),
   withHooks({
-    onInit(store, gateway = inject(GatewayEvents), voice = inject(VoiceService)) {
+    onInit(
+      store,
+      gateway = inject(GatewayEvents),
+      voice = inject(VoiceService),
+      signalR = inject(SignalRService),
+    ) {
+      // LiveKit tells every room participant when a screenshare publication disappears; that path
+      // is independent of SignalR group membership, so it covers the cases where the
+      // VoiceStateUpdated broadcast can't reach us (a DM call whose channel group we've left, or
+      // a state update dropped while the socket was reconnecting).
+      voice.onRemoteScreenShareEnded = (userId) => store.applyStreamEnded(userId);
+
+      // Any state we toggled while the socket was down never reached the server (updateVoiceState
+      // is fire-and-forget). Re-publish the tuple on every recovery so Redis can't keep serving a
+      // stale isStreaming/isVideoOn to whoever joins the room next.
+      let wasConnected = signalR.connectionState() === 'connected';
+      effect(() => {
+        const connected = signalR.connectionState() === 'connected';
+        const recovered = connected && !wasConnected;
+        wasConnected = connected;
+        if (recovered) store.republishSelfState();
+      });
+
       gateway.events$.pipe(takeUntilDestroyed()).subscribe((e) => {
         switch (e.type) {
           case 'VoiceParticipantJoined':

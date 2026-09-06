@@ -97,6 +97,16 @@ export class VoiceService {
    */
   readonly localScreenShareOn = signal(false);
 
+  /**
+   * Fired when a REMOTE participant's screenshare publication goes away — LiveKit's own
+   * authoritative "their stream ended", assigned once by VoiceStore. This is the belt to the
+   * VoiceStateUpdated braces: that broadcast can legitimately never arrive (a DM call carries no
+   * guildId, so it only reaches the channel group — which a caller browsing elsewhere has left —
+   * and updateVoiceState is silently dropped while the socket reconnects), and without it the
+   * viewer's tile sits on "Loading stream..." forever. The room event reaches every participant.
+   */
+  onRemoteScreenShareEnded: ((identity: string) => void) | null = null;
+
   /** Per-user local voice (mic) volume (0..1) — a client-side preference, kept for the whole session. */
   readonly volumes = signal<ReadonlyMap<string, number>>(new Map());
 
@@ -279,6 +289,20 @@ export class VoiceService {
       this.setVideoTrack(room.localParticipant.identity, slot, undefined);
       if (slot === 'screen') this.localScreenShareOn.set(false);
     });
+
+    // A remote screenshare publication disappearing IS the stream ending — and unlike the
+    // VoiceStateUpdated broadcast it reaches every participant of the room unconditionally.
+    // Clear the slot (TrackUnsubscribed may not fire if we never subscribed) and tell the store,
+    // so a watcher's tile can't be stranded on "Loading stream...". Scoped to ScreenShare only —
+    // an unpublished camera is already handled by the roster's isVideoOn flag.
+    room.on(
+      RoomEvent.TrackUnpublished,
+      (pub: RemoteTrackPublication, participant: RemoteParticipant) => {
+        if (pub.source !== Track.Source.ScreenShare) return;
+        this.setVideoTrack(participant.identity, 'screen', undefined);
+        this.onRemoteScreenShareEnded?.(participant.identity);
+      },
+    );
 
     // NOTE: speaking detection deliberately does NOT use RoomEvent.ActiveSpeakersChanged — that's
     // computed server-side and pushed on a coarse interval (visibly delayed). The local analyser

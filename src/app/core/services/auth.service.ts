@@ -1,6 +1,5 @@
 import { Injectable, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { environment } from "../../../environments/environment";
 import { PushService } from "./push.service";
@@ -73,7 +72,6 @@ export class AuthService {
 
   constructor(
     private http: HttpClient,
-    private router: Router,
     private push: PushService,
   ) {}
 
@@ -212,7 +210,14 @@ export class AuthService {
     } finally {
       // Always clear local state even if the request fails
       this.clearSession();
-      this.router.navigate(["/login"]);
+      // A FULL PAGE LOAD, not a router navigation. Every `providedIn: 'root'` store in this SPA
+      // session still holds the account that just logged out, and a router navigation keeps them
+      // all alive for whoever logs in next on this browser. PresenceStore is the visible symptom:
+      // its `requested` dedupe set already contains the previous user's id, so the next account
+      // never re-fetches that status and renders them permanently "online". Reloading is the only
+      // teardown that can't miss a store. The socket closes on unload, so the server still gets
+      // its OnDisconnectedAsync (and the 90s ghost prune backstops even that).
+      window.location.assign("/login");
     }
   }
 
